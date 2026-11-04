@@ -70,3 +70,20 @@ Before calling `gh pr merge` on ANY pull request (unit, story, or module), an ex
 - Zero direct file editing or compilation at `/workspaces/some-stripe` directly on `main` is permitted.
 - Worktree isolation guarantees zero workspace cross-contamination, eliminates cargo/file locking contention, and ensures atomic commit/PR boundaries.
 - Once child PRs are reviewed and merged, worktrees are pruned cleanly using `git worktree remove .worktrees/<id>`.
+
+### 6. Streaming Pipelined PR Creation & Ordered Cascading Merge Queue
+To eliminate execution delays and avoid idle waiting:
+1. **Immediate Pipelined PR Creation**:
+   - Subagents MUST be granted full read, write, and command execution tools (`EnableWriteTools: true`).
+   - As soon as any subagent finishes its code implementation and local unit testing in its worktree, it MUST immediately commit, push, and open its GitHub PR (`gh pr create`).
+   - Never wait for subsequent or peer units to finish before opening an already completed unit's PR.
+2. **Ordered Cascading Merge Queue ($1 \to 2 \to 3 \to 4 \to 5$)**:
+   - **Unit 1**: When Unit 1 finishes and its PR is open, it has no preceding dependencies. It is immediately reviewed, approved, and merged into the story branch (`gh pr merge --merge`).
+   - **Unit 2**: If Unit 2 finishes while Unit 1 is still in progress, Unit 2's PR remains open in queue. Once Unit 1 is merged into the story branch, Unit 2 pulls/merges the updated story branch, runs full validation (`cargo test`, `cargo clippy`, `cargo fmt`), passes Gatekeeper sign-off, and merges into the story branch (`gh pr merge --merge`).
+   - **Unit 3**: Waits for Unit 2 to merge. Once Unit 2 merges, Unit 3 pulls the updated story branch (containing 1 and 2), runs validation, passes review sign-off, and merges into the story branch.
+   - **Unit 4**: Waits for Unit 3 to merge, updates against story branch, validates, and merges.
+   - **Unit 5**: Waits for Unit 4 to merge, updates against story branch, validates, and merges.
+3. **Cascading Promotion for User Stories**:
+   - The same streaming pipeline applies at Level 2:
+   - When all units for User Story 1 (e.g., US-x.1.0) are merged, its Story PR is opened immediately and can be merged into the module branch upon review.
+   - User Story 2 (US-x.2.0) opens its PR when ready, waits for Story 1 to merge into the module branch, pulls the updated module branch, runs integration validation, and merges into the module branch.

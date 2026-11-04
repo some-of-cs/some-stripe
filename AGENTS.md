@@ -44,6 +44,15 @@ Welcome to the **`some-stripe`** workspace. All AI agents, contributors, and aut
      1. Run tests over all 5 Level 3 units in a user story -> review & approve -> merge units into the story branch via `gh pr merge <PR> --merge`.
      2. Pull updated story branch, run story integration and contract wire tests -> review & approve -> merge user story PRs into the module branch via `gh pr merge <PR> --merge`.
      3. Pull updated module branch, run workspace-wide test suite (`cargo test --workspace`) and quality gates -> review & approve -> merge the module PR into `main` via `gh pr merge <PR> --merge`.
+   - **Streaming Pipelined PR Creation & Ordered Cascading Merge Queue**:
+     - Subagents MUST be granted full read, write, and command execution tools (`EnableWriteTools: true`).
+     - As soon as each micro-unit finishes implementation and local tests, it MUST immediately push and open its GitHub PR (`gh pr create`) without waiting for other units.
+     - Merges MUST follow the strict sequential dependency order ($1 \to 2 \to 3 \to 4 \to 5$):
+       - Unit 1 merges into the story branch immediately upon completion and gate review.
+       - Unit 2 waits for Unit 1 to merge, then pulls/merges the updated story branch, runs full validation (`cargo test`, `cargo clippy`, `cargo fmt`), passes gate review, and merges into the story branch.
+       - Unit 3 waits for Unit 2 to merge, updates against the story branch, validates, and merges.
+       - Units 4 and 5 follow the exact same cascading merge sequence.
+       - The same streaming pipeline and cascading merge applies for User Story PRs into the Module branch.
    - **Multi-Profile Round-Robin**: Tasks MUST be actively distributed across all 3 profiles (`agent-a`, `agent-b`, `agent-c`) to split the API quota and prevent single-account billing concentration.
    - **Automatic Quota Failover**: In case any profile exhausts quota (429 / `RESOURCE_EXHAUSTED`), agents and launchers must automatically switch and retry using the next available account profile.
 
