@@ -475,104 +475,9 @@ impl<'a> IntoIterator for &'a LineItemList {
     }
 }
 
-/// Parameters for creating a Stripe Checkout Session.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct CreateCheckoutSessionParams {
-    /// The URL the customer will be directed to upon successful payment.
-    pub success_url: String,
-
-    /// The URL the customer will be directed to if they decide to cancel.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub cancel_url: Option<String>,
-
-    /// The mode of the checkout session (`payment`, `setup`, or `subscription`). Default: `payment`.
-    #[serde(default = "default_payment_mode")]
-    pub mode: String,
-
-    /// Unique string to reference the Checkout Session on your system.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub client_reference_id: Option<String>,
-
-    /// Currency code (e.g. `usd`, `eur`, `egp`).
-    pub currency: String,
-
-    /// The amount to be collected per unit in minor currency units (e.g., cents).
-    pub unit_amount: i64,
-
-    /// Name of the product or service displayed at checkout.
-    pub product_name: String,
-
-    /// Quantity of the item being purchased. Default: 1.
-    #[serde(default = "default_quantity")]
-    pub quantity: u32,
-
-    /// Epoch timestamp at which the session expires (must be between 30 minutes and 24 hours).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub expires_at: Option<i64>,
-
-    /// Idempotency key for safe retries.
-    #[serde(skip)]
-    pub idempotency_key: Option<String>,
-}
-
-impl CreateCheckoutSessionParams {
-    /// Creates a minimal `CreateCheckoutSessionParams` for a one-time payment.
-    pub fn new(
-        success_url: impl Into<String>,
-        currency: impl Into<String>,
-        unit_amount: i64,
-        product_name: impl Into<String>,
-    ) -> Self {
-        Self {
-            success_url: success_url.into(),
-            cancel_url: None,
-            mode: default_payment_mode(),
-            client_reference_id: None,
-            currency: currency.into(),
-            unit_amount,
-            product_name: product_name.into(),
-            quantity: default_quantity(),
-            expires_at: None,
-            idempotency_key: None,
-        }
-    }
-
-    /// Sets the cancel URL.
-    pub fn with_cancel_url(mut self, cancel_url: impl Into<String>) -> Self {
-        self.cancel_url = Some(cancel_url.into());
-        self
-    }
-
-    /// Sets the session mode (`payment`, `setup`, `subscription`).
-    pub fn with_mode(mut self, mode: impl Into<String>) -> Self {
-        self.mode = mode.into();
-        self
-    }
-
-    /// Sets the client reference ID.
-    pub fn with_client_reference_id(mut self, client_reference_id: impl Into<String>) -> Self {
-        self.client_reference_id = Some(client_reference_id.into());
-        self
-    }
-
-    /// Sets the quantity.
-    pub fn with_quantity(mut self, quantity: u32) -> Self {
-        self.quantity = quantity;
-        self
-    }
-
-    /// Sets the expiration timestamp.
-    pub fn with_expires_at(mut self, expires_at: i64) -> Self {
-        self.expires_at = Some(expires_at);
-        self
-    }
-
-    /// Sets the idempotency key for safe retries.
-    pub fn with_idempotency_key(mut self, idempotency_key: impl Into<String>) -> Self {
-        self.idempotency_key = Some(idempotency_key.into());
-        self
-    }
-}
+pub use crate::params::{
+    CreateCheckoutSessionParams, LineItemParams, LineItemPriceDataParams, LineItemProductDataParams,
+};
 
 #[cfg(test)]
 mod tests {
@@ -700,18 +605,18 @@ mod tests {
 
     #[test]
     fn test_create_params_builders() {
-        let params = CreateCheckoutSessionParams::new(
+        let params = CreateCheckoutSessionParams::single_item(
             "https://example.com/success",
             "usd",
             5000,
             "Pro Membership",
+            1,
         )
-        .with_cancel_url("https://example.com/cancel")
-        .with_mode("payment")
-        .with_client_reference_id("user_42")
-        .with_quantity(1)
-        .with_expires_at(1728400000)
-        .with_idempotency_key("idem_checkout_123");
+        .cancel_url("https://example.com/cancel")
+        .mode("payment")
+        .client_reference_id("user_42")
+        .expires_at(1728400000)
+        .idempotency_key("idem_checkout_123");
 
         assert_eq!(params.success_url, "https://example.com/success");
         assert_eq!(
@@ -720,10 +625,10 @@ mod tests {
         );
         assert_eq!(params.mode, "payment");
         assert_eq!(params.client_reference_id.as_deref(), Some("user_42"));
-        assert_eq!(params.currency, "usd");
-        assert_eq!(params.unit_amount, 5000);
-        assert_eq!(params.product_name, "Pro Membership");
-        assert_eq!(params.quantity, 1);
+        assert_eq!(params.currency.as_deref(), Some("usd"));
+        assert_eq!(params.unit_amount, Some(5000));
+        assert_eq!(params.product_name.as_deref(), Some("Pro Membership"));
+        assert_eq!(params.quantity, Some(1));
         assert_eq!(params.expires_at, Some(1728400000));
         assert_eq!(params.idempotency_key.as_deref(), Some("idem_checkout_123"));
     }

@@ -26,12 +26,13 @@
 //!     cancel_url: Some("https://example.com/cancel".into()),
 //!     mode: "payment".into(),
 //!     client_reference_id: Some("dep_sess_123".into()),
-//!     currency: "usd".into(),
-//!     unit_amount: 5000, // $50.00
-//!     product_name: "Wallet Deposit".into(),
-//!     quantity: 1,
+//!     currency: Some("usd".into()),
+//!     unit_amount: Some(5000), // $50.00
+//!     product_name: Some("Wallet Deposit".into()),
+//!     quantity: Some(1),
 //!     expires_at: None,
 //!     idempotency_key: Some("dep_sess_123".into()),
+//!     ..Default::default()
 //! }).await?;
 //!
 //! println!("Hosted checkout URL: {:?}", session.url);
@@ -262,12 +263,13 @@ mod tests {
                 cancel_url: Some("https://example.com/return".into()),
                 mode: "payment".into(),
                 client_reference_id: Some("dep_fixture".into()),
-                currency: "usd".into(),
-                unit_amount: 50000,
-                product_name: "Wallet deposit".into(),
-                quantity: 1,
+                currency: Some("usd".into()),
+                unit_amount: Some(50000),
+                product_name: Some("Wallet deposit".into()),
+                quantity: Some(1),
                 expires_at: Some(1800),
                 idempotency_key: Some("dep_fixture".into()),
+                ..Default::default()
             })
             .await
             .unwrap();
