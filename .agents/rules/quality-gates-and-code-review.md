@@ -25,17 +25,18 @@ Every quality gate is explicitly owned and executed by a specialized subagent pe
 | **Gate G4** | Wire Contract & Integrated E2E | **API Tester** | `testing-api-tester.md` | `stripe-docs`<br>`stripe-best-practices` | End-to-end integration journeys against live wire mock fixtures and `stripe-mock`. Verify serialization/deserialization fidelity, pagination streams, retries, and network failure resilience. |
 | **Gate G-Docs** | Microkernel Documentation | **Technical Writer** | `engineering-technical-writer.md` | `stripe-docs` | Crate `README.md` passing the 5-second test, comprehensive rustdoc on public APIs with runnable doctests (`cargo test --doc`), and runnable serde examples verifying wire format. |
 | **Gate G-Review** | Senior Code Review & Sign-Off | **Code Reviewer** | `engineering-code-reviewer.md` | `security-audit`<br>`stripe-best-practices` | Council President. Independent code review of `gh pr diff <PR>`. Reviews edge cases, panic safety, maintainability. Synthesizes gatekeeper findings and posts formal PR approval sign-off comment. |
+| **Git & PR Lifecycle** | Version Control & PR Management | **Git Workflow Master** | `engineering-git-workflow-master.md` | `antigravity-guide`<br>`stripe-best-practices` | Worktree orchestration (`git worktree add/remove`), atomic conventional commits, remote tracking branches, Pull Request creation (`gh pr create`), and cascading promotion merges (`gh pr merge`). |
 
 ---
 
 ## 2. Gate Verification Execution Protocol
 
-### Step 1: Pre-Submission Verification (Authoring Implementer)
+### Step 1: Pre-Submission Verification (Authoring Implementer & Git Workflow Master)
 - Implementer develops code inside designated worktree (`/workspaces/some-stripe/.worktrees/<worktree-id>`).
 - Implementer exports `export CARGO_TARGET_DIR=/workspaces/some-stripe/target`.
 - Implementer runs local verification: `cargo test` and `cargo check`.
-- Implementer pushes branch and creates GitHub Pull Request via `gh pr create`.
-- Implementer attaches initial execution report to the PR.
+- Implementer hands off to `Git Workflow Master` (Skills: `antigravity-guide`, `stripe-best-practices`) to stage atomic commits, push branch with `-u origin <branch>`, and create GitHub Pull Request via `gh pr create`.
+- `Git Workflow Master` attaches initial execution report to the PR.
 - Implementer transitions Kanban task status to `🔍 In Review / Gate Sign-Off`.
 - **Implementer stops and yields to the Gatekeeper Council. Implementer CANNOT self-approve or merge.**
 
@@ -96,6 +97,7 @@ The independent `Code Reviewer` subagent MUST post the following structured sign
 
 #### 🚀 Merge Verdict
 **APPROVED FOR MERGE** into `<target-branch>` via `gh pr merge <PR_NUMBER> --merge`.
+*(Executed by `Git Workflow Master` with skills `antigravity-guide` and `stripe-best-practices`)*
 ```
 
 ---
