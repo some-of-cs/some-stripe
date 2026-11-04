@@ -122,13 +122,12 @@ async fn test_ac_us_3_1_0_01_manual_capture_partial() {
     // 1. Create authorization
     let intent = client
         .payment_intents()
-        .create(&CreatePaymentIntentParams {
-            amount: 10000,
-            currency: "usd".into(),
-            capture_method: Some("manual".into()),
-            description: Some("Order #1001 manual auth".into()),
-            idempotency_key: None,
-        })
+        .create(
+            &CreatePaymentIntentParams::new(10000, "usd")
+                .unwrap()
+                .capture_method("manual")
+                .description("Order #1001 manual auth"),
+        )
         .await
         .expect("Failed to create manual payment intent");
 
@@ -272,13 +271,11 @@ async fn test_ac_us_3_1_0_03_idempotent_retry_identical_response() {
     let config = StripeConfig::new("sk_test_mock_123").with_api_base(format!("http://{address}"));
     let client = StripeClient::with_config(config);
 
-    let params = CreatePaymentIntentParams {
-        amount: 4200,
-        currency: "eur".into(),
-        capture_method: Some("automatic".into()),
-        description: Some("Idempotency test payload".into()),
-        idempotency_key: Some(expected_idem_key.into()),
-    };
+    let params = CreatePaymentIntentParams::new(4200, "eur")
+        .unwrap()
+        .capture_method("automatic")
+        .description("Idempotency test payload")
+        .idempotency_key(expected_idem_key);
 
     // First attempt
     let pi1 = client

@@ -401,13 +401,9 @@ mod tests {
         let client = StripeClient::with_config(config);
         let resource = PaymentIntentsResource::new(&client);
 
-        let params = CreatePaymentIntentParams {
-            amount: 2000,
-            currency: "usd".into(),
-            capture_method: Some("manual".into()),
-            idempotency_key: None,
-            ..Default::default()
-        };
+        let params = CreatePaymentIntentParams::new(2000, "usd")
+            .unwrap()
+            .capture_method("manual");
 
         let intent = resource.create(&params).await.unwrap();
         assert_eq!(intent.id, "pi_auto_1");
@@ -451,12 +447,9 @@ mod tests {
         let client = StripeClient::with_config(config);
         let resource = PaymentIntentsResource::new(&client);
 
-        let params = CreatePaymentIntentParams {
-            amount: 5000,
-            currency: "usd".into(),
-            idempotency_key: Some("user_custom_create_key_777".into()),
-            ..Default::default()
-        };
+        let params = CreatePaymentIntentParams::new(5000, "usd")
+            .unwrap()
+            .idempotency_key("user_custom_create_key_777");
 
         let intent = resource.create(&params).await.unwrap();
         assert_eq!(intent.id, "pi_user_1");
@@ -711,13 +704,12 @@ mod tests {
         let pi1 = resource.confirm("pi_conf_1", None).await.unwrap();
         assert_eq!(pi1.status, "succeeded");
 
-        let conf_params = ConfirmPaymentIntentParams {
-            payment_method: Some("pm_card_visa".into()),
-            return_url: Some("https://example.com/return".into()),
-            receipt_email: Some("payer@example.com".into()),
-            setup_future_usage: Some("off_session".into()),
-            idempotency_key: Some("custom_confirm_key_789".into()),
-        };
+        let conf_params = ConfirmPaymentIntentParams::new()
+            .payment_method("pm_card_visa")
+            .return_url("https://example.com/return")
+            .receipt_email("payer@example.com")
+            .setup_future_usage("off_session")
+            .idempotency_key("custom_confirm_key_789");
         let pi2 = resource
             .confirm("pi_conf_2", Some(&conf_params))
             .await

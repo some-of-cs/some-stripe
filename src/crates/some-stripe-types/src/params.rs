@@ -136,30 +136,7 @@ pub fn validate_currency(currency: &str) -> Result<String, PaymentIntentValidati
 }
 
 /// Capture method for a PaymentIntent.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum CaptureMethod {
-    /// Stripe automatically captures the payment after authorization.
-    Automatic,
-    /// Manually capture funds at a later time (e.g. upon order shipment).
-    Manual,
-}
-
-impl CaptureMethod {
-    /// Returns the string representation used by Stripe API.
-    pub const fn as_str(&self) -> &'static str {
-        match self {
-            Self::Automatic => "automatic",
-            Self::Manual => "manual",
-        }
-    }
-}
-
-impl std::fmt::Display for CaptureMethod {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.as_str())
-    }
-}
+pub use crate::CaptureMethod;
 
 /// Predefined cancellation reasons for a PaymentIntent.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
