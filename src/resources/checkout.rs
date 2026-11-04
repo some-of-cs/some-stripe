@@ -8,6 +8,7 @@
 //! - **G-Borrow**: Zero-clone borrowing discipline across session creation, retrieval, and pagination.
 //! - **G2**: Automatic RFC 4122 UUID v4 `Idempotency-Key` header injection on session creation and expiration.
 
+pub use some_stripe_core::RedirectError;
 use some_stripe_core::patterns::pagination::Paginator;
 use some_stripe_core::{StripeClient, StripeError};
 use some_stripe_types::{
@@ -178,4 +179,110 @@ impl<'a> SessionsResource<'a> {
         };
         self.list_line_items(session_id, &params)
     }
+}
+
+/// Checks if a Checkout Session has succeeded and is ready for order fulfillment.
+///
+/// For delayed payment methods (e.g. SEPA Direct Debit, Boleto, Konbini),
+/// initial `checkout.session.completed` has `payment_status: "unpaid"`.
+/// Fulfillment MUST be deferred until `payment_status == "paid"`.
+///
+/// Delegates to [`CheckoutSession::is_fulfillment_ready`].
+#[must_use]
+pub fn is_fulfillment_ready(session: &CheckoutSession) -> bool {
+    session.is_fulfillment_ready()
+}
+
+/// Validates that a redirect URL (success_url / cancel_url) is safe against open redirect vulnerabilities.
+///
+/// Rejects `javascript:`, data URIs, unauthorized schemes, embedded credentials, and unapproved external domains.
+/// Enforces HTTPS for all external domains (HTTP permitted strictly for localhost / loopback testing).
+///
+/// If `allowed_domains` is non-empty, the URL's host must match or be a subdomain of an allowed domain
+/// (or localhost).
+pub fn validate_redirect_url(url: &str, allowed_domains: &[&str]) -> Result<(), RedirectError> {
+    let parsed = reqwest::Url::parse(url).map_err(|e| {
+        if e.to_string().to_ascii_lowercase().contains("empty host") {
+            RedirectError::MissingHost {
+                url: url.to_string(),
+            }
+        } else {
+            RedirectError::InvalidUrl {
+                url: url.to_string(),
+                reason: e.to_string(),
+            }
+        }
+    })?;
+
+    let scheme = parsed.scheme();
+    if scheme != "https" && scheme != "http" {
+        return Err(RedirectError::ProhibitedScheme {
+            url: url.to_string(),
+            scheme: scheme.to_string(),
+        });
+    }
+
+    let host = match parsed.host_str() {
+        Some(h) if !h.trim().is_empty() => h.trim(),
+        _ => {
+            return Err(RedirectError::MissingHost {
+                url: url.to_string(),
+            });
+        }
+    };
+
+    if !parsed.username().is_empty() || parsed.password().is_some() {
+        return Err(RedirectError::EmbeddedCredentials {
+            url: url.to_string(),
+        });
+    }
+
+    let is_localhost = is_localhost_host(host);
+
+    if scheme == "http" && !is_localhost {
+        return Err(RedirectError::ProhibitedScheme {
+            url: url.to_string(),
+            scheme: scheme.to_string(),
+        });
+    }
+
+    if !allowed_domains.is_empty() {
+        let is_allowed = is_localhost
+            || allowed_domains.iter().any(|allowed| {
+                let clean = allowed
+                    .trim()
+                    .strip_prefix("*.")
+                    .or_else(|| allowed.trim().strip_prefix('.'))
+                    .unwrap_or_else(|| allowed.trim());
+
+                if clean.is_empty() {
+                    return false;
+                }
+
+                host.eq_ignore_ascii_case(clean)
+                    || host
+                        .to_ascii_lowercase()
+                        .ends_with(&format!(".{}", clean.to_ascii_lowercase()))
+            });
+
+        if !is_allowed {
+            return Err(RedirectError::DisallowedDomain {
+                host: host.to_string(),
+                allowed_domains: allowed_domains.iter().map(|s| s.to_string()).collect(),
+            });
+        }
+    }
+
+    Ok(())
+}
+
+fn is_localhost_host(host: &str) -> bool {
+    let host = host.trim_matches(|c| c == '[' || c == ']');
+    if host.eq_ignore_ascii_case("localhost") {
+        return true;
+    }
+    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+        return ip.is_loopback();
+    }
+    false
 }
