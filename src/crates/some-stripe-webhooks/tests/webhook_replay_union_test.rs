@@ -177,15 +177,9 @@ fn tc_2_2_0_03_strongly_typed_v1_snapshot_deserialization() {
         .expect("StripeWebhookWrapper::from_raw must succeed");
 
     assert_eq!(wrapper.event_id(), "evt_1P0XYZ2eZvKYlo2C89ABCDEF");
-    assert_eq!(
-        wrapper.order_id().as_deref(),
-        Some("cs_test_b1c2d3e4f5g6h7")
-    );
-    assert_eq!(wrapper.customer_id().as_deref(), Some("cus_987654321"));
-    assert_eq!(
-        wrapper.payment_intent_id().as_deref(),
-        Some("pi_1234567890abcdef")
-    );
+    assert_eq!(wrapper.order_id(), Some("cs_test_b1c2d3e4f5g6h7"));
+    assert_eq!(wrapper.customer_id(), Some("cus_987654321"));
+    assert_eq!(wrapper.payment_intent_id(), Some("pi_1234567890abcdef"));
     assert_eq!(wrapper.amount_total(), Some(7500));
     assert_eq!(wrapper.currency().as_deref(), Some("USD"));
     assert!(
@@ -249,10 +243,7 @@ fn tc_2_2_0_04_invoice_upcoming_without_id_handled() {
         "order_id() must be None when /data/object/id is null"
     );
     // customer_id() extracts /data/object/customer successfully
-    assert_eq!(
-        wrapper.customer_id().as_deref(),
-        Some("cus_upcoming_merchant_456")
-    );
+    assert_eq!(wrapper.customer_id(), Some("cus_upcoming_merchant_456"));
     // Not a checkout session completed
     assert!(!wrapper.is_checkout_completed());
 }
