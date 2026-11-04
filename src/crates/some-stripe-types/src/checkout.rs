@@ -365,6 +365,21 @@ impl CheckoutSession {
         self.payment_status.as_deref() == Some(PAYMENT_STATUS_NO_PAYMENT_REQUIRED)
     }
 
+    /// Checks if a Checkout Session has succeeded and is ready for order fulfillment.
+    ///
+    /// # Stripe Fulfillment Invariants
+    /// Fulfillment must only occur when the session is completed (`status == "complete"`)
+    /// and either payment was captured (`payment_status == "paid"`) or no payment was required
+    /// (`payment_status == "no_payment_required"`).
+    ///
+    /// For delayed payment methods (e.g. SEPA Direct Debit, Boleto, Konbini),
+    /// initial `checkout.session.completed` has `payment_status: "unpaid"`.
+    /// Fulfillment **MUST** be deferred until `payment_status == "paid"`.
+    #[must_use]
+    pub fn is_fulfillment_ready(&self) -> bool {
+        self.is_complete() && (self.is_paid() || self.is_no_payment_required())
+    }
+
     /// Returns true if the session mode is `payment`.
     #[must_use]
     pub fn is_payment_mode(&self) -> bool {
@@ -947,5 +962,32 @@ mod tests {
             session_with_url.recovery_url(),
             "https://checkout.stripe.com/c/pay/cs_rec_456"
         );
+    }
+
+    #[test]
+    fn test_is_fulfillment_ready() {
+        let mut session = CheckoutSession::new("cs_test_fulfillment");
+
+        // Open session is never fulfillment ready
+        session.status = Some(CHECKOUT_SESSION_STATUS_OPEN.into());
+        session.payment_status = Some(PAYMENT_STATUS_PAID.into());
+        assert!(!session.is_fulfillment_ready());
+
+        // Completed with paid is ready
+        session.status = Some(CHECKOUT_SESSION_STATUS_COMPLETE.into());
+        session.payment_status = Some(PAYMENT_STATUS_PAID.into());
+        assert!(session.is_fulfillment_ready());
+
+        // Completed with no_payment_required (free/trial) is ready
+        session.payment_status = Some(PAYMENT_STATUS_NO_PAYMENT_REQUIRED.into());
+        assert!(session.is_fulfillment_ready());
+
+        // Completed with unpaid (delayed payment like SEPA) is NOT ready
+        session.payment_status = Some(PAYMENT_STATUS_UNPAID.into());
+        assert!(!session.is_fulfillment_ready());
+
+        // Expired is never ready
+        session.status = Some(CHECKOUT_SESSION_STATUS_EXPIRED.into());
+        assert!(!session.is_fulfillment_ready());
     }
 }
