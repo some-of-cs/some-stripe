@@ -15,6 +15,8 @@
 
 set -euo pipefail
 
+export PATH="${PATH}:/home/codespace/.cargo/bin:/home/codespace/.local/bin"
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 WORKTREES_DIR="${WORKSPACE_ROOT}/.worktrees"
