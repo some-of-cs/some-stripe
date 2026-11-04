@@ -12,8 +12,10 @@
 //!   `invoice.upcoming` preview events where `id` is null on Stripe wire payloads.
 //! - **Discriminated Event Union**: [`EventObject`] provides seamless enum dispatch across
 //!   `payment_intent`, `checkout.session`, `invoice`, and unknown types via `#[serde(other)]`.
-//! - **PCI-DSS Compliance (Gate G-Law)**: Sensitive credentials like `client_secret` in
-//!   [`PaymentIntent`] are masked as `[REDACTED]` in `Debug` implementations.
+//! - **Request Parameter Schemas & ISO 4217 Validation**: [`CreatePaymentIntentParams`],
+//!   [`CapturePaymentIntentParams`], [`CancelPaymentIntentParams`], [`ConfirmPaymentIntentParams`].
+//! - **PCI-DSS Compliance (Gate G-Law & G2)**: Sensitive credentials like `client_secret` in
+//!   [`PaymentIntent`] and [`ConfirmPaymentIntentParams`] are masked as `[REDACTED]` in `Debug` implementations.
 //!
 //! ## Type Construction & Deserialization Example
 //!
@@ -252,47 +254,8 @@ fn default_payment_intent_object() -> String {
     "payment_intent".into()
 }
 
-/// Parameters for creating a Stripe PaymentIntent.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CreatePaymentIntentParams {
-    /// Amount intended to be collected in minor currency units.
-    pub amount: i64,
-
-    /// Three-letter ISO currency code.
-    pub currency: String,
-
-    /// Capture method: `automatic` (default) or `manual`.
-    pub capture_method: Option<String>,
-
-    /// Description of the payment.
-    pub description: Option<String>,
-
-    /// Unique idempotency key.
-    #[serde(skip)]
-    pub idempotency_key: Option<String>,
-}
-
-/// Parameters for capturing a PaymentIntent.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct CapturePaymentIntentParams {
-    /// The amount to capture from the authorization. If omitted, captures full amount.
-    pub amount_to_capture: Option<i64>,
-
-    /// Unique idempotency key.
-    #[serde(skip)]
-    pub idempotency_key: Option<String>,
-}
-
-/// Parameters for canceling a PaymentIntent.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct CancelPaymentIntentParams {
-    /// Reason for canceling this PaymentIntent.
-    pub cancellation_reason: Option<String>,
-
-    /// Unique idempotency key.
-    #[serde(skip)]
-    pub idempotency_key: Option<String>,
-}
+pub mod params;
+pub use params::*;
 
 /// Represents a Stripe Account object (merchant profile).
 #[derive(Debug, Clone, Serialize, Deserialize)]
