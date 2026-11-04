@@ -1,7 +1,6 @@
 //! Generic CRUD endpoint helpers and traits.
 
 use async_trait::async_trait;
-use serde::de::DeserializeOwned;
 use serde::Serialize;
 use crate::client::StripeClient;
 use crate::error::StripeError;
