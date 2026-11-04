@@ -20,6 +20,10 @@ pub enum StripeError {
         doc_url: Option<String>,
     },
 
+    /// Invalid request parameter provided prior to network transmission.
+    #[error("Invalid request parameter: {0}")]
+    InvalidRequest(String),
+
     /// An HTTP transport error.
     #[error("HTTP transport error: {0}")]
     Http(#[from] reqwest::Error),
@@ -65,7 +69,9 @@ pub enum StripeWebhookError {
     BadSignature,
 
     /// The event timestamp is older than the configured tolerance window.
-    #[error("Timestamp outside the tolerance zone ({timestamp} vs current {now}, tolerance {tolerance}s)")]
+    #[error(
+        "Timestamp outside the tolerance zone ({timestamp} vs current {now}, tolerance {tolerance}s)"
+    )]
     TimestampOutsideTolerance {
         /// The timestamp on the event.
         timestamp: i64,

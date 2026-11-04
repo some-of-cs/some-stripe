@@ -55,6 +55,7 @@
 
 pub mod client;
 pub mod error;
+pub mod patterns;
 pub mod resources;
 pub mod types;
 pub mod webhook;
@@ -67,8 +68,8 @@ pub use resources::{
 };
 pub use types::*;
 pub use webhook::{
-    safe_constant_time_eq, verify_stripe_signature, StripeWebhookWrapper, Webhook,
-    DEFAULT_TOLERANCE_SECONDS,
+    DEFAULT_TOLERANCE_SECONDS, StripeWebhookWrapper, Webhook, safe_constant_time_eq,
+    verify_stripe_signature,
 };
 pub use workflow::{
     CustomErrorWorkflowBuilder, DefaultErrorWorkflow, ErrorResolution, ErrorSeverity,
@@ -199,7 +200,11 @@ mod tests {
         assert_eq!(captured.status, "succeeded");
         assert_eq!(captured.amount_received, Some(5000));
 
-        let canceled = client.payment_intents().cancel("pi_456", None).await.unwrap();
+        let canceled = client
+            .payment_intents()
+            .cancel("pi_456", None)
+            .await
+            .unwrap();
         assert_eq!(canceled.status, "canceled");
 
         server.await.unwrap();

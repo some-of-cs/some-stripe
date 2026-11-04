@@ -3,3 +3,7 @@ Cargo.lock
 **/*.rs.bk
 *.swp
 .DS_Store
+/docs/Str*
+/scripts
+/.agent*
+skill*

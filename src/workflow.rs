@@ -118,7 +118,9 @@ impl DefaultErrorWorkflow {
     }
 
     fn calculate_backoff(&self, attempt: u32) -> Duration {
-        let factor = self.backoff_multiplier.powi(attempt.saturating_sub(1) as i32);
+        let factor = self
+            .backoff_multiplier
+            .powi(attempt.saturating_sub(1) as i32);
         Duration::from_secs_f64((self.initial_delay.as_secs_f64() * factor).min(30.0))
     }
 }
@@ -343,13 +345,15 @@ impl ErrorWorkflowHandler for CustomErrorWorkflow {
         }
 
         match error {
-            StripeWebhookError::BadSignature | StripeWebhookError::TimestampOutsideTolerance { .. } => {
-                ErrorResolution::Escalate {
-                    incident_id: format!("custom_sec_incident_{}", chrono::Utc::now().timestamp_micros()),
-                    severity: ErrorSeverity::Critical,
-                    message: format!("Custom workflow detected security violation: {error}"),
-                }
-            }
+            StripeWebhookError::BadSignature
+            | StripeWebhookError::TimestampOutsideTolerance { .. } => ErrorResolution::Escalate {
+                incident_id: format!(
+                    "custom_sec_incident_{}",
+                    chrono::Utc::now().timestamp_micros()
+                ),
+                severity: ErrorSeverity::Critical,
+                message: format!("Custom workflow detected security violation: {error}"),
+            },
             _ => ErrorResolution::Fail {
                 reason: format!("Custom workflow: webhook error: {error}"),
             },
@@ -390,7 +394,9 @@ mod tests {
             .await;
 
         match resolution {
-            ErrorResolution::Escalate { severity, message, .. } => {
+            ErrorResolution::Escalate {
+                severity, message, ..
+            } => {
                 assert_eq!(severity, ErrorSeverity::Critical);
                 assert!(message.contains("signature mismatch"));
             }

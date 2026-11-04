@@ -51,7 +51,10 @@ impl SessionsResource {
                 "line_items[0][price_data][currency]",
                 params.currency.as_str(),
             ),
-            ("line_items[0][price_data][unit_amount]", amount_str.as_str()),
+            (
+                "line_items[0][price_data][unit_amount]",
+                amount_str.as_str(),
+            ),
             (
                 "line_items[0][price_data][product_data][name]",
                 params.product_name.as_str(),

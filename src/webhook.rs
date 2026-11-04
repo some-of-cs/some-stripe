@@ -130,7 +130,9 @@ impl Webhook {
         let tolerance_secs = tolerance.unwrap_or(Self::DEFAULT_TOLERANCE);
         if tolerance_secs > 0 {
             let now = chrono::Utc::now().timestamp();
-            if timestamp < now - (tolerance_secs as i64) || timestamp > now + (tolerance_secs as i64) {
+            if timestamp < now - (tolerance_secs as i64)
+                || timestamp > now + (tolerance_secs as i64)
+            {
                 return Err(StripeWebhookError::TimestampOutsideTolerance {
                     timestamp,
                     now,
@@ -270,9 +272,19 @@ impl StripeWebhookWrapper {
     /// Checks if the event represents a completed checkout session.
     pub fn is_checkout_completed(&self) -> bool {
         self.event.event_type == "checkout.session.completed"
-            && self.event.data.object.pointer("/status").and_then(|v| v.as_str()) == Some("complete")
+            && self
+                .event
+                .data
+                .object
+                .pointer("/status")
+                .and_then(|v| v.as_str())
+                == Some("complete")
             && matches!(
-                self.event.data.object.pointer("/payment_status").and_then(|v| v.as_str()),
+                self.event
+                    .data
+                    .object
+                    .pointer("/payment_status")
+                    .and_then(|v| v.as_str()),
                 Some("paid" | "unpaid")
             )
     }
