@@ -15,6 +15,7 @@ openssl = { version = "0.10.82", features = ["vendored"] }
 chrono = { version = "0.4.45", features = ["serde"] }
 subtle = "2.6.1"
 thiserror = "2.0.21"
+async-trait = "0.1.92"
 
 [dev-dependencies]
 tokio = { version = "1.54.1", features = ["full"] }
