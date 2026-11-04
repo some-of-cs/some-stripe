@@ -29,11 +29,11 @@ PLAN_DOC="${WORKSPACE_ROOT}/docs/MULTI_AGENT_IMPLEMENTATION_PLAN.md"
 
 MODE="${1:---dry-run}"
 
-# Profile definitions matching scripts/launch-agent.sh
+# Profile definitions (Universal Agent Generators for load balancing and bill splitting)
 declare -A PROFILES=(
-    ["agent-a"]="1:microkernel-architect:Core Runtime, Dual-Protocol Serialization & V2 Engine"
-    ["agent-b"]="2:security-webhook-engineer:Cryptographic Webhooks, Replay Guards & Edge Security"
-    ["agent-c"]="3:domain-codegen-specialist:OpenAPI Domain Plugins, Billing, Connect & Test Harness"
+    ["agent-a"]="1:universal-generator:Account 1 Generator (Can run any agent role or task)"
+    ["agent-b"]="2:universal-generator:Account 2 Generator (Can run any agent role or task)"
+    ["agent-c"]="3:universal-generator:Account 3 Generator (Can run any agent role or task)"
 )
 
 # Color helpers
