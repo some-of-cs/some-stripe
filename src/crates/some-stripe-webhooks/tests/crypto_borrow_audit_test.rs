@@ -222,7 +222,7 @@ fn test_tc_2_1_0_law_pci_dss_and_psd2_compliance() {
         !wrapper_dbg.contains(mock_cvv),
         "StripeWebhookWrapper Debug representation must never contain CVC/CVV"
     );
-    assert_eq!(wrapper.order_id().as_deref(), Some("pi_pci_audit_123"));
+    assert_eq!(wrapper.order_id(), Some("pi_pci_audit_123"));
 }
 
 /// Gate G2 Audit: Asserts constant-time comparison slice length invariance.
