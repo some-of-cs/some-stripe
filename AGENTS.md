@@ -29,6 +29,7 @@ Welcome to the **`some-stripe`** workspace. All AI agents, contributors, and aut
    - Code must compile with 0 warnings on Rust 2024 edition (`cargo clippy --all-targets -- -D warnings` and `cargo fmt --check`).
    - Mandatory test coverage: >=90% line and >=85% branch coverage in affected modules.
    - Microkernel architecture: keep the core runtime lean with zero monolithic codegen.
+   - **Mandatory Independent Code Reviewer Subagent (Gate G-Review)**: No self-approval. Every PR requires an independent review and sign-off posted by a dedicated `Code Reviewer` subagent before merging.
 
 6. **[Global Financial & Statutory Legal Compliance (Gate G-Law)](.agents/rules/legal-compliance.md)**:
    - PCI-DSS 4.0 data security and zero raw PAN handling in application memory.
@@ -45,7 +46,7 @@ Welcome to the **`some-stripe`** workspace. All AI agents, contributors, and aut
      - **Module PR Titles**: MUST match `feat(module-N): <module-title>`.
    - **Multi-Tier Merge & Validation Workflow (Strictly via `gh pr merge`)**:
      - **All tier merges MUST happen over GitHub using GitHub CLI (`gh pr merge`)**. Local `git merge` commands across promotion tiers are strictly prohibited.
-     - **Mandatory Pre-Merge Review Sign-Off (Gates G-Review, G2, G-Borrow)**: Before calling `gh pr merge` on ANY pull request (unit, story, or module), an explicit code review and security validation must be executed and approved via `gh pr review <PR> --approve -b '...'`. Merging without documented quality gate review is strictly prohibited.
+     - **Mandatory Pre-Merge Review Sign-Off (Gates G-Review, G2, G-Borrow)**: Before calling `gh pr merge` on ANY pull request (unit, story, or module), an explicit code review and security validation must be executed and approved by an independent `Code Reviewer` subagent via `gh pr comment <PR> --body '### Gate G-Review Approval...'`. Merging without documented independent quality gate review is strictly prohibited. Self-approval by the authoring implementer is rejected.
      1. Run tests over all 5 Level 3 units in a user story -> review & approve -> merge units into the story branch via `gh pr merge <PR> --merge`.
      2. Pull updated story branch, run story integration and contract wire tests -> review & approve -> merge user story PRs into the module branch via `gh pr merge <PR> --merge`.
      3. Pull updated module branch, run workspace-wide test suite (`cargo test --workspace`) and quality gates -> review & approve -> merge the module PR into `main` via `gh pr merge <PR> --merge`.

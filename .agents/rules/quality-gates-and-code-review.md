@@ -15,6 +15,16 @@ Ensure that every contribution to `some-stripe` adheres to the highest standards
    - The root core runtime crate must remain ultra-lightweight with zero monolithic code-generated models.
    - Resource domains must be isolated behind modular Cargo feature flags.
 4. **Independent Senior Code Review (Gate G-Review)**:
-   - Every pull request requires review and sign-off by `engineering-code-reviewer` across Correctness, Security, Maintainability, Performance, and Testing.
+   - Every pull request requires an independent review and sign-off by a dedicated `Code Reviewer` subagent before merging.
+   - **No Self-Approvals**: The authoring implementer or leader MUST NOT sign off on their own PR.
+   - **Invocation Protocol**: Upon PR creation (`gh pr create`), the Story Leader or Supervisor invokes a `Code Reviewer` subagent (assigned an alternating billing profile).
+   - **Review Audit Scope**:
+     - Inspect `gh pr diff <PR>` for correctness, edge cases, and panic hardening.
+     - Verify Gate G-Borrow (zero unauthorized `.clone()` calls, zero-copy references).
+     - Verify Gate G2 (PCI-DSS credential redaction `[REDACTED]`, constant-time crypto).
+     - Verify Gate G-Law (ISO 4217 zero-float integer arithmetic, statutory protections).
+     - Verify Gate G4 (clean clippy, clean rustfmt).
+   - **Formal GitHub Sign-Off**: The `Code Reviewer` posts the structured review sign-off directly on the PR (`gh pr comment <PR> --body "..."`).
+   - Merging via `gh pr merge` is strictly blocked until this review comment is posted.
 5. **Integrated Wire Validation (Gate G4)**:
    - Realistic end-to-end user journeys must be verified against live wire mock fixtures or `stripe-mock`.
