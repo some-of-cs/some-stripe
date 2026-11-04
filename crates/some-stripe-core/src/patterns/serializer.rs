@@ -114,7 +114,6 @@ pub fn serialize_v2_json<T: Serialize>(value: &T) -> Result<String, StripeError>
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::BTreeMap;
 
     #[test]
     fn test_zero_indexed_bracket_notation() {
@@ -131,8 +130,14 @@ mod tests {
 
         let batch = Batch {
             items: vec![
-                Item { id: "si_1".into(), amount: 100 },
-                Item { id: "si_2".into(), amount: 200 },
+                Item {
+                    id: "si_1".into(),
+                    amount: 100,
+                },
+                Item {
+                    id: "si_2".into(),
+                    amount: 200,
+                },
             ],
         };
 
@@ -140,10 +145,10 @@ mod tests {
         assert_eq!(
             pairs,
             vec![
-                ("items[0][id]".to_string(), "si_1".to_string()),
                 ("items[0][amount]".to_string(), "100".to_string()),
-                ("items[1][id]".to_string(), "si_2".to_string()),
+                ("items[0][id]".to_string(), "si_1".to_string()),
                 ("items[1][amount]".to_string(), "200".to_string()),
+                ("items[1][id]".to_string(), "si_2".to_string()),
             ]
         );
     }

@@ -348,3 +348,67 @@ impl StripeClient {
         Ok(value)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_client_concurrency_stress_10k_tasks() {
+        let client = StripeClient::new("sk_test_10k_concurrency_stress_test");
+        let initial_count = Arc::strong_count(client.inner());
+        assert_eq!(initial_count, 1);
+
+        let mut handles = Vec::with_capacity(10_000);
+        for _ in 0..10_000 {
+            let client_clone = client.clone();
+            handles.push(tokio::spawn(async move {
+                // Verify clone maintains valid access to config without locking
+                assert_eq!(client_clone.config.api_base, "https://api.stripe.com");
+            }));
+        }
+
+        for handle in handles {
+            handle.await.expect("task join failure");
+        }
+
+        assert_eq!(Arc::strong_count(client.inner()), 1);
+    }
+
+    #[test]
+    fn test_request_options_builder() {
+        let options = RequestOptions::new()
+            .stripe_account("acct_test_123")
+            .idempotency_key("idemp_key_456")
+            .stripe_version("2024-11-04")
+            .timeout(Duration::from_secs(15));
+
+        assert_eq!(options.stripe_account.as_deref(), Some("acct_test_123"));
+        assert_eq!(options.idempotency_key.as_deref(), Some("idemp_key_456"));
+        assert_eq!(options.stripe_version.as_deref(), Some("2024-11-04"));
+        assert_eq!(options.timeout, Some(Duration::from_secs(15)));
+    }
+
+    #[test]
+    fn test_secret_redaction_and_zeroize() {
+        let secret = SecretKey::new("sk_live_very_secret_key_9999");
+        let config = StripeConfig::new(secret.clone());
+        let client = StripeClient::with_config(config.clone());
+
+        // Assert secret is never printed in Debug or Display
+        let debug_secret = format!("{:?}", secret);
+        let display_secret = format!("{}", secret);
+        let debug_config = format!("{:?}", config);
+        let debug_client = format!("{:?}", client);
+
+        assert_eq!(debug_secret, "[REDACTED]");
+        assert_eq!(display_secret, "[REDACTED]");
+        assert!(!debug_config.contains("sk_live_very_secret_key_9999"));
+        assert!(debug_config.contains("[REDACTED]"));
+        assert!(!debug_client.contains("sk_live_very_secret_key_9999"));
+        assert!(debug_client.contains("[REDACTED]"));
+
+        // Expose secret is available only for HTTP transmission
+        assert_eq!(secret.expose_secret(), "sk_live_very_secret_key_9999");
+    }
+}
