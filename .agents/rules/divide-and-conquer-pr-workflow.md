@@ -37,15 +37,24 @@ Profiles are **universal agent generators** tied to separate Google AI Pro billi
 - Any profile can generate and execute **ANY** specialized agent for any role or task (e.g. `microkernel-architect`, `security-webhook-engineer`, `domain-codegen-specialist`, `rust-refactoring-specialist`, `code-reviewer`, `api-tester`, or micro-unit worker agents).
 - Workloads and agent generation MUST rotate across the 3 profile generators in round-robin fashion to distribute token consumption and split the quota bill evenly.
 
-### 3. Quality Gate Sign-Off Before Merge
-- An atomic child PR cannot be merged into a story branch without passing local tests and G-Borrow zero-clone checks.
-- A story PR cannot be merged into a module branch without passing G1 (coverage >=90%), G2 (security audit), and G-Review sign-off.
-- A module PR cannot be merged into `main` without passing G4 (`stripe-mock` integration) and workspace-wide `cargo test --all-features`.
+### 3. Multi-Tier Sequential Merge & Promotion Protocol
+Merging MUST proceed in strict hierarchical tiers after running all test suites:
+1. **Tier 1 (Units to Story)**:
+   - Run tests across all 5 Level 3 micro-unit branches.
+   - Once all unit tests and quality gates pass, merge the 5 unit branches into the Level 2 User Story branch (`feat/us-x.y.z`).
+2. **Tier 2 (Stories to Module)**:
+   - Run story-level integration and wire mock test suites on the User Story branch.
+   - Once story validation passes, merge all User Story branches into the Level 1 Module branch (`feat/module-n`).
+3. **Tier 3 (Module to Main)**:
+   - Run full workspace test suite (`cargo test --workspace`), clippy (`cargo clippy --workspace --all-targets -- -D warnings`), and fmt verification on the Module branch.
+   - Once workspace validation passes, merge the Level 1 Module branch into `main`.
 
-### 4. No Direct Pushes to Parent Branches
-- Every agent operates in its own non-blocking feature branch. Code is integrated strictly via reviewed and validated pull requests and branch merges.
+### 4. Quota Exhaustion Failover Across Profiles
+- In case any profile encounters a quota depletion or rate limit error (429 / `RESOURCE_EXHAUSTED` / `exceeded your current quota`), the process/agent must automatically switch to the next account profile in round-robin sequence (`Account 1` -> `Account 2` -> `Account 3`).
+- All 3 profiles are universal generators equipped to handle any task or role.
 
-### 5. Dedicated Git Worktree Isolation
-- Every agent MUST operate in a dedicated, isolated `git worktree` under `.worktrees/<branch-sanitized-name>`.
+### 5. Mandatory `.worktrees/` Directory Isolation Invariant
+- **Every agent MUST operate strictly inside the `.worktrees/` folder in this repository directory (`/workspaces/some-stripe/.worktrees/<branch-sanitized-name>`)**.
+- Zero direct file editing or compilation at `/workspaces/some-stripe` directly on `main` is permitted.
 - Worktree isolation guarantees zero workspace cross-contamination, eliminates cargo/file locking contention, and ensures atomic commit/PR boundaries.
 - Once child PRs are reviewed and merged, worktrees are pruned cleanly using `git worktree remove .worktrees/<id>`.
