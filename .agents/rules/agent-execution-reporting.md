@@ -50,3 +50,12 @@ Every agent working at any tier (Level 3 Unit, Level 2 Story, Level 1 Module, or
   - Module reports: `.agents/reports/<module-id>/module_summary.md`
   - Gatekeeper audits: `.agents/reports/<module-id>/gatekeeper_audit.md`
 - Reports MUST be committed to Git so they persist permanently in repository history.
+
+### 3. Mandatory PR Body Attachment Invariant
+When opening ANY pull request on GitHub (`gh pr create` / `gh pr edit`), the agent MUST directly embed the full report into the PR body or attach it as a primary audit comment.
+The attached PR report MUST include:
+- Scope and architectural deliverables.
+- Complete inventory of created and modified files.
+- Full verification and gate results: G0 (0 warnings), G-Borrow (zero-clone evidence), G2 (cryptography/security), G-Law (PCI-DSS & statutory compliance), G1/G4 (test coverage & wire mocks).
+- Exact test execution commands and verbatim terminal output logs.
+PRs submitted without a full report including validation and gate results are strictly prohibited and will be rejected by gatekeepers.

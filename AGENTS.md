@@ -54,6 +54,7 @@ Welcome to the **`some-stripe`** workspace. All AI agents, contributors, and aut
      - Verification logs for all quality gates (G0, G-Borrow, G2, G-Law, G1, G4).
      - Test commands and verbatim outputs.
      - GitHub PR link, commit SHA, and pre-merge review approval.
+   - **Mandatory PR Attachment**: A full execution report including validation and gate results MUST be attached directly to every GitHub PR (in the PR body or primary audit comment) before review.
    - All reports MUST be committed under `.agents/reports/<module-id>/` to preserve a permanent audit trail.
 
 ---
