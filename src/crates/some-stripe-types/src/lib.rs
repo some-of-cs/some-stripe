@@ -606,6 +606,63 @@ impl std::fmt::Debug for PaymentIntent {
     }
 }
 
+impl PaymentIntent {
+    /// Returns `true` if the payment succeeded (`status == PaymentIntentStatus::Succeeded`).
+    pub fn is_succeeded(&self) -> bool {
+        self.status == PaymentIntentStatus::Succeeded
+    }
+
+    /// Returns `true` if the payment has been authorized and requires capture (`status == PaymentIntentStatus::RequiresCapture`).
+    pub fn requires_capture(&self) -> bool {
+        self.status == PaymentIntentStatus::RequiresCapture
+    }
+
+    /// Returns `true` if customer authentication action is required (`status == PaymentIntentStatus::RequiresAction`).
+    pub fn requires_action(&self) -> bool {
+        self.status == PaymentIntentStatus::RequiresAction
+    }
+
+    /// Returns `true` if the payment was canceled (`status == PaymentIntentStatus::Canceled`).
+    pub fn is_canceled(&self) -> bool {
+        self.status == PaymentIntentStatus::Canceled
+    }
+
+    /// Returns the PSD2 3D Secure redirect URL, if present in `next_action`.
+    ///
+    /// Extracts the URL by reference (`Option<&str>`) without heap cloning (Gate G-Borrow).
+    ///
+    /// # Example
+    /// ```
+    /// use some_stripe_types::PaymentIntent;
+    ///
+    /// let json = r#"{
+    ///     "id": "pi_3Mtw",
+    ///     "object": "payment_intent",
+    ///     "amount": 2000,
+    ///     "currency": "usd",
+    ///     "status": "requires_action",
+    ///     "next_action": {
+    ///         "type": "redirect_to_url",
+    ///         "redirect_to_url": {
+    ///             "url": "https://hooks.stripe.com/redirect/authenticate/src_123"
+    ///         }
+    ///     }
+    /// }"#;
+    /// let pi: PaymentIntent = serde_json::from_str(json).unwrap();
+    /// assert_eq!(
+    ///     pi.redirect_url(),
+    ///     Some("https://hooks.stripe.com/redirect/authenticate/src_123")
+    /// );
+    /// ```
+    pub fn redirect_url(&self) -> Option<&str> {
+        self.next_action
+            .as_ref()?
+            .get("redirect_to_url")?
+            .get("url")?
+            .as_str()
+    }
+}
+
 fn default_payment_intent_object() -> String {
     "payment_intent".into()
 }
@@ -630,6 +687,102 @@ pub struct CreatePaymentIntentParams {
     pub idempotency_key: Option<String>,
 }
 
+impl Default for CreatePaymentIntentParams {
+    fn default() -> Self {
+        Self {
+            amount: 0,
+            currency: "usd".to_string(),
+            capture_method: None,
+            description: None,
+            idempotency_key: None,
+        }
+    }
+}
+
+impl CreatePaymentIntentParams {
+    /// Creates a new `CreatePaymentIntentParams` with required `amount` (in minor currency units) and `currency`.
+    ///
+    /// # Example
+    /// ```
+    /// use some_stripe_types::CreatePaymentIntentParams;
+    ///
+    /// let params = CreatePaymentIntentParams::new(5000, "usd")
+    ///     .with_capture_method("manual")
+    ///     .with_description("E-commerce order #1001")
+    ///     .with_idempotency_key("idem_order_1001");
+    ///
+    /// assert_eq!(params.amount, 5000);
+    /// assert_eq!(params.currency, "usd");
+    /// assert_eq!(params.capture_method.as_deref(), Some("manual"));
+    /// assert_eq!(params.description.as_deref(), Some("E-commerce order #1001"));
+    /// assert_eq!(params.idempotency_key.as_deref(), Some("idem_order_1001"));
+    /// ```
+    pub fn new(amount: i64, currency: impl Into<String>) -> Self {
+        Self {
+            amount,
+            currency: currency.into(),
+            capture_method: None,
+            description: None,
+            idempotency_key: None,
+        }
+    }
+
+    /// Sets the capture method: `"automatic"` (default) or `"manual"` (authorization hold).
+    pub fn with_capture_method(mut self, capture_method: impl Into<String>) -> Self {
+        self.capture_method = Some(capture_method.into());
+        self
+    }
+
+    /// Sets an optional description for the transaction.
+    pub fn with_description(mut self, description: impl Into<String>) -> Self {
+        self.description = Some(description.into());
+        self
+    }
+
+    /// Attaches a unique idempotency key for network retry resilience.
+    pub fn with_idempotency_key(mut self, key: impl Into<String>) -> Self {
+        self.idempotency_key = Some(key.into());
+        self
+    }
+
+    /// Validates ISO-4217 minor currency constraints and parameter sanity.
+    ///
+    /// - Amount must be a positive integer (`amount > 0`).
+    /// - Currency must be a 3-letter lowercase ASCII code.
+    ///
+    /// # Errors
+    /// Returns `Err(String)` if validation fails.
+    ///
+    /// # Example
+    /// ```
+    /// use some_stripe_types::CreatePaymentIntentParams;
+    ///
+    /// let valid = CreatePaymentIntentParams::new(1000, "usd");
+    /// assert!(valid.validate().is_ok());
+    ///
+    /// let zero_amount = CreatePaymentIntentParams::new(0, "usd");
+    /// assert!(zero_amount.validate().is_err());
+    ///
+    /// let bad_currency = CreatePaymentIntentParams::new(1000, "USD");
+    /// assert!(bad_currency.validate().is_err());
+    /// ```
+    pub fn validate(&self) -> Result<(), String> {
+        if self.amount <= 0 {
+            return Err(format!(
+                "Payment amount must be a positive integer in minor units, got {}",
+                self.amount
+            ));
+        }
+        if self.currency.len() != 3 || !self.currency.chars().all(|c| c.is_ascii_lowercase()) {
+            return Err(format!(
+                "Currency must be a 3-letter lowercase ISO-4217 code (e.g. 'usd'), got '{}'",
+                self.currency
+            ));
+        }
+        Ok(())
+    }
+}
+
 /// Parameters for capturing a PaymentIntent.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CapturePaymentIntentParams {
@@ -641,6 +794,68 @@ pub struct CapturePaymentIntentParams {
     pub idempotency_key: Option<String>,
 }
 
+impl CapturePaymentIntentParams {
+    /// Creates a new `CapturePaymentIntentParams` with default settings (full capture).
+    ///
+    /// # Example
+    /// ```
+    /// use some_stripe_types::CapturePaymentIntentParams;
+    ///
+    /// let params = CapturePaymentIntentParams::new()
+    ///     .with_amount_to_capture(3500)
+    ///     .with_idempotency_key("idem_capture_1001");
+    ///
+    /// assert_eq!(params.amount_to_capture, Some(3500));
+    /// assert_eq!(params.idempotency_key.as_deref(), Some("idem_capture_1001"));
+    /// ```
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets the partial or full amount to capture in minor currency units (e.g., cents).
+    ///
+    /// If omitted or `None`, Stripe captures the full authorized amount.
+    pub fn with_amount_to_capture(mut self, amount: i64) -> Self {
+        self.amount_to_capture = Some(amount);
+        self
+    }
+
+    /// Attaches a unique idempotency key for safe capture retries.
+    pub fn with_idempotency_key(mut self, key: impl Into<String>) -> Self {
+        self.idempotency_key = Some(key.into());
+        self
+    }
+
+    /// Validates capture parameter sanity.
+    ///
+    /// - If specified, `amount_to_capture` must be a positive integer (`> 0`).
+    ///
+    /// # Errors
+    /// Returns `Err(String)` if validation fails.
+    ///
+    /// # Example
+    /// ```
+    /// use some_stripe_types::CapturePaymentIntentParams;
+    ///
+    /// let valid = CapturePaymentIntentParams::new().with_amount_to_capture(2000);
+    /// assert!(valid.validate().is_ok());
+    ///
+    /// let invalid = CapturePaymentIntentParams::new().with_amount_to_capture(0);
+    /// assert!(invalid.validate().is_err());
+    /// ```
+    pub fn validate(&self) -> Result<(), String> {
+        if let Some(amount) = self.amount_to_capture
+            && amount <= 0
+        {
+            return Err(format!(
+                "Amount to capture must be a positive integer in minor units, got {}",
+                amount
+            ));
+        }
+        Ok(())
+    }
+}
+
 /// Parameters for canceling a PaymentIntent.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct CancelPaymentIntentParams {
@@ -650,6 +865,92 @@ pub struct CancelPaymentIntentParams {
     /// Unique idempotency key.
     #[serde(skip)]
     pub idempotency_key: Option<String>,
+}
+
+impl CancelPaymentIntentParams {
+    /// Creates a new `CancelPaymentIntentParams`.
+    ///
+    /// # Example
+    /// ```
+    /// use some_stripe_types::CancelPaymentIntentParams;
+    ///
+    /// let params = CancelPaymentIntentParams::new()
+    ///     .with_cancellation_reason("requested_by_customer")
+    ///     .with_idempotency_key("idem_cancel_1001");
+    ///
+    /// assert_eq!(params.cancellation_reason.as_deref(), Some("requested_by_customer"));
+    /// assert_eq!(params.idempotency_key.as_deref(), Some("idem_cancel_1001"));
+    /// ```
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets the reason for canceling this PaymentIntent.
+    ///
+    /// Possible values include: `"duplicate"`, `"fraudulent"`, `"requested_by_customer"`, or `"abandoned"`.
+    pub fn with_cancellation_reason(mut self, reason: impl Into<String>) -> Self {
+        self.cancellation_reason = Some(reason.into());
+        self
+    }
+
+    /// Attaches a unique idempotency key for safe cancellation retries.
+    pub fn with_idempotency_key(mut self, key: impl Into<String>) -> Self {
+        self.idempotency_key = Some(key.into());
+        self
+    }
+}
+
+/// Parameters for confirming a Stripe PaymentIntent.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ConfirmPaymentIntentParams {
+    /// ID of the payment method to attach to this PaymentIntent (`pm_...`).
+    pub payment_method: Option<String>,
+
+    /// Return URL for 3D Secure / redirect-based payment methods.
+    pub return_url: Option<String>,
+
+    /// Unique idempotency key.
+    #[serde(skip)]
+    pub idempotency_key: Option<String>,
+}
+
+impl ConfirmPaymentIntentParams {
+    /// Creates a new `ConfirmPaymentIntentParams`.
+    ///
+    /// # Example
+    /// ```
+    /// use some_stripe_types::ConfirmPaymentIntentParams;
+    ///
+    /// let params = ConfirmPaymentIntentParams::new()
+    ///     .with_payment_method("pm_card_visa")
+    ///     .with_return_url("https://example.com/checkout/complete")
+    ///     .with_idempotency_key("idem_confirm_1001");
+    ///
+    /// assert_eq!(params.payment_method.as_deref(), Some("pm_card_visa"));
+    /// assert_eq!(params.return_url.as_deref(), Some("https://example.com/checkout/complete"));
+    /// assert_eq!(params.idempotency_key.as_deref(), Some("idem_confirm_1001"));
+    /// ```
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets the payment method identifier (`pm_...`).
+    pub fn with_payment_method(mut self, pm: impl Into<String>) -> Self {
+        self.payment_method = Some(pm.into());
+        self
+    }
+
+    /// Sets the customer return URL after 3D Secure challenge completion.
+    pub fn with_return_url(mut self, return_url: impl Into<String>) -> Self {
+        self.return_url = Some(return_url.into());
+        self
+    }
+
+    /// Attaches a unique idempotency key for safe confirmation retries.
+    pub fn with_idempotency_key(mut self, key: impl Into<String>) -> Self {
+        self.idempotency_key = Some(key.into());
+        self
+    }
 }
 
 /// Represents a Stripe Account object (merchant profile).
@@ -1238,5 +1539,101 @@ mod tests {
             }
             other => panic!("Expected Invoice variant, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn test_payment_intent_methods_and_redirect_url() {
+        let json = serde_json::json!({
+            "id": "pi_test_3ds_challenge",
+            "object": "payment_intent",
+            "amount": 10000,
+            "currency": "eur",
+            "status": "requires_action",
+            "client_secret": "pi_secret_top_secret_code",
+            "next_action": {
+                "type": "redirect_to_url",
+                "redirect_to_url": {
+                    "url": "https://hooks.stripe.com/redirect/authenticate/src_test"
+                }
+            }
+        });
+
+        let pi: PaymentIntent = serde_json::from_value(json).unwrap();
+        assert!(pi.requires_action());
+        assert!(!pi.is_succeeded());
+        assert!(!pi.requires_capture());
+        assert!(!pi.is_canceled());
+        assert_eq!(
+            pi.redirect_url(),
+            Some("https://hooks.stripe.com/redirect/authenticate/src_test")
+        );
+
+        let debug_str = format!("{pi:?}");
+        assert!(debug_str.contains("[REDACTED]"));
+        assert!(!debug_str.contains("top_secret_code"));
+    }
+
+    #[test]
+    fn test_param_builders_and_validation() {
+        // Valid params
+        let create = CreatePaymentIntentParams::new(5000, "usd")
+            .with_capture_method("manual")
+            .with_description("Order #123")
+            .with_idempotency_key("idem_123");
+        assert!(create.validate().is_ok());
+        assert_eq!(create.amount, 5000);
+        assert_eq!(create.currency, "usd");
+        assert_eq!(create.capture_method.as_deref(), Some("manual"));
+        assert_eq!(create.description.as_deref(), Some("Order #123"));
+        assert_eq!(create.idempotency_key.as_deref(), Some("idem_123"));
+
+        // Invalid: non-positive amount
+        let invalid_amount = CreatePaymentIntentParams::new(0, "usd");
+        assert!(invalid_amount.validate().is_err());
+        let negative_amount = CreatePaymentIntentParams::new(-50, "usd");
+        assert!(negative_amount.validate().is_err());
+
+        // Invalid: bad currency code
+        let upper_currency = CreatePaymentIntentParams::new(1000, "USD");
+        assert!(upper_currency.validate().is_err());
+        let short_currency = CreatePaymentIntentParams::new(1000, "us");
+        assert!(short_currency.validate().is_err());
+        let long_currency = CreatePaymentIntentParams::new(1000, "usdt");
+        assert!(long_currency.validate().is_err());
+
+        // Capture params validation
+        let capture = CapturePaymentIntentParams::new()
+            .with_amount_to_capture(2500)
+            .with_idempotency_key("idem_cap");
+        assert!(capture.validate().is_ok());
+        assert_eq!(capture.amount_to_capture, Some(2500));
+        assert_eq!(capture.idempotency_key.as_deref(), Some("idem_cap"));
+
+        let invalid_cap = CapturePaymentIntentParams::new().with_amount_to_capture(0);
+        assert!(invalid_cap.validate().is_err());
+        let neg_cap = CapturePaymentIntentParams::new().with_amount_to_capture(-100);
+        assert!(neg_cap.validate().is_err());
+
+        // Cancel params builder
+        let cancel = CancelPaymentIntentParams::new()
+            .with_cancellation_reason("requested_by_customer")
+            .with_idempotency_key("idem_can");
+        assert_eq!(
+            cancel.cancellation_reason.as_deref(),
+            Some("requested_by_customer")
+        );
+        assert_eq!(cancel.idempotency_key.as_deref(), Some("idem_can"));
+
+        // Confirm params builder
+        let confirm = ConfirmPaymentIntentParams::new()
+            .with_payment_method("pm_card_visa")
+            .with_return_url("https://example.com/return")
+            .with_idempotency_key("idem_conf");
+        assert_eq!(confirm.payment_method.as_deref(), Some("pm_card_visa"));
+        assert_eq!(
+            confirm.return_url.as_deref(),
+            Some("https://example.com/return")
+        );
+        assert_eq!(confirm.idempotency_key.as_deref(), Some("idem_conf"));
     }
 }
