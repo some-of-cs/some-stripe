@@ -11,8 +11,12 @@ Strongly Typed Domain Models, Events & Request DTOs for [`some-stripe`](https://
 ## Architectural Highlights
 
 - **Strongly Typed Domain Entities**:
-  - Full serde JSON serialization and deserialization for core Stripe resources: `PaymentIntent`, `CheckoutSession`, `Account`, `Invoice`, `Event`, and `EventData`.
+  - Full serde JSON serialization and deserialization for core Stripe resources: `PaymentIntent`, `CheckoutSession`, `Account`, `Invoice`, `Balance`, `BalanceTransaction`, `Event`, and `EventData`.
   - Type-safe identifiers: `AccountId` (`acct_...`), `IdempotencyKey`.
+- **Immutable Balance Ledger & Reconciliation (Gate G2, Gate G-Law)**:
+  - `BalanceTransaction` and `Balance` entities with zero-clone stream pagination integration (`balance_transaction_id`).
+  - Mathematical double-entry ledger reconciliation invariant: `verify_accounting_invariant(&self) -> bool` enforcing $\text{net} = \text{amount} - \text{fee}$.
+  - Batch validation helper: `validate_ledger_reconciliation(txns: &[BalanceTransaction]) -> Result<(), String>`.
 - **Discriminated Event Union & Upcoming Invoice Guard**:
   - `EventObject` tagged union (`payment_intent`, `checkout.session`, `invoice`, with `#[serde(other)] Unknown` fallback).
   - `Invoice.id` is typed as `Option<String>` to safely accommodate `invoice.upcoming` preview events where `id` is null on Stripe payloads.
@@ -54,3 +58,11 @@ match data.deserialize_object().unwrap() {
     }
     _ => panic!("Expected Invoice"),
 }
+
+// Balance Transaction Immutable Accounting Invariant (net == amount - fee)
+use some_stripe_types::{BalanceTransaction, validate_ledger_reconciliation};
+
+let txn = BalanceTransaction::new("txn_001", 1000, 30, "usd", "charge", "available");
+assert!(txn.verify_accounting_invariant());
+assert!(validate_ledger_reconciliation(&[txn]).is_ok());
+```

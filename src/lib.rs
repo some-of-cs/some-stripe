@@ -67,6 +67,7 @@ pub use some_stripe_core::workflow::{
     DefaultErrorWorkflow, ErrorAction, ErrorSeverity, ErrorWorkflowHandler,
 };
 
+pub use some_stripe_types::balance;
 pub use some_stripe_types::*;
 pub use some_stripe_webhooks::{
     DEFAULT_TOLERANCE_SECONDS, MAX_FUTURE_DRIFT_SECONDS, MAX_WEBHOOK_PAYLOAD_BYTES,

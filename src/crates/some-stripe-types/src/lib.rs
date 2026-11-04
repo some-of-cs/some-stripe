@@ -5,7 +5,7 @@
 //!
 //! ## Overview
 //!
-//! - **Domain Entities**: [`PaymentIntent`], [`CheckoutSession`], [`Account`], [`Invoice`].
+//! - **Domain Entities**: [`PaymentIntent`], [`CheckoutSession`], [`Account`], [`Invoice`], [`Balance`], [`BalanceTransaction`].
 //! - **Event Pipeline**: [`Event`], [`EventData`], [`EventObject`].
 //! - **Strongly Typed Identifiers**: [`AccountId`], [`IdempotencyKey`].
 //! - **Invoice Upcoming Guard**: [`Invoice`] specifies `pub id: Option<String>` to safely accommodate
@@ -63,6 +63,9 @@
 //! ```
 
 use serde::{Deserialize, Serialize};
+
+pub mod balance;
+pub use balance::*;
 
 /// Strongly typed Stripe Connect Account ID (`acct_...`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
