@@ -4,49 +4,38 @@ This Kanban board tracks the end-to-end execution of **Module 4 (Hosted Checkout
 
 > [!IMPORTANT]
 > **Mandatory Agent Rule**: Every subagent assigned to a task MUST update this file upon:
-> 1. Starting execution $\to$ update status to `🔄 In Progress`.
-> 2. Pushing branch and opening PR $\to$ update status to `🔍 In Review / PR Open (#XX)` and link the PR.
-> 3. Merging the PR $\to$ update status to `✅ Merged`.
+> 1. Starting execution $\to$ move its task from `todo` to `in_progress`.
+> 2. Pushing branch and opening PR $\to$ move its task from `in_progress` to `review` and set the `ticket` metadata to the GitHub PR number (e.g. `ticket: '50'`).
+> 3. Merging the PR $\to$ move its task to `done`.
 
 ---
 
-## 1. Visual Mermaid Kanban Flow
+## 1. Native Mermaid Kanban Board
 
 ```mermaid
-flowchart LR
-    subgraph BACKLOG["📋 Backlog / Ready to Start"]
-        direction TB
-        M4_MOD["Module 4: Hosted Checkout & Links<br/>Branch: feat/module-4-checkout-and-links<br/>Assigned: Module 4 Lead (agent-a)"]
-        S41_STORY["US-4.1.0: Checkout Sessions Promotion<br/>Branch: feat/us-4.1.0-checkout-sessions<br/>Assigned: US-4.1.0 Story Leader (agent-b)"]
-        S42_STORY["US-4.2.0: Payment Links Promotion<br/>Branch: feat/us-4.2.0-payment-links<br/>Assigned: US-4.2.0 Story Leader (agent-c)"]
-        
-        U41_1["Unit 4.1.0-1: CheckoutSession & LineItem Entities<br/>Branch: feat/us-4.1.0/unit-1-session-line-item-entities<br/>Assigned: Entity Specialist (agent-a)"]
-        U41_2["Unit 4.1.0-2: CreateCheckoutSessionParams Builder<br/>Branch: feat/us-4.1.0/unit-2-params-and-bracket-serialization<br/>Assigned: Schema Specialist (agent-b)"]
-        U41_3["Unit 4.1.0-3: SessionsResource CRUD & Expire<br/>Branch: feat/us-4.1.0/unit-3-sessions-resource-crud<br/>Assigned: CRUD Implementer (agent-c)"]
-        U41_4["Unit 4.1.0-4: Async Fulfillment & Redirect Guard<br/>Branch: feat/us-4.1.0/unit-4-async-fulfillment-wire-tests<br/>Assigned: AppSec Engineer (agent-a)"]
-        U41_5["Unit 4.1.0-5: Borrow Audit, Doctests & Mocks<br/>Branch: feat/us-4.1.0/unit-5-borrow-audit-and-doctests<br/>Assigned: QA & Docs Engineer (agent-b)"]
-
-        U42_1["Unit 4.2.0-1: PaymentLink Domain Entities<br/>Branch: feat/us-4.2.0/unit-1-payment-link-entities<br/>Assigned: Entity Specialist (agent-c)"]
-        U42_2["Unit 4.2.0-2: PaymentLink Params & Multi-Currency<br/>Branch: feat/us-4.2.0/unit-2-payment-link-params<br/>Assigned: Schema Specialist (agent-a)"]
-        U42_3["Unit 4.2.0-3: PaymentLinksResource CRUD<br/>Branch: feat/us-4.2.0/unit-3-payment-links-resource-crud<br/>Assigned: CRUD Implementer (agent-b)"]
-        U42_4["Unit 4.2.0-4: EU Omnibus 2019/2161 Wire Mocks<br/>Branch: feat/us-4.2.0/unit-4-omnibus-price-wire-tests<br/>Assigned: AppSec Engineer (agent-c)"]
-        U42_5["Unit 4.2.0-5: Borrow Audit & Reconciliation Docs<br/>Branch: feat/us-4.2.0/unit-5-borrow-audit-and-reconciliation<br/>Assigned: QA & Docs Engineer (agent-a)"]
-    end
-
-    subgraph IN_PROGRESS["🔄 In Progress"]
-        direction TB
-        IP_NONE["(None currently active)"]
-    end
-
-    subgraph REVIEW["🔍 In Review / PR Open"]
-        direction TB
-        REV_NONE["(No open PRs currently)"]
-    end
-
-    subgraph DONE["✅ Merged to Target"]
-        direction TB
-        DONE_NONE["(Awaiting Unit 1 start)"]
-    end
+---
+config:
+  kanban:
+    ticketBaseUrl: 'https://github.com/some-of-cs/some-stripe/pull/#TICKET#'
+---
+kanban
+  todo[📋 Backlog / Ready]
+    m4[Module 4: Hosted Checkout & Links Final Promotion]@{ ticket: 'feat/module-4-checkout-and-links', assigned: 'agent-a', priority: 'Very High' }
+    s41[US-4.1.0: Checkout Sessions Story Promotion]@{ ticket: 'feat/us-4.1.0-checkout-sessions', assigned: 'agent-b', priority: 'High' }
+    u411[Unit 4.1.0-1: CheckoutSession & LineItem Entities]@{ ticket: 'unit-1', assigned: 'agent-a', priority: 'High' }
+    u412[Unit 4.1.0-2: CreateCheckoutSessionParams Builder]@{ ticket: 'unit-2', assigned: 'agent-b', priority: 'High' }
+    u413[Unit 4.1.0-3: SessionsResource CRUD & Expire]@{ ticket: 'unit-3', assigned: 'agent-c', priority: 'High' }
+    u414[Unit 4.1.0-4: Async Fulfillment & Redirect Guard]@{ ticket: 'unit-4', assigned: 'agent-a', priority: 'High' }
+    u415[Unit 4.1.0-5: Borrow Audit, Doctests & Mocks]@{ ticket: 'unit-5', assigned: 'agent-b', priority: 'High' }
+    s42[US-4.2.0: Payment Links Story Promotion]@{ ticket: 'feat/us-4.2.0-payment-links', assigned: 'agent-c', priority: 'High' }
+    u421[Unit 4.2.0-1: PaymentLink Domain Entities]@{ ticket: 'unit-1', assigned: 'agent-c', priority: 'High' }
+    u422[Unit 4.2.0-2: PaymentLink Params & Multi-Currency]@{ ticket: 'unit-2', assigned: 'agent-a', priority: 'High' }
+    u423[Unit 4.2.0-3: PaymentLinksResource CRUD]@{ ticket: 'unit-3', assigned: 'agent-b', priority: 'High' }
+    u424[Unit 4.2.0-4: EU Omnibus 2019/2161 Wire Mocks]@{ ticket: 'unit-4', assigned: 'agent-c', priority: 'High' }
+    u425[Unit 4.2.0-5: Borrow Audit & Reconciliation Docs]@{ ticket: 'unit-5', assigned: 'agent-a', priority: 'High' }
+  in_progress[🔄 In Progress]
+  review[🔍 In Review / PR Open]
+  done[✅ Done / Merged]
 ```
 
 ---
@@ -71,9 +60,11 @@ flowchart LR
 
 ---
 
-## 3. Protocol for Updating Status
-Whenever an agent updates its task status:
-1. Open this file `docs/user-stories/module-4-hosted-checkout-and-links/KANBAN.md`.
-2. Move your task node in the Mermaid chart from `BACKLOG` to `IN_PROGRESS`, `REVIEW`, or `DONE`.
-3. In the Task Allocation table, update the `Status` and `PR` columns.
-4. Also update `.agents/checkpoints/module-4/checkpoint.json` to keep machine-readable tracking in sync.
+## 3. How Agents Transition Tasks in Mermaid Kanban
+1. Under the `kanban` block above, indent your task line under the appropriate column:
+   - `todo[📋 Backlog / Ready]`
+   - `in_progress[🔄 In Progress]`
+   - `review[🔍 In Review / PR Open]` (update `@{ ticket: '<PR_NUMBER>' }`)
+   - `done[✅ Done / Merged]`
+2. Keep `assigned: '<profile>'` and `priority: 'High'`.
+3. In the markdown table, update the `Status` and `PR` columns accordingly.
