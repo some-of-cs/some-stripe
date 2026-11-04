@@ -11,8 +11,11 @@ Strongly Typed Domain Models, Events & Request DTOs for [`some-stripe`](https://
 ## Architectural Highlights
 
 - **Strongly Typed Domain Entities**:
-  - Full serde JSON serialization and deserialization for core Stripe resources: `PaymentIntent`, `CheckoutSession`, `Account`, `Event`, and `EventData`.
+  - Full serde JSON serialization and deserialization for core Stripe resources: `PaymentIntent`, `CheckoutSession`, `Account`, `Invoice`, `Event`, and `EventData`.
   - Type-safe identifiers: `AccountId` (`acct_...`), `IdempotencyKey`.
+- **Discriminated Event Union & Upcoming Invoice Guard**:
+  - `EventObject` tagged union (`payment_intent`, `checkout.session`, `invoice`, with `#[serde(other)] Unknown` fallback).
+  - `Invoice.id` is typed as `Option<String>` to safely accommodate `invoice.upcoming` preview events where `id` is null on Stripe payloads.
 - **Statutory Financial & PCI-DSS 4.0 Compliance (Gate G-Law)**:
   - Strict custom `std::fmt::Debug` implementations masking sensitive fields (e.g. `client_secret` in `PaymentIntent`) with `[REDACTED]`.
   - Zero raw PAN or secret retention in formatted error strings and logs.
@@ -26,7 +29,7 @@ Strongly Typed Domain Models, Events & Request DTOs for [`some-stripe`](https://
 ## Quickstart
 
 ```rust
-use some_stripe_types::{AccountId, IdempotencyKey, PaymentIntent};
+use some_stripe_types::{AccountId, IdempotencyKey, PaymentIntent, EventData, EventObject};
 
 let account_id = AccountId::from("acct_1H2X3Y4Z");
 assert_eq!(account_id.to_string(), "acct_1H2X3Y4Z");
@@ -34,26 +37,20 @@ assert_eq!(account_id.to_string(), "acct_1H2X3Y4Z");
 let idempotency_key = IdempotencyKey::from("idem_tx_checkout_88712");
 assert_eq!(idempotency_key.to_string(), "idem_tx_checkout_88712");
 
-let payload = r#"{
-    "id": "pi_123456789",
-    "object": "payment_intent",
-    "amount": 5000,
-    "currency": "usd",
-    "status": "succeeded"
-}"#;
+// EventObject Deserialization with invoice.upcoming null id support
+let data = EventData {
+    object: serde_json::json!({
+        "id": null,
+        "object": "invoice",
+        "customer": "cus_preview_123",
+        "amount_due": 3500
+    }),
+};
 
-let intent: PaymentIntent = serde_json::from_str(payload).unwrap();
-assert_eq!(intent.id, "pi_123456789");
-assert_eq!(intent.amount, 5000);
-```
-
----
-
-## Quality Gates & Verification
-
-| Gate | Criterion | Status | Evidence |
-| :--- | :--- | :---: | :--- |
-| **G0** | Compilation & Clippy | **PASS** | 0 warnings (`cargo clippy -- -D warnings`), 0 fmt diffs |
-| **G-Borrow** | Zero-Clone Discipline | **PASS** | Zero clone calls inside hot deserialization pipelines |
-| **G-Law** | PCI-DSS Redaction | **PASS** | Sensitive `client_secret` redacted to `[REDACTED]` in `Debug` |
-| **G1** | Contract Testing | **PASS** | Comprehensive JSON roundtrip tests in `types_contract_test.rs` |
+match data.deserialize_object().unwrap() {
+    EventObject::Invoice(inv) => {
+        assert!(inv.id.is_none());
+        assert_eq!(inv.amount_due, Some(3500));
+    }
+    _ => panic!("Expected Invoice"),
+}
