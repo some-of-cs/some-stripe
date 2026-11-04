@@ -6,8 +6,10 @@
 //! ## Overview
 //!
 //! - **Domain Entities**: [`PaymentIntent`], [`CheckoutSession`], [`Account`], [`Invoice`], [`Dispute`], [`Refund`], [`Balance`], [`BalanceTransaction`].
+//! - **ISO 4217 Integer Arithmetic (Gate G-Law)**: [`currency`] module provides zero-float exact integer arithmetic across non-decimal, 2-decimal, and 3-decimal currencies.
 //! - **Event Pipeline**: [`Event`], [`EventData`], [`EventObject`].
 //! - **Statutory Legal Compliance**: [`is_statutory_withdrawal_compliant`] enforces EU Directive 2011/83/EU Article 13.
+//! - **Immutable Ledger Reconciliation**: [`validate_ledger_reconciliation`] verifies $\text{net} = \text{amount} - \text{fee}$ across batches and streams.
 //! - **Strongly Typed Identifiers**: [`AccountId`], [`IdempotencyKey`], [`DisputeId`].
 //! - **Dispute & Evidence Management**: [`Dispute`], [`DisputeEvidence`], [`DisputeEvidenceDetails`],
 //!   [`DisputeStatus`], and [`UpdateDisputeParams`] with submission locking invariants.
@@ -69,6 +71,8 @@ use serde::{Deserialize, Serialize};
 
 pub mod balance;
 pub use balance::*;
+pub mod currency;
+pub use currency::*;
 pub mod dispute;
 pub use dispute::*;
 pub mod refund;

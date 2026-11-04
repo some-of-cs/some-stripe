@@ -56,7 +56,6 @@
 
 pub use some_stripe_core as core;
 pub use some_stripe_types as types;
-pub use some_stripe_types::dispute;
 pub use some_stripe_webhooks as webhooks;
 
 pub use some_stripe_core::client::{
@@ -69,7 +68,6 @@ pub use some_stripe_core::workflow::{
     DefaultErrorWorkflow, ErrorAction, ErrorSeverity, ErrorWorkflowHandler,
 };
 
-pub use some_stripe_types::balance;
 pub use some_stripe_types::*;
 pub use some_stripe_webhooks::{
     DEFAULT_TOLERANCE_SECONDS, MAX_FUTURE_DRIFT_SECONDS, MAX_WEBHOOK_PAYLOAD_BYTES,
