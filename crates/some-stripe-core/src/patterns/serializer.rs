@@ -1,6 +1,7 @@
 //! Dual-protocol serialization engine and 3-state [`Nullable`] type system for the Stripe API.
 
 use crate::error::StripeError;
+use crate::patterns::nullable::Nullable;
 use serde::Serialize;
 
 /// Encodes a string slice using RFC 3986 percent-encoding.
