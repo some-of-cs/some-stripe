@@ -65,6 +65,10 @@ pub enum StripeWebhookError {
     #[error("Missing or empty webhook secret")]
     MissingSecret,
 
+    /// The webhook secret is invalid, corrupted, or consists solely of whitespace.
+    #[error("Invalid or whitespace-only webhook secret")]
+    BadKey,
+
     /// The payload slice is empty.
     #[error("Empty webhook payload")]
     EmptyPayload,
