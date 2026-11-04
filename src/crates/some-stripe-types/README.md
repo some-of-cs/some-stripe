@@ -11,10 +11,15 @@ Strongly Typed Domain Models, Events & Request DTOs for [`some-stripe`](https://
 ## Architectural Highlights
 
 - **Strongly Typed Domain Entities**:
-  - Full serde JSON serialization and deserialization for core Stripe resources: `PaymentIntent`, `CheckoutSession`, `Account`, `Invoice`, `Refund`, `Event`, and `EventData`.
-  - Type-safe identifiers: `AccountId` (`acct_...`), `IdempotencyKey`.
+  - Full serde JSON serialization and deserialization for core Stripe resources: `PaymentIntent`, `CheckoutSession`, `Account`, `Invoice`, `Dispute`, `Refund`, `Event`, and `EventData`.
+  - Type-safe identifiers: `AccountId` (`acct_...`), `IdempotencyKey`, `DisputeId` (`dp_...`).
+- **Disputes Management & Evidence Submission Locking**:
+  - Complete 8-status dispute lifecycle state machine (`DisputeStatus`).
+  - Exhaustive 20-field evidence container (`DisputeEvidence`) for fulfillment proofs, customer communications, duplicate charge explanations, and policy disclosures.
+  - Evidence submission tracking (`DisputeEvidenceDetails`) with due dates and past-due detection.
+  - Submission locking invariants: `Dispute::is_evidence_locked` and `UpdateDisputeParams::is_submission_final` prevent modifying finalized or closed dispute evidence.
 - **Discriminated Event Union & Upcoming Invoice Guard**:
-  - `EventObject` tagged union (`payment_intent`, `checkout.session`, `invoice`, `refund`, with `#[serde(other)] Unknown` fallback).
+  - `EventObject` tagged union (`payment_intent`, `checkout.session`, `invoice`, `dispute`, `refund`, with `#[serde(other)] Unknown` fallback).
   - `Invoice.id` is typed as `Option<String>` to safely accommodate `invoice.upcoming` preview events where `id` is null on Stripe payloads.
 - **Statutory Financial & PCI-DSS 4.0 Compliance (Gate G-Law)**:
   - EU Directive 2011/83/EU Article 13 statutory 14-day consumer withdrawal compliance validator (`is_statutory_withdrawal_compliant`).
