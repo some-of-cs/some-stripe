@@ -564,12 +564,13 @@ fn test_create_checkout_session_params_defaults_and_serde() {
         cancel_url: Some("https://example.com/checkout/cancel".into()),
         mode: "payment".into(),
         client_reference_id: Some("user_99".into()),
-        currency: "usd".into(),
-        unit_amount: 1500,
-        product_name: "Coffee Mug".into(),
-        quantity: 1,
+        currency: Some("usd".into()),
+        unit_amount: Some(1500),
+        product_name: Some("Coffee Mug".into()),
+        quantity: Some(1),
         expires_at: Some(1728400000),
         idempotency_key: Some("idem_key_coffee".into()),
+        ..Default::default()
     };
 
     let serialized = serde_json::to_string(&params)
@@ -590,10 +591,10 @@ fn test_create_checkout_session_params_defaults_and_serde() {
         Some("https://example.com/checkout/cancel")
     );
     assert_eq!(deserialized.mode, "payment");
-    assert_eq!(deserialized.currency, "usd");
-    assert_eq!(deserialized.unit_amount, 1500);
-    assert_eq!(deserialized.product_name, "Coffee Mug");
-    assert_eq!(deserialized.quantity, 1);
+    assert_eq!(deserialized.currency.as_deref(), Some("usd"));
+    assert_eq!(deserialized.unit_amount, Some(1500));
+    assert_eq!(deserialized.product_name.as_deref(), Some("Coffee Mug"));
+    assert_eq!(deserialized.quantity, Some(1));
     assert_eq!(deserialized.expires_at, Some(1728400000));
     assert!(deserialized.idempotency_key.is_none());
 }

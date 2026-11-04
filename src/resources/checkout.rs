@@ -40,38 +40,6 @@ impl<'a> SessionsResource<'a> {
         params: &CreateCheckoutSessionParams,
     ) -> Result<CheckoutSession, StripeError> {
         let url = format!("{}/v1/checkout/sessions", self.client.config.api_base);
-        let amount_str = params.unit_amount.to_string();
-        let qty_str = params.quantity.to_string();
-
-        let mut form_data = vec![
-            ("success_url", params.success_url.as_str()),
-            ("mode", params.mode.as_str()),
-            (
-                "line_items[0][price_data][currency]",
-                params.currency.as_str(),
-            ),
-            (
-                "line_items[0][price_data][unit_amount]",
-                amount_str.as_str(),
-            ),
-            (
-                "line_items[0][price_data][product_data][name]",
-                params.product_name.as_str(),
-            ),
-            ("line_items[0][quantity]", qty_str.as_str()),
-        ];
-
-        if let Some(cancel_url) = &params.cancel_url {
-            form_data.push(("cancel_url", cancel_url.as_str()));
-        }
-        if let Some(client_ref) = &params.client_reference_id {
-            form_data.push(("client_reference_id", client_ref.as_str()));
-        }
-
-        let expires_str = params.expires_at.map(|e| e.to_string());
-        if let Some(ref exp) = expires_str {
-            form_data.push(("expires_at", exp.as_str()));
-        }
 
         let generated_key;
         let idempotency_key = match params.idempotency_key.as_deref() {
@@ -82,11 +50,54 @@ impl<'a> SessionsResource<'a> {
             }
         };
 
+        let form_pairs;
+        let mut legacy_form_data;
+        let form_data: &[(String, String)] = if params.line_items.is_some() {
+            form_pairs = some_stripe_core::patterns::serializer::to_form_params(params)?;
+            &form_pairs
+        } else {
+            legacy_form_data = vec![
+                ("success_url".to_string(), params.success_url.clone()),
+                ("mode".to_string(), params.mode.clone()),
+            ];
+            if let Some(cancel_url) = &params.cancel_url {
+                legacy_form_data.push(("cancel_url".to_string(), cancel_url.clone()));
+            }
+            if let Some(client_ref) = &params.client_reference_id {
+                legacy_form_data.push(("client_reference_id".to_string(), client_ref.clone()));
+            }
+            if let Some(curr) = &params.currency {
+                legacy_form_data.push((
+                    "line_items[0][price_data][currency]".to_string(),
+                    curr.clone(),
+                ));
+            }
+            if let Some(amt) = params.unit_amount {
+                legacy_form_data.push((
+                    "line_items[0][price_data][unit_amount]".to_string(),
+                    amt.to_string(),
+                ));
+            }
+            if let Some(name) = &params.product_name {
+                legacy_form_data.push((
+                    "line_items[0][price_data][product_data][name]".to_string(),
+                    name.clone(),
+                ));
+            }
+            if let Some(qty) = params.quantity {
+                legacy_form_data.push(("line_items[0][quantity]".to_string(), qty.to_string()));
+            }
+            if let Some(exp) = params.expires_at {
+                legacy_form_data.push(("expires_at".to_string(), exp.to_string()));
+            }
+            &legacy_form_data
+        };
+
         let req = self
             .client
             .http
             .post(&url)
-            .form(&form_data)
+            .form(form_data)
             .header("Idempotency-Key", idempotency_key);
 
         let val = self.client.execute(req).await?;
