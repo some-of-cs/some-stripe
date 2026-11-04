@@ -58,6 +58,7 @@
 
 - **Created**:
   - `src/crates/some-stripe-types/src/omnibus.rs`
+  - `src/crates/some-stripe-types/tests/omnibus_price_wire_test.rs`
   - `tests/omnibus_price_wire_test.rs`
   - `.agents/reports/module-4/us-4.2.0/unit-4-omnibus-price-wire-tests.md`
 - **Modified**:
@@ -75,7 +76,7 @@
 | **Gate G-Borrow** | Zero-Clone Discipline | **PASS** | Borrowed parameters (`&CreatePaymentLinkParams`, `&str`); zero unnecessary deep copies |
 | **Gate G2** | Security & Idempotency Invariants | **PASS** | Idempotency keys verified across wire mock calls; no credential leaks |
 | **Gate G-Law** | Statutory EU Directive 2019/2161 & ISO 4217 | **PASS** | Integer minor currency units (`i64`), zero floating-point operations, prior 30-day baseline validation, deceptive discount prohibition, tax transparency enforcement |
-| **Gate G1** | Wire Mock & Acceptance Tests | **PASS** | 9 integration tests in `tests/omnibus_price_wire_test.rs` + 14 unit tests in `omnibus.rs` pass cleanly |
+| **Gate G1** | Wire Mock & Acceptance Tests | **PASS** | 9 integration tests in `tests/omnibus_price_wire_test.rs`, 10 contract tests in `src/crates/some-stripe-types/tests/omnibus_price_wire_test.rs`, and 14 unit tests in `omnibus.rs` pass cleanly |
 | **Gate G3** | Microkernel Architecture | **PASS** | Progressive cargo feature compatibility, clean module boundaries |
 | **Gate G-Docs** | Idiomatic Documentation | **PASS** | Comprehensive rustdoc examples on `validate_omnibus_price_transparency` and `OmnibusTaxBreakdown` pass in doctests |
 
@@ -84,6 +85,20 @@
 ## 4. Verification Logs & Test Suite Results
 
 ```text
+running 10 tests in src/crates/some-stripe-types/tests/omnibus_price_wire_test.rs
+test test_omnibus_types_compliant_discount_with_prior_30d_baseline ... ok
+test test_omnibus_types_error_deceptive_discount_exceeds_baseline ... ok
+test test_omnibus_types_error_discount_exceeds_regular_price ... ok
+test test_omnibus_types_error_missing_prior_30d_baseline ... ok
+test test_omnibus_types_error_non_positive_minor_units ... ok
+test test_omnibus_types_gate_g_borrow_zero_clone ... ok
+test test_omnibus_types_metadata_roundtrip ... ok
+test test_omnibus_types_price_data_params_builder ... ok
+test test_omnibus_types_tax_behavior_transparency ... ok
+test test_omnibus_types_tax_breakdown_arithmetic ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
 running 9 tests in tests/omnibus_price_wire_test.rs
 test test_compliant_discount_with_documented_prior_30d_baseline ... ok
 test test_error_deceptive_discount_exceeds_30d_baseline ... ok
