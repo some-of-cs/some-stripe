@@ -37,17 +37,19 @@ Profiles are **universal agent generators** tied to separate Google AI Pro billi
 - Any profile can generate and execute **ANY** specialized agent for any role or task (e.g. `microkernel-architect`, `security-webhook-engineer`, `domain-codegen-specialist`, `rust-refactoring-specialist`, `code-reviewer`, `api-tester`, or micro-unit worker agents).
 - Workloads and agent generation MUST rotate across the 3 profile generators in round-robin fashion to distribute token consumption and split the quota bill evenly.
 
-### 3. Multi-Tier Sequential Merge & Promotion Protocol
-Merging MUST proceed in strict hierarchical tiers after running all test suites:
-1. **Tier 1 (Units to Story)**:
+### 3. Multi-Tier Sequential Merge & Promotion Protocol (Strictly via `gh pr merge`)
+All branch integrations and tier promotions MUST happen **over GitHub via GitHub CLI (`gh pr merge`)**. Local `git merge` commands across promotion tiers are strictly prohibited. The GitHub Pull Request audit trail is the single source of truth.
+1. **Tier 1 (Units to Story via `gh pr merge`)**:
    - Run tests across all 5 Level 3 micro-unit branches.
-   - Once all unit tests and quality gates pass, merge the 5 unit branches into the Level 2 User Story branch (`feat/us-x.y.z`).
-2. **Tier 2 (Stories to Module)**:
+   - Once all unit tests and quality gates pass, merge the 5 unit PRs over GitHub into the story branch using `gh pr merge <PR_NUMBER> --merge`.
+2. **Tier 2 (Stories to Module via `gh pr merge`)**:
+   - Pull the merged story branch into its worktree (`git pull origin <story-branch>`).
    - Run story-level integration and wire mock test suites on the User Story branch.
-   - Once story validation passes, merge all User Story branches into the Level 1 Module branch (`feat/module-n`).
-3. **Tier 3 (Module to Main)**:
+   - Once story validation passes, merge the User Story PR over GitHub into the module branch using `gh pr merge <PR_NUMBER> --merge`.
+3. **Tier 3 (Module to Main via `gh pr merge`)**:
+   - Pull the merged module branch into its worktree (`git pull origin <module-branch>`).
    - Run full workspace test suite (`cargo test --workspace`), clippy (`cargo clippy --workspace --all-targets -- -D warnings`), and fmt verification on the Module branch.
-   - Once workspace validation passes, merge the Level 1 Module branch into `main`.
+   - Once workspace validation passes, merge the Level 1 Module PR over GitHub into `main` using `gh pr merge <PR_NUMBER> --merge`.
 
 ### 4. Quota Exhaustion Failover Across Profiles
 - In case any profile encounters a quota depletion or rate limit error (429 / `RESOURCE_EXHAUSTED` / `exceeded your current quota`), the process/agent must automatically switch to the next account profile in round-robin sequence (`Account 1` -> `Account 2` -> `Account 3`).
