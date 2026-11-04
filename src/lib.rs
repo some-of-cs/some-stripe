@@ -56,10 +56,6 @@
 
 pub use some_stripe_core as core;
 pub use some_stripe_types as types;
-pub use some_stripe_types::balance;
-pub use some_stripe_types::currency;
-pub use some_stripe_types::dispute;
-pub use some_stripe_types::refund;
 pub use some_stripe_webhooks as webhooks;
 
 pub use some_stripe_core::client::{
@@ -83,7 +79,8 @@ pub use some_stripe_webhooks::{
 
 pub mod resources;
 pub use resources::{
-    AccountsResource, CheckoutResource, PaymentIntentsResource, SessionsResource, WebhooksResource,
+    AccountsResource, BalanceResource, BalanceTransactionsResource, CheckoutResource,
+    DisputesResource, PaymentIntentsResource, RefundsResource, SessionsResource, WebhooksResource,
 };
 
 /// The main Stripe client used to interact with the Stripe API, modeled after `stripe-node`.
@@ -131,6 +128,26 @@ impl StripeClient {
     pub fn webhooks(&self) -> WebhooksResource {
         WebhooksResource::new()
     }
+
+    /// Access the Refunds resource namespace (`stripe.refunds`).
+    pub fn refunds(&self) -> RefundsResource<'_> {
+        RefundsResource::new(&self.0)
+    }
+
+    /// Access the Disputes resource namespace (`stripe.disputes`).
+    pub fn disputes(&self) -> DisputesResource<'_> {
+        DisputesResource::new(&self.0)
+    }
+
+    /// Access the Balance resource namespace (`stripe.balance`).
+    pub fn balance(&self) -> BalanceResource<'_> {
+        BalanceResource::new(&self.0)
+    }
+
+    /// Access the BalanceTransactions resource namespace (`stripe.balance_transactions`).
+    pub fn balance_transactions(&self) -> BalanceTransactionsResource<'_> {
+        BalanceTransactionsResource::new(&self.0)
+    }
 }
 
 impl From<some_stripe_core::StripeClient> for StripeClient {
@@ -152,6 +169,18 @@ pub trait StripeClientExt {
 
     /// Access the Webhooks helper resource (`stripe.webhooks`).
     fn webhooks(&self) -> WebhooksResource;
+
+    /// Access the Refunds resource namespace (`stripe.refunds`).
+    fn refunds(&self) -> RefundsResource<'_>;
+
+    /// Access the Disputes resource namespace (`stripe.disputes`).
+    fn disputes(&self) -> DisputesResource<'_>;
+
+    /// Access the Balance resource namespace (`stripe.balance`).
+    fn balance(&self) -> BalanceResource<'_>;
+
+    /// Access the BalanceTransactions resource namespace (`stripe.balance_transactions`).
+    fn balance_transactions(&self) -> BalanceTransactionsResource<'_>;
 }
 
 impl StripeClientExt for some_stripe_core::StripeClient {
@@ -169,6 +198,22 @@ impl StripeClientExt for some_stripe_core::StripeClient {
 
     fn webhooks(&self) -> WebhooksResource {
         WebhooksResource::new()
+    }
+
+    fn refunds(&self) -> RefundsResource<'_> {
+        RefundsResource::new(self)
+    }
+
+    fn disputes(&self) -> DisputesResource<'_> {
+        DisputesResource::new(self)
+    }
+
+    fn balance(&self) -> BalanceResource<'_> {
+        BalanceResource::new(self)
+    }
+
+    fn balance_transactions(&self) -> BalanceTransactionsResource<'_> {
+        BalanceTransactionsResource::new(self)
     }
 }
 

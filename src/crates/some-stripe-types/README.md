@@ -13,8 +13,9 @@ Strongly Typed Domain Models, Events & Request DTOs for [`some-stripe`](https://
 - **Strongly Typed Domain Entities**:
   - Full serde JSON serialization and deserialization for core Stripe resources: `PaymentIntent`, `CheckoutSession`, `Account`, `Invoice`, `Dispute`, `Refund`, `Balance`, `BalanceTransaction`, `Event`, and `EventData`.
   - Type-safe identifiers: `AccountId` (`acct_...`), `IdempotencyKey`, `DisputeId` (`dp_...`).
-- **Balance & Immutable Ledger Accounting (Gate G-Law & G2)**:
-  - Exact double-entry accounting invariant ($\text{net} = \text{amount} - \text{fee}$) enforced across individual transactions (`verify_accounting_invariant`) and batch streams (`validate_ledger_reconciliation`).
+- **Immutable Balance Ledger & Reconciliation (Gate G2, Gate G-Law)**:
+  - `BalanceTransaction` and `Balance` entities with zero-clone stream pagination integration (`balance_transaction_id`).
+  - Mathematical double-entry ledger reconciliation invariant: `verify_accounting_invariant(&self) -> bool` enforcing $\text{net} = \text{amount} - \text{fee}$ across individual transactions and batch streams (`validate_ledger_reconciliation`).
   - Zero-clone ID accessor `balance_transaction_id(&BalanceTransaction) -> &str`.
 - **ISO 4217 Integer Arithmetic & Conversion Engine (Gate G-Law)**:
   - Exact, zero-float integer arithmetic across 0-decimal (JPY, KRW), 2-decimal (USD, EUR, GBP), and 3-decimal (BHD, KWD) currencies.
@@ -67,6 +68,13 @@ match data.deserialize_object().unwrap() {
     }
     _ => panic!("Expected Invoice"),
 }
+
+// Balance Transaction Immutable Accounting Invariant (net == amount - fee)
+use some_stripe_types::{BalanceTransaction, validate_ledger_reconciliation};
+
+let txn = BalanceTransaction::new("txn_001", 1000, 30, "usd", "charge", "available");
+assert!(txn.verify_accounting_invariant());
+assert!(validate_ledger_reconciliation(&[txn]).is_ok());
 
 // Refund and Statutory 14-Day Consumer Withdrawal (EU Directive 2011/83/EU)
 use some_stripe_types::{Refund, is_statutory_withdrawal_compliant};

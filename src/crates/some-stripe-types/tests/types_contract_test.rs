@@ -356,6 +356,7 @@ fn test_dispute_all_evidence_fields_contract() {
         duplicate_charge_explanation: Some("Authorized subscription billing".into()),
         duplicate_charge_id: Some("ch_original_99".into()),
         refund_refusal_explanation: Some("Customer consumed digital good completely".into()),
+        product_description: Some("Digital Subscription Pass".into()),
         cancellation_policy: Some("file_policy_99".into()),
         cancellation_policy_disclosure: Some("Presented at signup".into()),
         receipt: Some("file_receipt_99".into()),

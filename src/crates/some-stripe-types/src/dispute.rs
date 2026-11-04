@@ -148,6 +148,30 @@ impl fmt::Display for DisputeStatus {
     }
 }
 
+impl AsRef<str> for DisputeStatus {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl PartialEq<&str> for DisputeStatus {
+    fn eq(&self, other: &&str) -> bool {
+        self.as_str() == *other
+    }
+}
+
+impl PartialEq<str> for DisputeStatus {
+    fn eq(&self, other: &str) -> bool {
+        self.as_str() == other
+    }
+}
+
+impl PartialEq<DisputeStatus> for &str {
+    fn eq(&self, other: &DisputeStatus) -> bool {
+        *self == other.as_str()
+    }
+}
+
 /// Error returned when parsing an unrecognized dispute status string.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DisputeStatusParseError(pub String);
@@ -216,6 +240,9 @@ pub struct DisputeEvidenceDetails {
 ///
 /// assert_eq!(evidence.customer_name.as_deref(), Some("Alice Smith"));
 /// ```
+/// Alias for `DisputeEvidence` parameters when submitting or updating evidence.
+pub type DisputeEvidenceParams = DisputeEvidence;
+
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DisputeEvidence {
     /// Any server or customer communication (such as email transcripts) showing customer agreement.
@@ -285,6 +312,10 @@ pub struct DisputeEvidence {
     /// Explanation of how and when the customer was informed of the cancellation policy.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cancellation_policy_disclosure: Option<String>,
+
+    /// Description of the product or service provided to the customer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub product_description: Option<String>,
 
     /// File ID of the receipt or transaction invoice (`file_...`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -628,6 +659,7 @@ mod tests {
             refund_refusal_explanation: Some(
                 "Item was custom manufactured to specification".into(),
             ),
+            product_description: Some("Custom manufactured widget".into()),
             cancellation_policy: Some("file_policy_222".into()),
             cancellation_policy_disclosure: Some(
                 "Explicit checkbox agreement at checkout step 2".into(),
