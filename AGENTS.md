@@ -71,6 +71,10 @@ Welcome to the **`some-stripe`** workspace. All AI agents, contributors, and aut
    - Every public module, struct, enum, and method in a microkernel MUST have comprehensive rustdoc documentation with working doc-tests (`cargo test --doc`) verified against the test harness.
    - Serde field attributes (such as `#[serde(default, skip_serializing_if = "Nullable::is_omit")]`) must be documented with runnable examples verifying payload expectations.
 
+10. **[Mandatory Shared Cargo Build Cache (`CARGO_TARGET_DIR`) in Git Worktrees](.agents/rules/cargo-target-dir-worktree-caching.md)**:
+   - Every agent running `cargo` commands in `.worktrees/` MUST export `export CARGO_TARGET_DIR=/workspaces/some-stripe/target`.
+   - Never run un-cached cargo builds or baseline tests before creating worktrees; provision worktrees instantly via `git worktree add` and reuse precompiled artifacts to keep build times under 2 seconds.
+
 ---
 
 ## 2. Multi-Profile Quota Engine & Dynamic Agent Generation
