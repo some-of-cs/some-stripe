@@ -164,13 +164,9 @@ async fn test_payment_intent_full_crud_lifecycle_and_idempotency() {
     let client = StripeClient::with_config(config);
 
     // 1. Create
-    let create_params = CreatePaymentIntentParams {
-        amount: 10000,
-        currency: "usd".into(),
-        capture_method: Some("manual".into()),
-        idempotency_key: None,
-        ..Default::default()
-    };
+    let create_params = CreatePaymentIntentParams::new(10000, "usd")
+        .unwrap()
+        .capture_method("manual");
     let created = client
         .payment_intents()
         .create(&create_params)
@@ -190,12 +186,10 @@ async fn test_payment_intent_full_crud_lifecycle_and_idempotency() {
     assert_eq!(retrieved.status, "requires_payment_method");
 
     // 3. Confirm
-    let confirm_params = ConfirmPaymentIntentParams {
-        payment_method: Some("pm_card_visa".into()),
-        setup_future_usage: Some("off_session".into()),
-        idempotency_key: Some("custom_confirm_token_abc".into()),
-        ..Default::default()
-    };
+    let confirm_params = ConfirmPaymentIntentParams::new()
+        .payment_method("pm_card_visa")
+        .setup_future_usage("off_session")
+        .idempotency_key("custom_confirm_token_abc");
     let confirmed = client
         .payment_intents()
         .confirm("pi_crud_100", Some(&confirm_params))

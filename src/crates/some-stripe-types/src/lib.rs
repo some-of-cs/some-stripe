@@ -1211,8 +1211,11 @@ mod tests {
             capture_method: Some("manual".into()),
             description: Some("Order #1024".into()),
             payment_method: Some("pm_test_card".into()),
+            customer: None,
+            receipt_email: None,
             confirm: Some(true),
             return_url: Some("https://example.com/complete".into()),
+            metadata: None,
             idempotency_key: Some("idem_create_123".into()),
         };
         assert_eq!(create_params.amount, 5000);
@@ -1220,6 +1223,7 @@ mod tests {
         assert_eq!(create_params.confirm, Some(true));
 
         let confirm_params = ConfirmPaymentIntentParams {
+            client_secret: None,
             payment_method: Some("pm_test_456".into()),
             return_url: Some("https://example.com/return".into()),
             receipt_email: Some("billing@example.com".into()),
