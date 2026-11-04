@@ -9,7 +9,8 @@
 //! 6. Gate G-Borrow zero-clone borrowing discipline.
 
 use some_stripe_types::{
-    PaymentLink, PaymentLinkId, PaymentLinkStatus, default_payment_link_object,
+    PaymentLink, PaymentLinkAfterCompletionParams, PaymentLinkId, PaymentLinkStatus,
+    default_payment_link_object,
 };
 use std::collections::HashMap;
 
@@ -111,11 +112,15 @@ fn test_payment_link_deserialization_official_stripe_fixture() {
     // Verify after_completion payload
     let after_comp = link
         .after_completion
+        .as_ref()
         .expect("Expected after_completion payload");
-    assert_eq!(after_comp["type"], "hosted_confirmation");
+    assert_eq!(after_comp.r#type, "hosted_confirmation");
     assert_eq!(
-        after_comp["hosted_confirmation"]["custom_message"],
-        "Thank you for supporting our open-source project!"
+        after_comp
+            .hosted_confirmation
+            .as_ref()
+            .and_then(|h| h.custom_message.as_deref()),
+        Some("Thank you for supporting our open-source project!")
     );
 
     // Verify shipping_address_collection
@@ -145,11 +150,14 @@ fn test_payment_link_deserialization_inactive_fixture() {
     assert_eq!(link.livemode, Some(true));
     assert!(link.shipping_address_collection.is_none());
 
-    let after_comp = link.after_completion.expect("Expected after_completion");
-    assert_eq!(after_comp["type"], "redirect");
+    let after_comp = link
+        .after_completion
+        .as_ref()
+        .expect("Expected after_completion");
+    assert_eq!(after_comp.r#type, "redirect");
     assert_eq!(
-        after_comp["redirect"]["url"],
-        "https://example.com/checkout/success"
+        after_comp.redirect.as_ref().map(|r| r.url.as_str()),
+        Some("https://example.com/checkout/success")
     );
 }
 
@@ -244,12 +252,9 @@ fn test_payment_link_serialization_roundtrip_full() {
             "allowed_countries": ["US", "DE"]
         })),
         customer_creation: Some("always".to_string()),
-        after_completion: Some(serde_json::json!({
-            "type": "hosted_confirmation",
-            "hosted_confirmation": {
-                "custom_message": "Order confirmed!"
-            }
-        })),
+        after_completion: Some(PaymentLinkAfterCompletionParams::hosted_confirmation(Some(
+            "Order confirmed!".into(),
+        ))),
         livemode: Some(true),
     };
 
@@ -441,7 +446,9 @@ fn test_payment_link_fluent_builder_chain() {
         .with_billing_address_collection("required")
         .with_shipping_address_collection(serde_json::json!({ "allowed_countries": ["FR", "IT"] }))
         .with_customer_creation("always")
-        .with_after_completion(serde_json::json!({ "type": "hosted_confirmation" }))
+        .with_after_completion(PaymentLinkAfterCompletionParams::hosted_confirmation(Some(
+            "Thank you!".into(),
+        )))
         .with_livemode(false);
 
     assert_eq!(link.id, "plink_builder");
