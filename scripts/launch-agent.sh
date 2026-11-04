@@ -106,10 +106,10 @@ case "$TARGET" in
     *)
         echo -e "${YELLOW}Usage: $0 <account_number: 1|2|3 | profile: agent-a|agent-b|agent-c> [agent_name] [--worktree <branch>]${NC}"
         echo ""
-        echo -e "${BOLD}Profiles:${NC}"
-        echo -e "  1 | agent-a -> microkernel-architect      (Account 1: Core Runtime & Serialization)"
-        echo -e "  2 | agent-b -> security-webhook-engineer  (Account 2: Cryptographic Engine & Edge Security)"
-        echo -e "  3 | agent-c -> domain-codegen-specialist  (Account 3: OpenAPI Domain Plugins & Tests)"
+        echo -e "${BOLD}Profiles (Universal Agent Generators / Quota Splitters):${NC}"
+        echo -e "  1 | agent-a -> Account 1 generator (Can instantiate ANY agent role or task)"
+        echo -e "  2 | agent-b -> Account 2 generator (Can instantiate ANY agent role or task)"
+        echo -e "  3 | agent-c -> Account 3 generator (Can instantiate ANY agent role or task)"
         echo ""
         list_rules
         echo ""
@@ -119,66 +119,93 @@ case "$TARGET" in
 esac
 
 AGENT_NAME="${AGENT_OVERRIDE:-$DEFAULT_AGENT}"
-PROFILE_DIR="${HOME}/.gemini-profiles/account${ACCOUNT_NUM}"
+ORIGINAL_HOME="${HOME}"
 
-mkdir -p "${PROFILE_DIR}/.gemini/antigravity-cli"
-mkdir -p "${PROFILE_DIR}/.gemini/config/rules"
-
-# 1. Sync global settings if available
-if [[ -f "${HOME}/.gemini/antigravity-cli/settings.json" ]]; then
-    cp "${HOME}/.gemini/antigravity-cli/settings.json" "${PROFILE_DIR}/.gemini/antigravity-cli/settings.json"
-fi
-
-if [[ -f "${HOME}/.gemini/config/mcp_config.json" ]]; then
-    cp "${HOME}/.gemini/config/mcp_config.json" "${PROFILE_DIR}/.gemini/config/mcp_config.json"
-fi
-
-# 2. Sync and link all workspace rules into the agent profile config
-RULE_COUNT=0
-if [[ -d "${RULES_DIR}" ]]; then
-    for rule_file in "${RULES_DIR}"/*.md; do
-        if [[ -f "${rule_file}" ]]; then
-            rule_basename="$(basename "${rule_file}")"
-            ln -sf "${rule_file}" "${PROFILE_DIR}/.gemini/config/rules/${rule_basename}"
-            RULE_COUNT=$((RULE_COUNT + 1))
-        fi
-    done
-fi
-
-if [[ -f "${WORKSPACE_ROOT}/AGENTS.md" ]]; then
-    ln -sf "${WORKSPACE_ROOT}/AGENTS.md" "${PROFILE_DIR}/.gemini/config/rules/AGENTS.md"
-    RULE_COUNT=$((RULE_COUNT + 1))
-fi
-
-# 3. Worktree isolation setup
+# Worktree isolation setup
 EXEC_DIR="${WORKSPACE_ROOT}"
 if [[ -n "${WORKTREE_BRANCH}" ]]; then
     EXEC_DIR="$("${WORKSPACE_ROOT}/scripts/worktree-manager.sh" create "${WORKTREE_BRANCH}")"
 fi
 
-echo -e "${BOLD}${BLUE}======================================================================${NC}"
-echo -e "${BOLD}${BLUE} Launching Agent Profile for Google AI Pro Account #${ACCOUNT_NUM} (${PROFILE_NAME})${NC}"
-echo -e " Agent:       ${CYAN}${AGENT_NAME}${NC}"
-echo -e " Profile Dir: ${PROFILE_DIR}"
-echo -e " Worktree:    ${GREEN}${EXEC_DIR}${NC}"
-echo -e " Active Rules:${GREEN} ${RULE_COUNT} rules loaded and enforced:${NC}"
-if [[ -d "${RULES_DIR}" ]]; then
-    for rule_file in "${RULES_DIR}"/*.md; do
-        if [[ -f "${rule_file}" ]]; then
-            echo -e "   ✔ $(basename "${rule_file}" .md)"
-        fi
-    done
-fi
-if [[ -f "${WORKSPACE_ROOT}/AGENTS.md" ]]; then
-    echo -e "   ✔ AGENTS.md (Root Guidelines & Quality Standards)"
-fi
-echo -e "${BOLD}${BLUE}======================================================================${NC}"
-echo -e "Note: If this is the first run for Account #${ACCOUNT_NUM}, you will be"
-echo -e "prompted to authenticate with that account's Google credentials."
-echo -e "${BOLD}${BLUE}======================================================================${NC}"
+# Multi-Profile Execution with Automatic Quota Exhaustion Failover
+MAX_ATTEMPTS=3
+ATTEMPT=1
+CURRENT_ACCOUNT="${ACCOUNT_NUM}"
 
-export HOME="${PROFILE_DIR}"
-export PATH="${PATH}:/home/codespace/.cargo/bin:/home/codespace/.local/bin"
+while [[ ${ATTEMPT} -le ${MAX_ATTEMPTS} ]]; do
+    case "${CURRENT_ACCOUNT}" in
+        1) CURRENT_PROFILE_NAME="agent-a" ;;
+        2) CURRENT_PROFILE_NAME="agent-b" ;;
+        3) CURRENT_PROFILE_NAME="agent-c" ;;
+        *) CURRENT_PROFILE_NAME="agent-a"; CURRENT_ACCOUNT=1 ;;
+    esac
 
-cd "${EXEC_DIR}"
-exec agy --agent "${AGENT_NAME}" "${REMAINING_ARGS[@]}"
+    PROFILE_DIR="${ORIGINAL_HOME}/.gemini-profiles/account${CURRENT_ACCOUNT}"
+    mkdir -p "${PROFILE_DIR}/.gemini/antigravity-cli"
+    mkdir -p "${PROFILE_DIR}/.gemini/config/rules"
+
+    # Sync settings
+    if [[ -f "${ORIGINAL_HOME}/.gemini/antigravity-cli/settings.json" ]]; then
+        cp "${ORIGINAL_HOME}/.gemini/antigravity-cli/settings.json" "${PROFILE_DIR}/.gemini/antigravity-cli/settings.json"
+    fi
+    if [[ -f "${ORIGINAL_HOME}/.gemini/config/mcp_config.json" ]]; then
+        cp "${ORIGINAL_HOME}/.gemini/config/mcp_config.json" "${PROFILE_DIR}/.gemini/config/mcp_config.json"
+    fi
+
+    # Sync rules
+    RULE_COUNT=0
+    if [[ -d "${RULES_DIR}" ]]; then
+        for rule_file in "${RULES_DIR}"/*.md; do
+            if [[ -f "${rule_file}" ]]; then
+                rule_basename="$(basename "${rule_file}")"
+                ln -sf "${rule_file}" "${PROFILE_DIR}/.gemini/config/rules/${rule_basename}"
+                RULE_COUNT=$((RULE_COUNT + 1))
+            fi
+        done
+    fi
+    if [[ -f "${WORKSPACE_ROOT}/AGENTS.md" ]]; then
+        ln -sf "${WORKSPACE_ROOT}/AGENTS.md" "${PROFILE_DIR}/.gemini/config/rules/AGENTS.md"
+        RULE_COUNT=$((RULE_COUNT + 1))
+    fi
+
+    echo -e "${BOLD}${BLUE}======================================================================${NC}"
+    echo -e "${BOLD}${BLUE} Launching Agent [Attempt ${ATTEMPT}/${MAX_ATTEMPTS}] on Account #${CURRENT_ACCOUNT} (${CURRENT_PROFILE_NAME})${NC}"
+    echo -e " Agent Role:   ${CYAN}${AGENT_NAME}${NC}"
+    echo -e " Profile Dir:  ${PROFILE_DIR}"
+    echo -e " Worktree:     ${GREEN}${EXEC_DIR}${NC}"
+    echo -e " Active Rules: ${GREEN}${RULE_COUNT} rules loaded and enforced${NC}"
+    echo -e "${BOLD}${BLUE}======================================================================${NC}"
+
+    export HOME="${PROFILE_DIR}"
+    export PATH="${PATH}:/home/codespace/.cargo/bin:/home/codespace/.local/bin"
+
+    cd "${EXEC_DIR}"
+
+    # If this is interactive and not piped, execute directly
+    LOG_FILE="$(mktemp /tmp/agy_run_XXXXXX.log)"
+    set +e
+    agy --agent "${AGENT_NAME}" "${REMAINING_ARGS[@]}" 2>&1 | tee "${LOG_FILE}"
+    EXIT_CODE="${PIPESTATUS[0]}"
+    set -e
+
+    if [[ ${EXIT_CODE} -eq 0 ]]; then
+        rm -f "${LOG_FILE}"
+        exit 0
+    fi
+
+    # Check for quota exhaustion / rate-limiting triggers
+    if grep -qiE "quota|rate.?limit|resource_exhausted|429|exceeded your current quota" "${LOG_FILE}"; then
+        echo -e "${YELLOW}⚠️ [QUOTA EXHAUSTION DETECTED] Account #${CURRENT_ACCOUNT} (${CURRENT_PROFILE_NAME}) quota depleted.${NC}"
+        CURRENT_ACCOUNT=$(( (CURRENT_ACCOUNT % 3) + 1 ))
+        echo -e "${GREEN}🔄 [FAILOVER TO NEXT PROFILE] Automatically switching to Account #${CURRENT_ACCOUNT}...${NC}"
+        ATTEMPT=$((ATTEMPT + 1))
+        rm -f "${LOG_FILE}"
+        sleep 2
+    else
+        rm -f "${LOG_FILE}"
+        exit "${EXIT_CODE}"
+    fi
+done
+
+echo -e "${RED}❌ All available account profiles have exhausted their API quota.${NC}"
+exit 1

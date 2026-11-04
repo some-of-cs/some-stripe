@@ -36,14 +36,31 @@ Welcome to the **`some-stripe`** workspace. All AI agents, contributors, and aut
    - GDPR Article 15/17 consumer data rights and ISO 4217 minor currency unit arithmetic.
 
 7. **[Multi-Agent Divide-and-Conquer PR Lifecycle & Merge Protocol](.agents/rules/divide-and-conquer-pr-workflow.md)**:
-   - Hierarchical PR promotion: Level 3 atomic units -> Level 2 story branches -> Level 1 module branches -> Level 0 `main`.
-   - Quality gates must be validated before merging at every level.
+   - **Mandatory `.worktrees/` Directory Invariant**: All agents MUST work strictly inside the `.worktrees/` folder in this directory (`/workspaces/some-stripe/.worktrees/<branch-sanitized-name>`). Direct code modification on `main` or at the repository root is strictly prohibited.
+   - **Strict Bottom-Up PR Creation Order**: Level 3 micro-units (Unit 1 -> 5) MUST be implemented, verified, committed, pushed, and have their GitHub PR opened (`gh pr create`) BEFORE the Level 2 User Story PR is opened. Never open a parent story/module PR before child unit PRs exist.
+   - **Multi-Tier Merge & Validation Workflow (Strictly via `gh pr merge`)**:
+     - **All tier merges MUST happen over GitHub using GitHub CLI (`gh pr merge`)**. Local `git merge` commands across promotion tiers are strictly prohibited.
+     1. Run tests over all 5 Level 3 units in a user story -> merge units into the story branch via `gh pr merge <PR> --merge`.
+     2. Pull updated story branch, run story integration and contract wire tests -> merge user story PRs into the module branch via `gh pr merge <PR> --merge`.
+     3. Pull updated module branch, run workspace-wide test suite (`cargo test --workspace`) and quality gates -> merge the module PR into `main` via `gh pr merge <PR> --merge`.
+   - **Multi-Profile Round-Robin**: Tasks MUST be actively distributed across all 3 profiles (`agent-a`, `agent-b`, `agent-c`) to split the API quota and prevent single-account billing concentration.
+   - **Automatic Quota Failover**: In case any profile exhausts quota (429 / `RESOURCE_EXHAUSTED`), agents and launchers must automatically switch and retry using the next available account profile.
 
 ---
 
-## 2. Multi-Profile Agent Environment
+## 2. Multi-Profile Quota Engine & Dynamic Agent Generation
 
-When launching agents via [`scripts/launch-agent.sh`](scripts/launch-agent.sh):
-- **Profile 1 (`agent-a`)**: Microkernel Core, Concurrency, Serialization, V2 Engine (`microkernel-architect`)
-- **Profile 2 (`agent-b`)**: Cryptographic Webhook Engine, Edge Security, Replay Guards (`security-webhook-engineer`)
-- **Profile 3 (`agent-c`)**: OpenAPI Domain Plugins, Payments, Billing, Connect, Integration Tests (`domain-codegen-specialist`)
+Profiles are **universal agent generators** tied to independent billing accounts (Google AI Pro Accounts 1, 2, 3), NOT tied to specific domains or tasks. Any profile can generate and host ANY specialized agent role for any task.
+
+- **Profile Capacity & Bill Splitting**:
+  - `account1` (`agent-a`): Account slot 1 — generates agents on demand for any module or unit.
+  - `account2` (`agent-b`): Account slot 2 — generates agents on demand for any module or unit.
+  - `account3` (`agent-c`): Account slot 3 — generates agents on demand for any module or unit.
+- **Dedicated Worktree Location Invariant**:
+  - All agent execution, code changes, and test executions MUST take place inside `.worktrees/` in this repository directory (`/workspaces/some-stripe/.worktrees/`).
+  - No subagent or process may write outside its designated `.worktrees/<worktree-name>` path.
+- **Specialized Agents (Role & Task Specific)**:
+  - Agents are instantiated dynamically with specific tasks and roles (e.g. `microkernel-architect`, `security-webhook-engineer`, `domain-codegen-specialist`, `code-reviewer`, `api-tester`, `rust-refactoring-specialist`, or task-level unit implementers).
+  - Tasks must be dispatched across the 3 profile generators in a round-robin / quota-balanced manner to evenly split the quota bill.
+- **Hierarchical Validation & Merge Pipeline**:
+  - `Units (1..5) Tested` -> `Merge to Story Branch` -> `Story Integration Validated` -> `Merge to Module Branch` -> `Full Workspace Validated` -> `Merge to Main`.
