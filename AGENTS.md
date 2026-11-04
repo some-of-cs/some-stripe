@@ -57,6 +57,11 @@ Welcome to the **`some-stripe`** workspace. All AI agents, contributors, and aut
    - **Mandatory PR Attachment**: A full execution report including validation and gate results MUST be attached directly to every GitHub PR (in the PR body or primary audit comment) before review.
    - All reports MUST be committed under `.agents/reports/<module-id>/` to preserve a permanent audit trail.
 
+9. **[Mandatory Microkernel Documentation, Doctests & README Standard (Gate G-Docs)](.agents/rules/microkernel-documentation-standard.md)**:
+   - Every microkernel crate (under `src/crates/<crate-name>/`) MUST maintain a comprehensive `README.md` covering architectural invariants, security considerations, quickstarts, and quality gate compliance.
+   - Every public module, struct, enum, and method in a microkernel MUST have comprehensive rustdoc documentation with working doc-tests (`cargo test --doc`) verified against the test harness.
+   - Serde field attributes (such as `#[serde(default, skip_serializing_if = "Nullable::is_omit")]`) must be documented with runnable examples verifying payload expectations.
+
 ---
 
 ## 2. Multi-Profile Quota Engine & Dynamic Agent Generation

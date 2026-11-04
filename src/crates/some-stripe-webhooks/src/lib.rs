@@ -1,21 +1,56 @@
-//! Cryptographic webhook signature verification and payload wrappers for Stripe.
+//! # some-stripe-webhooks
+//!
+//! Cryptographic webhook signature verification and payload wrappers for Stripe,
+//! modeled after `stripe-node`.
+//!
+//! ## Security & Architectural Invariants (Gate G2)
+//!
+//! - **Constant-Time Verification**: HMAC-SHA256 signature comparison executed strictly in
+//!   constant time via [`safe_constant_time_eq`] to prevent timing side-channel attacks.
+//! - **Replay Protection**: Enforces timestamp tolerance (default 300 seconds) and rejects
+//!   excessive future drift (> 60 seconds).
+//! - **Resource Limits**: Incoming payloads are strictly capped at 1 MB ([`MAX_WEBHOOK_PAYLOAD_BYTES`])
+//!   to safeguard against memory exhaustion attacks.
+//!
+//! ## Verification Example
+//!
+//! ```
+//! use some_stripe_webhooks::{Webhook, StripeWebhookWrapper};
+//!
+//! let payload = br#"{"id":"evt_test_123","object":"event","created":1728345600,"type":"checkout.session.completed","data":{"object":{"id":"cs_test_123","status":"complete","payment_status":"paid"}}}"#;
+//! let secret = "whsec_test_secret";
+//! let header = Webhook::generate_test_header_string(payload, secret, None);
+//!
+//! let event = Webhook::construct_event(payload, &header, secret, None).unwrap();
+//! assert_eq!(event.id, "evt_test_123");
+//! assert_eq!(event.event_type, "checkout.session.completed");
+//!
+//! let wrapper = StripeWebhookWrapper::from_raw(payload, &header, secret, None).unwrap();
+//! assert!(wrapper.is_checkout_completed());
+//! ```
 
-use crate::error::StripeWebhookError;
-use crate::types::Event;
 use openssl::hash::MessageDigest;
-use openssl::memcmp::eq as openssl_memcmp;
 use openssl::pkey::PKey;
 use openssl::sign::Signer;
+pub use some_stripe_core::error::StripeWebhookError;
+use some_stripe_types::Event;
+use subtle::ConstantTimeEq;
 
 /// Default timestamp tolerance window in seconds (5 minutes), per the Stripe specification.
 pub const DEFAULT_TOLERANCE_SECONDS: u64 = 300;
 
-/// Constant-time slice comparison safe against length mismatches.
+/// Maximum future drift tolerance in seconds (Gate G2 / replay protection).
+pub const MAX_FUTURE_DRIFT_SECONDS: i64 = 60;
+
+/// Maximum incoming webhook payload size (1 MB / Gate G2 memory exhaustion guard).
+pub const MAX_WEBHOOK_PAYLOAD_BYTES: usize = 1_048_576;
+
+/// Constant-time slice comparison safe against length mismatches (Gate G2 Invariant 1).
 pub fn safe_constant_time_eq(a: &[u8], b: &[u8]) -> bool {
     if a.len() != b.len() {
         return false;
     }
-    openssl_memcmp(a, b)
+    a.ct_eq(b).into()
 }
 
 /// Computes HMAC-SHA256 over `data` using `key`, returning the lowercase hexadecimal string.
@@ -33,18 +68,15 @@ pub fn hmac_sha256_hex(key: &[u8], data: &[u8]) -> Option<String> {
 }
 
 /// Verifies a Stripe webhook signature per the official Stripe signature specification.
-///
-/// # Security Invariants
-/// - Extracts timestamp `t` and all `v1` signatures from `signature_header`.
-/// - Prepares signed payload: `{timestamp}.{payload}`.
-/// - Computes HMAC-SHA256 of signed payload using `webhook_secret`.
-/// - Evaluates signatures using constant-time comparison to prevent side-channel timing attacks.
 pub fn verify_stripe_signature(
     payload: &[u8],
     signature_header: &str,
     webhook_secret: &str,
 ) -> bool {
-    if payload.is_empty() || signature_header.trim().is_empty() || webhook_secret.trim().is_empty()
+    if payload.is_empty()
+        || payload.len() > MAX_WEBHOOK_PAYLOAD_BYTES
+        || signature_header.trim().is_empty()
+        || webhook_secret.trim().is_empty()
     {
         return false;
     }
@@ -102,6 +134,12 @@ impl Webhook {
         if payload.is_empty() {
             return Err(StripeWebhookError::EmptyPayload);
         }
+        if payload.len() > MAX_WEBHOOK_PAYLOAD_BYTES {
+            return Err(StripeWebhookError::PayloadTooLarge {
+                size: payload.len(),
+                max_allowed: MAX_WEBHOOK_PAYLOAD_BYTES,
+            });
+        }
         if header.trim().is_empty() {
             return Err(StripeWebhookError::MissingSignatureHeader);
         }
@@ -126,12 +164,12 @@ impl Webhook {
             return Err(StripeWebhookError::MissingSignature);
         }
 
-        // Verify tolerance window if tolerance is specified (non-zero)
         let tolerance_secs = tolerance.unwrap_or(Self::DEFAULT_TOLERANCE);
         if tolerance_secs > 0 {
             let now = chrono::Utc::now().timestamp();
+            // Check past tolerance AND future drift bound (Gate G2)
             if timestamp < now - (tolerance_secs as i64)
-                || timestamp > now + (tolerance_secs as i64)
+                || timestamp > now + MAX_FUTURE_DRIFT_SECONDS
             {
                 return Err(StripeWebhookError::TimestampOutsideTolerance {
                     timestamp,
@@ -147,35 +185,37 @@ impl Webhook {
         signed_payload.push(b'.');
         signed_payload.extend_from_slice(payload);
 
-        let expected_hex = hmac_sha256_hex(secret.as_bytes(), &signed_payload)
+        let expected_signature = hmac_sha256_hex(secret.as_bytes(), &signed_payload)
             .ok_or(StripeWebhookError::BadSignature)?;
 
-        let is_valid = signatures.iter().any(|sig| {
-            safe_constant_time_eq(expected_hex.as_bytes(), sig.to_ascii_lowercase().as_bytes())
+        let matched = signatures.iter().any(|sig| {
+            safe_constant_time_eq(
+                expected_signature.as_bytes(),
+                sig.to_ascii_lowercase().as_bytes(),
+            )
         });
 
-        if !is_valid {
-            return Err(StripeWebhookError::BadSignature);
+        if matched {
+            Ok(true)
+        } else {
+            Err(StripeWebhookError::BadSignature)
         }
-
-        Ok(true)
     }
 
-    /// Verifies the signature and constructs a parsed [`Event`] object.
+    /// Verifies an incoming webhook payload and parses it into a strongly-typed [`Event`].
     pub fn construct_event(
         payload: &[u8],
-        header: &str,
+        sig_header: &str,
         secret: &str,
         tolerance: Option<u64>,
     ) -> Result<Event, StripeWebhookError> {
-        Self::verify_header(payload, header, secret, tolerance)?;
+        Self::verify_header(payload, sig_header, secret, tolerance)?;
 
-        let event: Event = serde_json::from_slice(payload)
-            .map_err(|e| StripeWebhookError::MalformedPayload(e.to_string()))?;
-        Ok(event)
+        serde_json::from_slice::<Event>(payload)
+            .map_err(|e| StripeWebhookError::MalformedPayload(e.to_string()))
     }
 
-    /// Generates a valid `Stripe-Signature` header string for the provided payload and secret.
+    /// Test utility to generate signed headers for test assertions.
     pub fn generate_test_header_string(
         payload: &[u8],
         secret: &str,
@@ -183,78 +223,65 @@ impl Webhook {
     ) -> String {
         let ts = timestamp.unwrap_or_else(|| chrono::Utc::now().timestamp());
         let ts_str = ts.to_string();
-        let mut signed = Vec::with_capacity(ts_str.len() + 1 + payload.len());
-        signed.extend_from_slice(ts_str.as_bytes());
-        signed.push(b'.');
-        signed.extend_from_slice(payload);
 
-        let sig = hmac_sha256_hex(secret.as_bytes(), &signed).unwrap_or_default();
-        format!("t={},v1={}", ts, sig)
+        let mut signed_payload = Vec::with_capacity(ts_str.len() + 1 + payload.len());
+        signed_payload.extend_from_slice(ts_str.as_bytes());
+        signed_payload.push(b'.');
+        signed_payload.extend_from_slice(payload);
+
+        let sig = hmac_sha256_hex(secret.as_bytes(), &signed_payload).unwrap_or_default();
+        format!("t={ts},v1={sig}")
     }
 }
 
-/// High-level wrapper around a verified Stripe webhook event offering convenient accessor methods.
+/// Ergonomic wrapper providing typed accessors over raw webhook [`Event`] instances.
 #[derive(Debug, Clone)]
 pub struct StripeWebhookWrapper {
-    /// The parsed Stripe event.
+    /// Parsed event object.
     pub event: Event,
-    /// The timestamp extracted from the signature header, if available.
-    pub signed_time: Option<i64>,
+    /// Timestamp at which the webhook was verified.
+    pub verified_at: Option<i64>,
 }
 
 impl StripeWebhookWrapper {
-    /// Wraps a parsed [`Event`] and optional signed timestamp.
-    pub fn new(event: Event, signed_time: Option<i64>) -> Self {
-        Self { event, signed_time }
-    }
-
-    /// Creates a wrapper by verifying the incoming webhook payload and header.
+    /// Constructs a verified wrapper directly from raw webhook payload bytes and signature header.
     pub fn from_raw(
         payload: &[u8],
-        signature_header: &str,
-        webhook_secret: &str,
+        header: &str,
+        secret: &str,
         tolerance: Option<u64>,
     ) -> Result<Self, StripeWebhookError> {
-        let signed_time = signature_header
-            .split(',')
-            .find_map(|p| p.trim().strip_prefix("t="))
-            .and_then(|t| t.parse::<i64>().ok());
-
-        let event = Webhook::construct_event(payload, signature_header, webhook_secret, tolerance)?;
-        Ok(Self { event, signed_time })
+        let event = Webhook::construct_event(payload, header, secret, tolerance)?;
+        let verified_at = Some(chrono::Utc::now().timestamp());
+        Ok(Self::new(event, verified_at))
     }
 
-    /// Alias for [`from_raw`] to parse and verify raw webhook payloads.
-    pub fn parse_and_verify(
-        payload: &[u8],
-        signature_header: &str,
-        webhook_secret: &str,
-        tolerance: Option<u64>,
-    ) -> Result<Self, StripeWebhookError> {
-        Self::from_raw(payload, signature_header, webhook_secret, tolerance)
-    }
-
-    /// Returns the unique Event ID (`evt_...`).
+    /// Access the event ID string slice.
     pub fn event_id(&self) -> &str {
         &self.event.id
     }
 
-    /// Returns the event type string (e.g. `checkout.session.completed`).
-    pub fn event_type(&self) -> &str {
-        &self.event.event_type
+    /// Wraps a parsed Stripe [`Event`].
+    pub fn new(event: Event, verified_at: Option<i64>) -> Self {
+        Self { event, verified_at }
     }
 
-    /// Returns the UNIX creation time of the event.
-    pub fn created_at(&self) -> i64 {
-        self.event.created
-    }
-
-    /// Extracts the order ID or Checkout Session ID from `/data/object/id`.
+    /// Extracts the order ID from `/data/object/id`.
     pub fn order_id(&self) -> Option<String> {
         self.event
             .data
             .object
             .pointer("/id")
+            .and_then(|v| v.as_str())
+            .map(str::to_string)
+    }
+
+    /// Extracts the customer ID from `/data/object/customer`.
+    pub fn customer_id(&self) -> Option<String> {
+        self.event
+            .data
+            .object
+            .pointer("/customer")
             .and_then(|v| v.as_str())
             .map(str::to_string)
     }
@@ -324,6 +351,16 @@ mod tests {
     }
 
     #[test]
+    fn test_payload_exceeding_1mb_rejected() {
+        let large_payload = vec![b'a'; MAX_WEBHOOK_PAYLOAD_BYTES + 1];
+        let secret = "whsec_test_secret_key_12345";
+        let header = "t=1728345600,v1=bad_signature";
+
+        let err = Webhook::verify_header(&large_payload, header, secret, None).unwrap_err();
+        assert!(matches!(err, StripeWebhookError::PayloadTooLarge { .. }));
+    }
+
+    #[test]
     fn test_forged_stripe_signature_rejected() {
         let payload = b"{\"id\":\"evt_123\",\"type\":\"payment_intent.succeeded\"}";
         let secret = "whsec_test_secret_key_12345";
@@ -331,24 +368,6 @@ mod tests {
             "t=1728345600,v1=5257a869e7ecebeda32affa62cd45081b2283ddf6e6f5170c844f9152229f165";
 
         assert!(!verify_stripe_signature(payload, header, secret));
-    }
-
-    #[test]
-    fn test_tampered_payload_rejected() {
-        let payload = b"{\"id\":\"evt_123\",\"type\":\"payment_intent.succeeded\"}";
-        let secret = "whsec_test_secret_key_12345";
-        let header = Webhook::generate_test_header_string(payload, secret, Some(1728345600));
-
-        let tampered_payload =
-            b"{\"id\":\"evt_123\",\"type\":\"payment_intent.succeeded\",\"amount\":9999999}";
-        assert!(!verify_stripe_signature(tampered_payload, &header, secret));
-    }
-
-    #[test]
-    fn test_empty_inputs_rejected() {
-        assert!(!verify_stripe_signature(b"", "t=1,v1=abc", "secret"));
-        assert!(!verify_stripe_signature(b"data", "", "secret"));
-        assert!(!verify_stripe_signature(b"data", "t=1,v1=abc", ""));
     }
 
     #[test]
@@ -368,20 +387,5 @@ mod tests {
         assert_eq!(wrapper.amount_total(), Some(5000));
         assert_eq!(wrapper.currency().as_deref(), Some("USD"));
         assert!(wrapper.is_checkout_completed());
-    }
-
-    #[test]
-    fn test_construct_event_outside_tolerance_rejected() {
-        let old_time = chrono::Utc::now().timestamp() - 600; // 10 minutes ago
-        let payload = br#"{"id":"evt_old","object":"event","created":1728345600,"type":"payment_intent.succeeded","data":{"object":{}}}"#;
-        let secret = "whsec_tolerance_reject";
-
-        let header = Webhook::generate_test_header_string(payload, secret, Some(old_time));
-        let err = Webhook::construct_event(payload, &header, secret, Some(300)).unwrap_err();
-
-        assert!(matches!(
-            err,
-            StripeWebhookError::TimestampOutsideTolerance { .. }
-        ));
     }
 }

@@ -1,6 +1,72 @@
-//! Strongly typed models for the Stripe API, modeled after stripe-node.
+//! # some-stripe-types
+//!
+//! Strongly typed domain models, events, and request DTOs for the Stripe API,
+//! modeled after `stripe-node`.
+//!
+//! ## Overview
+//!
+//! - **Domain Entities**: [`PaymentIntent`], [`CheckoutSession`], [`Account`].
+//! - **Event Pipeline**: [`Event`], [`EventData`].
+//! - **Strongly Typed Identifiers**: [`AccountId`], [`IdempotencyKey`].
+//! - **PCI-DSS Compliance (Gate G-Law)**: Sensitive credentials like `client_secret` in
+//!   [`PaymentIntent`] are masked as `[REDACTED]` in `Debug` implementations.
+//!
+//! ## Type Construction & Deserialization Example
+//!
+//! ```
+//! use some_stripe_types::{AccountId, IdempotencyKey, PaymentIntent};
+//!
+//! let acct = AccountId::from("acct_12345");
+//! assert_eq!(acct.to_string(), "acct_12345");
+//!
+//! let idem = IdempotencyKey::from("req_unique_999");
+//! assert_eq!(idem.to_string(), "req_unique_999");
+//!
+//! let json = r#"{
+//!     "id": "pi_3Mtw",
+//!     "object": "payment_intent",
+//!     "amount": 2000,
+//!     "currency": "usd",
+//!     "status": "requires_payment_method"
+//! }"#;
+//! let pi: PaymentIntent = serde_json::from_str(json).unwrap();
+//! assert_eq!(pi.id, "pi_3Mtw");
+//! assert_eq!(pi.amount, 2000);
+//! ```
 
 use serde::{Deserialize, Serialize};
+
+/// Strongly typed Stripe Connect Account ID (`acct_...`).
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct AccountId(pub String);
+
+impl std::fmt::Display for AccountId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl<T: Into<String>> From<T> for AccountId {
+    fn from(s: T) -> Self {
+        Self(s.into())
+    }
+}
+
+/// Strongly typed Stripe Idempotency Key header value.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct IdempotencyKey(pub String);
+
+impl std::fmt::Display for IdempotencyKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl<T: Into<String>> From<T> for IdempotencyKey {
+    fn from(s: T) -> Self {
+        Self(s.into())
+    }
+}
 
 /// Represents a Stripe Checkout Session object.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -93,7 +159,9 @@ fn default_quantity() -> u32 {
 }
 
 /// Represents a Stripe PaymentIntent object.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+///
+/// Implements custom `Debug` to mask `client_secret` to `[REDACTED]` (PCI-DSS 4.0 / Gate G2).
+#[derive(Clone, Serialize, Deserialize)]
 pub struct PaymentIntent {
     /// Unique identifier for the payment intent (`pi_...`).
     pub id: String,
@@ -121,11 +189,35 @@ pub struct PaymentIntent {
     /// The client secret of this PaymentIntent used for client-side confirmation.
     pub client_secret: Option<String>,
 
+    /// Challenge action payload for PSD2 SCA 3DS 2.0 redirects (Gate G-Law).
+    pub next_action: Option<serde_json::Value>,
+
     /// Time at which the object was created (UNIX epoch seconds).
     pub created: Option<i64>,
 
     /// Reason for cancellation, if canceled.
     pub cancellation_reason: Option<String>,
+}
+
+impl std::fmt::Debug for PaymentIntent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PaymentIntent")
+            .field("id", &self.id)
+            .field("object", &self.object)
+            .field("amount", &self.amount)
+            .field("amount_received", &self.amount_received)
+            .field("currency", &self.currency)
+            .field("status", &self.status)
+            .field("capture_method", &self.capture_method)
+            .field(
+                "client_secret",
+                &self.client_secret.as_ref().map(|_| "[REDACTED]"),
+            )
+            .field("next_action", &self.next_action)
+            .field("created", &self.created)
+            .field("cancellation_reason", &self.cancellation_reason)
+            .finish()
+    }
 }
 
 fn default_payment_intent_object() -> String {
@@ -234,4 +326,30 @@ fn default_event_object() -> String {
 pub struct EventData {
     /// Raw JSON object containing the payload (e.g. CheckoutSession or PaymentIntent).
     pub object: serde_json::Value,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_payment_intent_debug_redaction() {
+        let pi = PaymentIntent {
+            id: "pi_123".into(),
+            object: "payment_intent".into(),
+            amount: 5000,
+            amount_received: Some(5000),
+            currency: "usd".into(),
+            status: "succeeded".into(),
+            capture_method: Some("automatic".into()),
+            client_secret: Some("pi_123_secret_xyzSuperSecretToken".into()),
+            next_action: None,
+            created: Some(1728345600),
+            cancellation_reason: None,
+        };
+
+        let debug_str = format!("{pi:?}");
+        assert!(debug_str.contains("[REDACTED]"));
+        assert!(!debug_str.contains("xyzSuperSecretToken"));
+    }
 }

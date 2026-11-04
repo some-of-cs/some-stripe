@@ -1,8 +1,7 @@
 //! Stripe Checkout resource implementations.
 
-use crate::client::StripeClient;
-use crate::error::StripeError;
-use crate::types::{CheckoutSession, CreateCheckoutSessionParams};
+use some_stripe_core::{StripeClient, StripeError};
+use some_stripe_types::{CheckoutSession, CreateCheckoutSessionParams};
 
 /// Root resource for Stripe Checkout operations (`stripe.checkout`).
 #[derive(Clone)]
