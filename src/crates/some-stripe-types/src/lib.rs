@@ -64,6 +64,14 @@
 
 use serde::{Deserialize, Serialize};
 
+pub mod balance;
+pub mod dispute;
+pub mod refund;
+
+pub use balance::*;
+pub use dispute::*;
+pub use refund::*;
+
 /// Strongly typed Stripe Connect Account ID (`acct_...`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct AccountId(pub String);
@@ -431,6 +439,12 @@ pub enum EventObject {
     /// Stripe Invoice payload (`object = "invoice"`), including upcoming invoices with null `id`.
     Invoice(Invoice),
 
+    /// Stripe Refund payload (`object = "refund"`).
+    Refund(Refund),
+
+    /// Stripe Dispute payload (`object = "dispute"`).
+    Dispute(Dispute),
+
     /// Unrecognized, custom, or unsupported event object types.
     #[serde(other)]
     Unknown,
@@ -719,6 +733,45 @@ mod tests {
                 assert_eq!(inv.amount_due, Some(1200));
             }
             other => panic!("Expected Invoice variant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_event_object_refund_and_dispute() {
+        let refund_json = serde_json::json!({
+            "id": "re_test_refund_123",
+            "object": "refund",
+            "amount": 2500,
+            "currency": "usd",
+            "status": "succeeded"
+        });
+        let refund_data = EventData {
+            object: refund_json,
+        };
+        match refund_data.deserialize_object().unwrap() {
+            EventObject::Refund(re) => {
+                assert_eq!(re.id, "re_test_refund_123");
+                assert_eq!(re.amount, 2500);
+            }
+            other => panic!("Expected Refund variant, got {other:?}"),
+        }
+
+        let dispute_json = serde_json::json!({
+            "id": "dp_test_dispute_456",
+            "object": "dispute",
+            "amount": 5000,
+            "currency": "usd",
+            "status": "needs_response"
+        });
+        let dispute_data = EventData {
+            object: dispute_json,
+        };
+        match dispute_data.deserialize_object().unwrap() {
+            EventObject::Dispute(dp) => {
+                assert_eq!(dp.id, "dp_test_dispute_456");
+                assert_eq!(dp.status, "needs_response");
+            }
+            other => panic!("Expected Dispute variant, got {other:?}"),
         }
     }
 }
