@@ -70,6 +70,7 @@ async fn test_refunds_create_statutory_and_idempotency_e2e() {
             reverse_transfer: None,
             metadata: None,
             idempotency_key: Some("idem_refund_test_001".into()),
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -124,6 +125,7 @@ async fn test_statutory_withdrawal_eu_directive_2011_83_compliance() {
             reverse_transfer: None,
             metadata: None,
             idempotency_key: None,
+            ..Default::default()
         })
         .await
         .unwrap();
@@ -263,10 +265,7 @@ async fn test_disputes_update_with_submit_true_and_evidence_e2e() {
                     customer_name: Some("Alice Smith".into()),
                     customer_email_address: Some("alice@example.com".into()),
                     product_description: Some("Cloud Platform Access".into()),
-                    billing_address: None,
-                    shipping_address: None,
-                    shipping_documentation: None,
-                    uncategorized_text: None,
+                    ..Default::default()
                 }),
                 metadata: None,
                 submit: Some(true),
@@ -281,10 +280,7 @@ async fn test_disputes_update_with_submit_true_and_evidence_e2e() {
     assert_eq!(dispute.status, "under_review");
     assert_eq!(dispute.amount, 7500);
     assert_eq!(
-        dispute
-            .evidence
-            .as_ref()
-            .and_then(|e| e.customer_name.as_deref()),
+        dispute.evidence.customer_name.as_deref(),
         Some("Alice Smith")
     );
 }
@@ -374,7 +370,7 @@ async fn test_balance_retrieve_e2e() {
     assert_eq!(balance.pending.len(), 1);
     assert_eq!(balance.pending[0].amount, 45000); // $450.00
     assert_eq!(balance.pending[0].currency, "usd");
-    assert_eq!(balance.livemode, Some(false));
+    assert!(!balance.livemode);
 }
 
 #[tokio::test]
@@ -397,6 +393,8 @@ async fn test_balance_transactions_auto_pagination_across_pages() {
                     "id": "txn_pag_001",
                     "object": "balance_transaction",
                     "amount": 5000,
+                    "available_on": 1728345600,
+                    "created": 1728345600,
                     "currency": "usd",
                     "net": 4825,
                     "fee": 175,
@@ -407,6 +405,8 @@ async fn test_balance_transactions_auto_pagination_across_pages() {
                     "id": "txn_pag_002",
                     "object": "balance_transaction",
                     "amount": -2000,
+                    "available_on": 1728345600,
+                    "created": 1728345600,
                     "currency": "usd",
                     "net": -2000,
                     "fee": 0,
@@ -432,6 +432,8 @@ async fn test_balance_transactions_auto_pagination_across_pages() {
                     "id": "txn_pag_003",
                     "object": "balance_transaction",
                     "amount": 10000,
+                    "available_on": 1728345600,
+                    "created": 1728345600,
                     "currency": "usd",
                     "net": 9680,
                     "fee": 320,
@@ -508,6 +510,8 @@ async fn test_balance_transaction_retrieve_e2e() {
             "id": "txn_single_555",
             "object": "balance_transaction",
             "amount": 4200,
+            "available_on": 1728345600,
+            "created": 1728345600,
             "currency": "usd",
             "net": 4048,
             "fee": 152,

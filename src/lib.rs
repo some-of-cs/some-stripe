@@ -9,6 +9,7 @@
 //! - **Client Architecture**: Clean namespace separation (`stripe.checkout().sessions()`, `stripe.payment_intents()`, `stripe.accounts()`, `stripe.webhooks()`).
 //! - **Webhook Engine**: Constant-time HMAC-SHA256 verification, replay protection against timestamp drift, and strongly typed event parsing.
 //! - **Robust Error Handling**: Structured API error payloads with documentation URLs, HTTP status codes, and webhook verification errors.
+//! - **Dispute & Evidence Management**: Strongly typed [`Dispute`], [`DisputeEvidence`], [`DisputeEvidenceDetails`], [`DisputeStatus`], and [`UpdateDisputeParams`] with submission locking invariants.
 //! - **Customizable Error Workflows**: Configurable retry policies and security escalation hooks.
 //!
 //! ## Quickstart
@@ -55,6 +56,7 @@
 
 pub use some_stripe_core as core;
 pub use some_stripe_types as types;
+pub use some_stripe_types::dispute;
 pub use some_stripe_webhooks as webhooks;
 
 pub use some_stripe_core::client::{
@@ -67,6 +69,7 @@ pub use some_stripe_core::workflow::{
     DefaultErrorWorkflow, ErrorAction, ErrorSeverity, ErrorWorkflowHandler,
 };
 
+pub use some_stripe_types::balance;
 pub use some_stripe_types::*;
 pub use some_stripe_webhooks::{
     DEFAULT_TOLERANCE_SECONDS, MAX_FUTURE_DRIFT_SECONDS, MAX_WEBHOOK_PAYLOAD_BYTES,
