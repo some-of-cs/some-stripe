@@ -4,33 +4,33 @@ use some_stripe_core::{StripeClient, StripeError};
 use some_stripe_types::{CheckoutSession, CreateCheckoutSessionParams};
 
 /// Root resource for Stripe Checkout operations (`stripe.checkout`).
-#[derive(Clone)]
-pub struct CheckoutResource {
+#[derive(Clone, Copy)]
+pub struct CheckoutResource<'a> {
     /// Checkout Sessions resource (`stripe.checkout.sessions`).
-    pub sessions: SessionsResource,
+    pub sessions: SessionsResource<'a>,
 }
 
-impl CheckoutResource {
-    pub(crate) fn new(client: StripeClient) -> Self {
+impl<'a> CheckoutResource<'a> {
+    pub(crate) fn new(client: &'a StripeClient) -> Self {
         Self {
             sessions: SessionsResource::new(client),
         }
     }
 
     /// Access the Sessions resource.
-    pub fn sessions(&self) -> &SessionsResource {
+    pub fn sessions(&self) -> &SessionsResource<'a> {
         &self.sessions
     }
 }
 
 /// Resource for managing Stripe Checkout Sessions (`stripe.checkout.sessions`).
-#[derive(Clone)]
-pub struct SessionsResource {
-    client: StripeClient,
+#[derive(Clone, Copy)]
+pub struct SessionsResource<'a> {
+    client: &'a StripeClient,
 }
 
-impl SessionsResource {
-    pub(crate) fn new(client: StripeClient) -> Self {
+impl<'a> SessionsResource<'a> {
+    pub(crate) fn new(client: &'a StripeClient) -> Self {
         Self { client }
     }
 

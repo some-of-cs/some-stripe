@@ -6,13 +6,13 @@ use some_stripe_types::{
 };
 
 /// Resource for managing Stripe PaymentIntents (`stripe.paymentIntents`).
-#[derive(Clone)]
-pub struct PaymentIntentsResource {
-    client: StripeClient,
+#[derive(Clone, Copy)]
+pub struct PaymentIntentsResource<'a> {
+    client: &'a StripeClient,
 }
 
-impl PaymentIntentsResource {
-    pub(crate) fn new(client: StripeClient) -> Self {
+impl<'a> PaymentIntentsResource<'a> {
+    pub(crate) fn new(client: &'a StripeClient) -> Self {
         Self { client }
     }
 

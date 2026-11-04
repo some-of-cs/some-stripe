@@ -36,8 +36,8 @@ async fn tc_1_1_0_01_tokio_10k_tasks_concurrency_stress() {
 
 #[test]
 fn tc_1_1_0_03_pci_dss_secret_redaction_and_zeroization() {
-    let raw_key = "sk_test_mock_redacted_key_999".to_string();
-    let secret = SecretKey::new(raw_key.clone());
+    let raw_key = "sk_test_mock_redacted_key_999";
+    let secret = SecretKey::new(raw_key);
 
     // Debug representation MUST NOT leak secret
     let debug_output = format!("{secret:?}");

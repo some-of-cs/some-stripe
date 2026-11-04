@@ -31,7 +31,7 @@ pub fn to_form_params<T: Serialize>(value: &T) -> Result<Vec<(String, String)>, 
         serde_json::Value::Object(map) => {
             let mut params = Vec::new();
             for (k, v) in map {
-                flatten_value(&k, &v, &mut params, 0)?;
+                flatten_value(&k, v, &mut params, 0)?;
             }
             Ok(params)
         }
@@ -45,7 +45,7 @@ const MAX_SERIALIZATION_DEPTH: usize = 16;
 
 fn flatten_value(
     prefix: &str,
-    value: &serde_json::Value,
+    value: serde_json::Value,
     out: &mut Vec<(String, String)>,
     depth: usize,
 ) -> Result<(), StripeError> {
@@ -63,7 +63,7 @@ fn flatten_value(
             }
         }
         serde_json::Value::Array(items) => {
-            for (idx, item) in items.iter().enumerate() {
+            for (idx, item) in items.into_iter().enumerate() {
                 let sub_key = format!("{prefix}[{idx}]");
                 flatten_value(&sub_key, item, out, depth + 1)?;
             }
@@ -78,7 +78,7 @@ fn flatten_value(
             out.push((prefix.to_string(), n.to_string()));
         }
         serde_json::Value::String(s) => {
-            out.push((prefix.to_string(), s.clone()));
+            out.push((prefix.to_string(), s));
         }
     }
     Ok(())
