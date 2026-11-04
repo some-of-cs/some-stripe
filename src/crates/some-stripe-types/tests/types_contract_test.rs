@@ -1,9 +1,12 @@
 //! Strongly Typed Models Contract & Serialization Verification Suite
 //!
 //! Validates serde serialization invariants, header newtype conversions,
-//! and PCI-DSS client secret redaction in some-stripe-types.
+//! discriminated EventObject union deserialization, and PCI-DSS client secret redaction.
 
-use some_stripe_types::{AccountId, CheckoutSession, IdempotencyKey, PaymentIntent};
+use some_stripe_types::{
+    AccountId, CheckoutSession, Event, EventData, EventObject, IdempotencyKey, Invoice,
+    PaymentIntent,
+};
 
 #[test]
 fn test_newtypes_conversion_and_display() {
@@ -56,4 +59,131 @@ fn test_checkout_session_json_roundtrip() {
     assert_eq!(cs.id, "cs_contract_test");
     assert_eq!(cs.amount_total, Some(4900));
     assert_eq!(cs.currency, Some("eur".to_string()));
+}
+
+#[test]
+fn test_invoice_json_roundtrip_with_id() {
+    let inv_json = serde_json::json!({
+        "id": "in_contract_test_99",
+        "object": "invoice",
+        "customer": "cus_contract_client",
+        "amount_due": 7500,
+        "amount_paid": 0,
+        "amount_remaining": 7500,
+        "total": 7500,
+        "subtotal": 7500,
+        "currency": "usd",
+        "status": "open",
+        "paid": false
+    });
+
+    let inv: Invoice = serde_json::from_value(inv_json).expect("Invoice deserialization failed");
+    assert_eq!(inv.id.as_deref(), Some("in_contract_test_99"));
+    assert_eq!(inv.customer.as_deref(), Some("cus_contract_client"));
+    assert_eq!(inv.amount_due, Some(7500));
+    assert_eq!(inv.status.as_deref(), Some("open"));
+    assert_eq!(inv.paid, Some(false));
+}
+
+#[test]
+fn test_invoice_upcoming_null_id_contract() {
+    let upcoming_json = serde_json::json!({
+        "id": null,
+        "object": "invoice",
+        "customer": "cus_upcoming_preview_1",
+        "amount_due": 3200,
+        "currency": "gbp",
+        "period_start": 1728300000,
+        "period_end": 1730900000
+    });
+
+    let inv: Invoice =
+        serde_json::from_value(upcoming_json).expect("invoice.upcoming deserialization failed");
+    assert!(inv.id.is_none(), "Expected None for upcoming invoice id");
+    assert_eq!(inv.customer.as_deref(), Some("cus_upcoming_preview_1"));
+    assert_eq!(inv.amount_due, Some(3200));
+    assert_eq!(inv.currency.as_deref(), Some("gbp"));
+}
+
+#[test]
+fn test_event_object_discriminated_union_contract() {
+    // 1. CheckoutSession variant
+    let cs_raw = serde_json::json!({
+        "id": "cs_contract_evt",
+        "object": "checkout.session",
+        "status": "complete"
+    });
+    let data_cs = EventData { object: cs_raw };
+    match data_cs.deserialize_object().unwrap() {
+        EventObject::CheckoutSession(cs) => assert_eq!(cs.id, "cs_contract_evt"),
+        other => panic!("Expected CheckoutSession, got {other:?}"),
+    }
+
+    // 2. PaymentIntent variant
+    let pi_raw = serde_json::json!({
+        "id": "pi_contract_evt",
+        "object": "payment_intent",
+        "amount": 5000,
+        "currency": "usd",
+        "status": "succeeded"
+    });
+    let data_pi = EventData { object: pi_raw };
+    match data_pi.deserialize_object().unwrap() {
+        EventObject::PaymentIntent(pi) => assert_eq!(pi.id, "pi_contract_evt"),
+        other => panic!("Expected PaymentIntent, got {other:?}"),
+    }
+
+    // 3. Invoice variant with null id (invoice.upcoming)
+    let inv_raw = serde_json::json!({
+        "id": null,
+        "object": "invoice",
+        "customer": "cus_preview_contract",
+        "amount_due": 1500
+    });
+    let data_inv = EventData { object: inv_raw };
+    match data_inv.deserialize_object().unwrap() {
+        EventObject::Invoice(inv) => {
+            assert!(inv.id.is_none());
+            assert_eq!(inv.customer.as_deref(), Some("cus_preview_contract"));
+            assert_eq!(inv.amount_due, Some(1500));
+        }
+        other => panic!("Expected Invoice, got {other:?}"),
+    }
+
+    // 4. Fallback to Unknown for unmapped object
+    let unknown_raw = serde_json::json!({
+        "id": "sub_99999",
+        "object": "subscription",
+        "status": "active"
+    });
+    let data_unknown = EventData {
+        object: unknown_raw,
+    };
+    assert!(matches!(
+        data_unknown.deserialize_object().unwrap(),
+        EventObject::Unknown
+    ));
+}
+
+#[test]
+fn test_event_object_unknown_fallback_contract() {
+    let event = Event {
+        id: "evt_contract_unsupported".into(),
+        object: "event".into(),
+        api_version: Some("2024-06-20".into()),
+        created: 1728345600,
+        event_type: "radar.early_fraud_warning.created".into(),
+        data: EventData {
+            object: serde_json::json!({
+                "id": "issfr_12345",
+                "object": "radar.early_fraud_warning",
+                "actionable": true
+            }),
+        },
+    };
+
+    let obj = event
+        .deserialize_object()
+        .expect("Should safely resolve to Unknown");
+    assert!(matches!(obj, EventObject::Unknown));
 }
