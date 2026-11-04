@@ -112,3 +112,11 @@ To eliminate execution delays and avoid idle waiting:
 ### 10. Enforced Multi-Profile Round-Robin Allocation (`agent-a`, `agent-b`, `agent-c`)
 - Subagents MUST be distributed evenly across `account1` (`agent-a`), `account2` (`agent-b`), `account3` (`agent-c`) to split API quota and prevent single-account exhaustion.
 - Every subagent MUST specify its assigned profile in its role title and audit report.
+
+### 11. Continuous Progress Checkpointing & Quota Recovery Protocol
+- **Persistent Machine-Readable Checkpoint**:
+  - Maintain `.agents/checkpoints/<module-id>/checkpoint.json` containing live status of all stories, units, PR numbers, merge commits, active profiles, and `next_action`.
+  - Atomically update `checkpoint.json` on every worktree creation, PR creation, and PR merge.
+- **Failover / Resume Guarantee**:
+  - When quota is depleted or an account switches, execution state is already persisted on disk.
+  - On restart, read `checkpoint.json` and resume execution directly from the pending micro-unit or promotion step with zero duplicate agent calls.

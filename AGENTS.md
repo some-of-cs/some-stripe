@@ -87,6 +87,10 @@ Welcome to the **`some-stripe`** workspace. All AI agents, contributors, and aut
    - **Strict Profile Rotation**: Agents MUST actively rotate across all 3 billing accounts (`account1`/`agent-a`, `account2`/`agent-b`, `account3`/`agent-c`) to split the API quota and avoid single-account concentration.
    - Every subagent MUST specify its assigned profile in its role title, system prompt, and audit report.
 
+14. **[Continuous Progress Checkpointing & Quota Failover Recovery](.agents/rules/quota-exhaustion-checkpointing.md)**:
+   - **Persistent Checkpoint Store**: Maintain `.agents/checkpoints/<module-id>/checkpoint.json` continuously updated on every worktree creation, PR creation, and PR merge.
+   - **Zero-Duplication Resume**: In the event of quota exhaustion (429) or restart, agents must load `checkpoint.json`, reconcile with GitHub/Git, and resume strictly from the exact pending micro-unit or story without re-executing finished tasks or burning extra quota.
+
 ---
 
 ## 2. Multi-Profile Quota Engine & Dynamic Agent Generation

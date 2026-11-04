@@ -1,0 +1,43 @@
+{
+  "module_id": "module-3",
+  "module_title": "Payments & Settlement Engine",
+  "module_branch": "feat/module-3-payments-and-settlement",
+  "status": "COMPLETED",
+  "main_pr": {
+    "id": 49,
+    "title": "feat(module-3): payments and settlement engine",
+    "status": "MERGED",
+    "merge_commit": "17478759d452315eb886b3173a2266338ee8dd48"
+  },
+  "updated_at": "2026-11-04T12:06:00Z",
+  "last_event": "Module 3 PR #49 merged into main",
+  "next_action": "None (Module 3 100% complete)",
+  "user_stories": {
+    "us-3.1.0": {
+      "title": "PaymentIntents Lifecycle, Authorization, Capture & Idempotency",
+      "status": "MERGED",
+      "branch": "feat/us-3.1.0-payment-intents",
+      "story_pr": { "id": 46, "status": "MERGED", "merge_commit": "c419814" },
+      "units": {
+        "unit-1": { "name": "PaymentIntent Entities", "branch": "feat/us-3.1.0/unit-1-payment-intent-entities", "pr": 37, "status": "MERGED", "profile": "agent-a" },
+        "unit-2": { "name": "Parameter Schemas & Minor Currency", "branch": "feat/us-3.1.0/unit-2-params-schemas", "pr": 43, "status": "MERGED", "profile": "agent-b" },
+        "unit-3": { "name": "Resource CRUD & Idempotency", "branch": "feat/us-3.1.0/unit-3-crud-idempotency", "pr": 38, "status": "MERGED", "profile": "agent-c" },
+        "unit-4": { "name": "3DS PSD2 Wire Mock Tests", "branch": "feat/us-3.1.0/unit-4-3ds-wire-tests", "pr": 44, "status": "MERGED", "profile": "agent-a" },
+        "unit-5": { "name": "Borrow Audit & Doctests", "branch": "feat/us-3.1.0/unit-5-borrow-audit-docs", "pr": 41, "status": "MERGED", "profile": "agent-b" }
+      }
+    },
+    "us-3.2.0": {
+      "title": "Refunds, Disputes Management & Immutable Balance Ledger",
+      "status": "MERGED",
+      "branch": "feat/us-3.2.0-refunds-and-ledger",
+      "story_pr": { "id": 48, "status": "MERGED", "merge_commit": "54d25e7" },
+      "units": {
+        "unit-1": { "name": "Refund Entity & Statutory Law", "branch": "feat/us-3.2.0/unit-1-refund-entity-and-statutory", "pr": 39, "status": "MERGED", "profile": "agent-c" },
+        "unit-2": { "name": "Dispute Entity & Evidence Schemas", "branch": "feat/us-3.2.0/unit-2-dispute-and-evidence-schemas", "pr": 42, "status": "MERGED", "profile": "agent-a" },
+        "unit-3": { "name": "Balance Ledger & Stream Paginators", "branch": "feat/us-3.2.0/unit-3-balance-ledger-and-stream", "pr": 45, "status": "MERGED", "profile": "agent-b" },
+        "unit-4": { "name": "Resource CRUD & Wire Tests", "branch": "feat/us-3.2.0/unit-4-resource-crud-and-mock-tests", "pr": 40, "status": "MERGED", "profile": "agent-c" },
+        "unit-5": { "name": "Minor Currency Engine & Reconciliation", "branch": "feat/us-3.2.0/unit-5-minor-currency-audit-and-reports", "pr": 47, "status": "MERGED", "profile": "agent-a" }
+      }
+    }
+  }
+}
