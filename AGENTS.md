@@ -75,6 +75,18 @@ Welcome to the **`some-stripe`** workspace. All AI agents, contributors, and aut
    - Every agent running `cargo` commands in `.worktrees/` MUST export `export CARGO_TARGET_DIR=/workspaces/some-stripe/target`.
    - Never run un-cached cargo builds or baseline tests before creating worktrees; provision worktrees instantly via `git worktree add` and reuse precompiled artifacts to keep build times under 2 seconds.
 
+11. **[Active Supervisor Watchdog & Immediate Subagent Spawning](.agents/rules/active-supervisor-watchdog.md)**:
+   - **Zero Idle Talk Before Spawning**: Module Leaders must immediately spawn User Story Leaders in their first step; Story Leaders must immediately spawn their 5 Unit Implementers in their first step. Protracted analysis prior to spawning child subagents is strictly prohibited.
+   - **3-Minute Watchdog Fallback**: The Main Agent actively monitors subagent progress every 3 minutes. If any leader runs for >3 minutes without spawning its required child agents, or idles in verbose monologues, the Main Agent MUST intervene immediately and directly spawn the missing subagents.
+
+12. **[Idempotent State Reconciliation & Anti-Duplication on Quota Failover](.agents/rules/anti-duplication-quota-recovery.md)**:
+   - **Mandatory Pre-Spawn Scan**: Before creating any story leader or unit implementer (especially after quota exhaustion, restart, or account switch), agents MUST scan `git worktree list`, `git branch -a`, `gh pr list --state all`, and active subagents.
+   - **Zero Duplicate Agents**: Never spawn duplicate agents or stories for tasks already in progress or merged. Re-attach to existing branches and continue the cascading queue without burning extra quota.
+
+13. **[Enforced Multi-Profile Round-Robin Allocation (`agent-a`, `agent-b`, `agent-c`)](.agents/rules/multi-profile-allocation.md)**:
+   - **Strict Profile Rotation**: Agents MUST actively rotate across all 3 billing accounts (`account1`/`agent-a`, `account2`/`agent-b`, `account3`/`agent-c`) to split the API quota and avoid single-account concentration.
+   - Every subagent MUST specify its assigned profile in its role title, system prompt, and audit report.
+
 ---
 
 ## 2. Multi-Profile Quota Engine & Dynamic Agent Generation

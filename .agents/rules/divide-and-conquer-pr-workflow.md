@@ -94,3 +94,21 @@ To eliminate execution delays and avoid idle waiting:
   export CARGO_TARGET_DIR=/workspaces/some-stripe/target
   ```
 - **Prohibition on Pre-Flight Compilation**: Agents must never run baseline or pre-flight `cargo test` runs before creating child worktrees. Worktrees must be provisioned immediately via `git worktree add`, and unit implementers dispatched without delay.
+
+### 8. Active Supervisor Watchdog & Immediate Subagent Spawning (Fallbacks)
+- **Zero Idle Talk Invariant**:
+  - The Module Leader's **first action** MUST be spawning User Story Leaders (`invoke_subagent`).
+  - The User Story Leader's **first action** MUST be provisioning worktrees and spawning all 5 Unit Implementers (`invoke_subagent`).
+  - No prolonged planning or monologues before dispatching children.
+- **3-Minute Watchdog Fallback**:
+  - The Main Agent supervises the hierarchy, checking subagent health every 3 minutes.
+  - If a leader runs for >3 minutes without creating its required child agents, or idles without active execution, the Main Agent directly intervenes and spawns the missing subagents.
+
+### 9. Idempotent State Reconciliation & Anti-Duplication on Quota Failover
+- **Pre-Spawn State Scan**:
+  - Before spawning ANY story or unit agent (especially after quota exhaustion, restart, or account switch), agents MUST scan `git worktree list`, `git branch -a`, `gh pr list --state all`, and active subagents.
+  - Zero duplicate agents or redundant user stories. Re-attach to existing branches and continue the cascading queue without burning extra quota.
+
+### 10. Enforced Multi-Profile Round-Robin Allocation (`agent-a`, `agent-b`, `agent-c`)
+- Subagents MUST be distributed evenly across `account1` (`agent-a`), `account2` (`agent-b`), `account3` (`agent-c`) to split API quota and prevent single-account exhaustion.
+- Every subagent MUST specify its assigned profile in its role title and audit report.
