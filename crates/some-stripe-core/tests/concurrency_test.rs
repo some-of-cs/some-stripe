@@ -1,8 +1,8 @@
 //! Concurrency & Stress Testing for US-1.1.0 (`TC-1.1.0-01` & `TC-1.1.0-03`).
 
 use some_stripe_core::{SecretKey, StripeClient, StripeConfig};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::Duration;
 
 #[tokio::test]
@@ -19,7 +19,10 @@ async fn tc_1_1_0_01_tokio_10k_tasks_concurrency_stress() {
         let client_clone = client.clone();
         let counter_clone = Arc::clone(&counter);
         handles.push(tokio::spawn(async move {
-            assert_eq!(client_clone.config.secret_key.expose_secret(), "sk_test_mock_12345");
+            assert_eq!(
+                client_clone.config.secret_key.expose_secret(),
+                "sk_test_mock_12345"
+            );
             counter_clone.fetch_add(1, Ordering::Relaxed);
         }));
     }

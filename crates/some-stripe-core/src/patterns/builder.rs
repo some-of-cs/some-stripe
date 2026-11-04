@@ -6,8 +6,8 @@ use crate::patterns::crud::resource_url;
 use crate::patterns::idempotency::IdempotencyKeyManager;
 use crate::patterns::serializer::{to_form_params, to_form_urlencoded};
 use reqwest::Method;
-use serde::de::DeserializeOwned;
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use std::time::Duration;
 
 /// Fluent request builder standardizing outbound HTTP request preparation.

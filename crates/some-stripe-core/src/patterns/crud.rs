@@ -1,9 +1,9 @@
 //! Generic CRUD endpoint helpers and traits.
 
-use async_trait::async_trait;
-use serde::Serialize;
 use crate::client::StripeClient;
 use crate::error::StripeError;
+use async_trait::async_trait;
+use serde::Serialize;
 
 /// Assembles a normalized Stripe REST API endpoint URL.
 pub fn resource_url(api_base: &str, resource_path: &str) -> String {

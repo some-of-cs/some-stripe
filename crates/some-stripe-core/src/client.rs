@@ -2,10 +2,10 @@
 
 use crate::error::StripeError;
 use crate::workflow::{DefaultErrorWorkflow, ErrorWorkflowHandler};
-use subtle::ConstantTimeEq;
 use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
+use subtle::ConstantTimeEq;
 use zeroize::{Zeroize, ZeroizeOnDrop};
 
 /// A secret API key securely stored in memory, automatically zeroized on drop,

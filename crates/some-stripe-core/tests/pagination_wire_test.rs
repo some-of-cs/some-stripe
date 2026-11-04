@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use some_stripe_core::client::{StripeClient, StripeConfig};
 use some_stripe_core::error::StripeError;
-use some_stripe_core::patterns::pagination::CursorLoopDetector;
+use some_stripe_core::patterns::pagination::{CursorLoopDetector, Paginator};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -57,18 +57,22 @@ async fn tc_1_3_0_01_stream_traversal_across_3_pages() {
             .unwrap();
     });
 
-    let config = StripeConfig::new("sk_test_wire_mock")
-        .with_api_base(format!("http://{address}"));
+    let config = StripeConfig::new("sk_test_wire_mock").with_api_base(format!("http://{address}"));
     let client = StripeClient::with_config(config);
 
-    let req = client.http.get(format!("{}/v1/test_items?limit=2", client.config.api_base));
-    let val = client.execute(req).await.unwrap();
-    let page: some_stripe_core::patterns::pagination::ListResponse<MockItem> =
-        serde_json::from_value(val).unwrap();
+    let mut paginator: Paginator<MockItem> =
+        Paginator::new(&client, "v1/test_items", 2, |item| item.id.clone());
 
-    assert_eq!(page.data.len(), 2);
-    assert_eq!(page.data[0].id, "item_1");
-    assert_eq!(page.data[1].id, "item_2");
+    let mut collected = Vec::new();
+    while let Some(item) = paginator.next_item().await.unwrap() {
+        collected.push(item);
+    }
+
+    assert_eq!(collected.len(), 4);
+    assert_eq!(collected[0].id, "item_1");
+    assert_eq!(collected[1].id, "item_2");
+    assert_eq!(collected[2].id, "item_3");
+    assert_eq!(collected[3].id, "item_4");
 
     server.await.unwrap();
 }

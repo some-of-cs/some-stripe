@@ -113,6 +113,7 @@ pub struct Paginator<'a, T> {
     pages_fetched: usize,
     done: bool,
     last_id_extractor: fn(&T) -> String,
+    last_seen_cursor: Option<String>,
 }
 
 impl<'a, T: serde::de::DeserializeOwned> Paginator<'a, T> {
@@ -133,6 +134,7 @@ impl<'a, T: serde::de::DeserializeOwned> Paginator<'a, T> {
             pages_fetched: 0,
             done: false,
             last_id_extractor: id_extractor,
+            last_seen_cursor: None,
         }
     }
 
@@ -141,12 +143,12 @@ impl<'a, T: serde::de::DeserializeOwned> Paginator<'a, T> {
         self.pages_fetched
     }
 
-    async fn fetch_page(&mut self, cursor: Option<&str>) -> Result<ListResponse<T>, StripeError> {
+    async fn fetch_page(&mut self) -> Result<ListResponse<T>, StripeError> {
         let mut url = format!(
             "{}/{}?limit={}",
             self.client.config.api_base, self.path, self.limit
         );
-        if let Some(c) = cursor {
+        if let Some(ref c) = self.last_seen_cursor {
             url.push_str(&format!("&starting_after={c}"));
         }
 
@@ -172,13 +174,21 @@ impl<'a, T: serde::de::DeserializeOwned> Paginator<'a, T> {
             }
 
             // 3. Fetch next page
-            let last_id = self.buffer.back().map(|last| (self.last_id_extractor)(last));
-            if let Some(ref cursor) = last_id {
+            if let Some(ref cursor) = self.last_seen_cursor {
                 self.loop_detector.record_cursor(cursor)?;
             }
 
-            let response = self.fetch_page(last_id.as_deref()).await?;
+            let response = self.fetch_page().await?;
             self.has_more = response.has_more;
+
+            if let Some(last) = response.data.last() {
+                self.last_seen_cursor = Some((self.last_id_extractor)(last));
+            }
+
+            if response.data.is_empty() {
+                self.done = true;
+                return Ok(None);
+            }
 
             // Move elements into deque buffer without cloning
             self.buffer = response.data.into();

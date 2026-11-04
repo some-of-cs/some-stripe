@@ -139,7 +139,9 @@ impl Webhook {
         if tolerance_secs > 0 {
             let now = chrono::Utc::now().timestamp();
             // Check past tolerance AND future drift bound (Gate G2)
-            if timestamp < now - (tolerance_secs as i64) || timestamp > now + MAX_FUTURE_DRIFT_SECONDS {
+            if timestamp < now - (tolerance_secs as i64)
+                || timestamp > now + MAX_FUTURE_DRIFT_SECONDS
+            {
                 return Err(StripeWebhookError::TimestampOutsideTolerance {
                     timestamp,
                     now,
@@ -185,7 +187,11 @@ impl Webhook {
     }
 
     /// Test utility to generate signed headers for test assertions.
-    pub fn generate_test_header_string(payload: &[u8], secret: &str, timestamp: Option<i64>) -> String {
+    pub fn generate_test_header_string(
+        payload: &[u8],
+        secret: &str,
+        timestamp: Option<i64>,
+    ) -> String {
         let ts = timestamp.unwrap_or_else(|| chrono::Utc::now().timestamp());
         let ts_str = ts.to_string();
 

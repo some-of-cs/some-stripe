@@ -1,8 +1,8 @@
 //! Wire-level Contract Tests for US-1.2.0 (`TC-1.2.0-01`, `TC-1.2.0-02`, `TC-1.2.0-LAW`).
 
 use serde::Serialize;
-use some_stripe_core::patterns::serializer::{to_form_urlencoded, serialize_v2_json};
 use some_stripe_core::Nullable;
+use some_stripe_core::patterns::serializer::{serialize_v2_json, to_form_urlencoded};
 use std::collections::BTreeMap;
 
 #[derive(Serialize)]
@@ -87,7 +87,7 @@ fn test_tc_1_2_0_law_minor_currency_precision() {
 
     let fixture = InvoiceItem {
         amount_cents: 999_999_999_999,
-        satoshis: 21_000_000_0000_0000,
+        satoshis: 2_100_000_000_000_000,
     };
 
     let wire = to_form_urlencoded(&fixture).expect("Serialization must succeed");
