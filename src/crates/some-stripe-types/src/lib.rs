@@ -267,9 +267,33 @@ pub struct CreatePaymentIntentParams {
     /// Description of the payment.
     pub description: Option<String>,
 
+    /// ID of the payment method to attach to this PaymentIntent.
+    pub payment_method: Option<String>,
+
+    /// Set to `true` to attempt confirmation immediately upon creation.
+    pub confirm: Option<bool>,
+
+    /// The URL to redirect your customer back to if authentication is required.
+    pub return_url: Option<String>,
+
     /// Unique idempotency key.
     #[serde(skip)]
     pub idempotency_key: Option<String>,
+}
+
+impl Default for CreatePaymentIntentParams {
+    fn default() -> Self {
+        Self {
+            amount: 0,
+            currency: "usd".into(),
+            capture_method: None,
+            description: None,
+            payment_method: None,
+            confirm: None,
+            return_url: None,
+            idempotency_key: None,
+        }
+    }
 }
 
 /// Parameters for capturing a PaymentIntent.
@@ -288,6 +312,26 @@ pub struct CapturePaymentIntentParams {
 pub struct CancelPaymentIntentParams {
     /// Reason for canceling this PaymentIntent.
     pub cancellation_reason: Option<String>,
+
+    /// Unique idempotency key.
+    #[serde(skip)]
+    pub idempotency_key: Option<String>,
+}
+
+/// Parameters for confirming a Stripe PaymentIntent.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ConfirmPaymentIntentParams {
+    /// ID of the payment method used to confirm this PaymentIntent.
+    pub payment_method: Option<String>,
+
+    /// The URL to redirect your customer back to after they authenticate or cancel their payment on the payment method's website.
+    pub return_url: Option<String>,
+
+    /// Email address that the receipt for the resulting payment will be sent to.
+    pub receipt_email: Option<String>,
+
+    /// Indicates that you intend to make future payments with this PaymentIntent's payment method.
+    pub setup_future_usage: Option<String>,
 
     /// Unique idempotency key.
     #[serde(skip)]
@@ -720,5 +764,38 @@ mod tests {
             }
             other => panic!("Expected Invoice variant, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn test_create_and_confirm_payment_intent_params() {
+        let create_params = CreatePaymentIntentParams {
+            amount: 5000,
+            currency: "usd".into(),
+            capture_method: Some("manual".into()),
+            description: Some("Order #1024".into()),
+            payment_method: Some("pm_test_card".into()),
+            confirm: Some(true),
+            return_url: Some("https://example.com/complete".into()),
+            idempotency_key: Some("idem_create_123".into()),
+        };
+        assert_eq!(create_params.amount, 5000);
+        assert_eq!(create_params.currency, "usd");
+        assert_eq!(create_params.confirm, Some(true));
+
+        let confirm_params = ConfirmPaymentIntentParams {
+            payment_method: Some("pm_test_456".into()),
+            return_url: Some("https://example.com/return".into()),
+            receipt_email: Some("billing@example.com".into()),
+            setup_future_usage: Some("off_session".into()),
+            idempotency_key: Some("idem_conf_789".into()),
+        };
+        assert_eq!(
+            confirm_params.payment_method.as_deref(),
+            Some("pm_test_456")
+        );
+        assert_eq!(
+            confirm_params.setup_future_usage.as_deref(),
+            Some("off_session")
+        );
     }
 }
