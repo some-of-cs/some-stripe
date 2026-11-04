@@ -53,6 +53,7 @@ pub use constants::{
 pub use crypto::compute_streaming_hmac_hex;
 pub use error::StripeWebhookError;
 pub use header::{StripeSignatureHeader, parse_signature_header};
+
 use openssl::hash::MessageDigest;
 use openssl::pkey::PKey;
 use openssl::sign::Signer;
@@ -233,6 +234,36 @@ impl Webhook {
 }
 
 /// Ergonomic wrapper providing typed accessors over raw webhook [`Event`] instances.
+/// Immutable, timestamped audit record produced upon webhook verification,
+/// satisfying ISO/IEC 27001:2022 Control A.8.15 (Logging and Monitoring).
+///
+/// Holds borrowed string references (`&'a str`) to prevent unnecessary heap allocation
+/// in compliance with Gate G-Borrow zero-clone invariants.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WebhookAuditRecord<'a> {
+    /// Unique identifier of the Stripe event (`evt_...`).
+    pub event_id: &'a str,
+    /// Classification type of the event (e.g., `checkout.session.completed`).
+    pub event_type: &'a str,
+    /// UNIX epoch timestamp when verification succeeded, if verified.
+    pub verified_at: Option<i64>,
+    /// Verification status indicator (`"verified"` or `"unverified"`).
+    pub status: &'a str,
+}
+
+impl<'a> WebhookAuditRecord<'a> {
+    /// Returns `true` if this audit record represents a successfully verified event.
+    pub fn is_verified(&self) -> bool {
+        self.status == "verified" && self.verified_at.is_some()
+    }
+}
+
+impl<'a> From<&'a StripeWebhookWrapper> for WebhookAuditRecord<'a> {
+    fn from(wrapper: &'a StripeWebhookWrapper) -> Self {
+        wrapper.audit_record()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct StripeWebhookWrapper {
     /// Parsed event object.
@@ -264,34 +295,46 @@ impl StripeWebhookWrapper {
         Self { event, verified_at }
     }
 
-    /// Extracts the order ID from `/data/object/id`.
-    pub fn order_id(&self) -> Option<String> {
+    /// Produces an immutable, timestamped audit record for this event,
+    /// satisfying ISO/IEC 27001:2022 Control A.8.15.
+    pub fn audit_record(&self) -> WebhookAuditRecord<'_> {
+        WebhookAuditRecord {
+            event_id: &self.event.id,
+            event_type: &self.event.event_type,
+            verified_at: self.verified_at,
+            status: if self.verified_at.is_some() {
+                "verified"
+            } else {
+                "unverified"
+            },
+        }
+    }
+
+    /// Extracts the order ID from `/data/object/id` as a borrowed string slice (Gate G-Borrow zero-clone).
+    pub fn order_id(&self) -> Option<&str> {
         self.event
             .data
             .object
             .pointer("/id")
             .and_then(|v| v.as_str())
-            .map(str::to_string)
     }
 
-    /// Extracts the customer ID from `/data/object/customer`.
-    pub fn customer_id(&self) -> Option<String> {
+    /// Extracts the customer ID from `/data/object/customer` as a borrowed string slice (Gate G-Borrow zero-clone).
+    pub fn customer_id(&self) -> Option<&str> {
         self.event
             .data
             .object
             .pointer("/customer")
             .and_then(|v| v.as_str())
-            .map(str::to_string)
     }
 
-    /// Extracts the PaymentIntent ID from `/data/object/payment_intent`.
-    pub fn payment_intent_id(&self) -> Option<String> {
+    /// Extracts the PaymentIntent ID from `/data/object/payment_intent` as a borrowed string slice (Gate G-Borrow zero-clone).
+    pub fn payment_intent_id(&self) -> Option<&str> {
         self.event
             .data
             .object
             .pointer("/payment_intent")
             .and_then(|v| v.as_str())
-            .map(str::to_string)
     }
 
     /// Checks if the event represents a completed checkout session.
@@ -403,7 +446,7 @@ mod tests {
         assert_eq!(event.event_type, "checkout.session.completed");
 
         let wrapper = StripeWebhookWrapper::new(event, Some(now));
-        assert_eq!(wrapper.order_id().as_deref(), Some("cs_test_123"));
+        assert_eq!(wrapper.order_id(), Some("cs_test_123"));
         assert_eq!(wrapper.amount_total(), Some(5000));
         assert_eq!(wrapper.currency().as_deref(), Some("USD"));
         assert!(wrapper.is_checkout_completed());
