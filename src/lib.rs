@@ -56,7 +56,10 @@
 
 pub use some_stripe_core as core;
 pub use some_stripe_types as types;
+pub use some_stripe_types::balance;
+pub use some_stripe_types::currency;
 pub use some_stripe_types::dispute;
+pub use some_stripe_types::refund;
 pub use some_stripe_webhooks as webhooks;
 
 pub use some_stripe_core::client::{
