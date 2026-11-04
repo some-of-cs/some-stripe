@@ -84,6 +84,8 @@ pub mod refund;
 pub use refund::*;
 pub mod payment_link;
 pub use payment_link::*;
+pub mod omnibus;
+pub use omnibus::*;
 
 /// Strongly typed Stripe Connect Account ID (`acct_...`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]

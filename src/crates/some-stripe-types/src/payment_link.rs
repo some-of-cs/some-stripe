@@ -1066,6 +1066,13 @@ impl PaymentLinkPriceDataParams {
         self
     }
 
+    /// Fluent builder method to attach tax behavior (`inclusive`, `exclusive`, or `unspecified`).
+    #[must_use]
+    pub fn tax_behavior(mut self, tax_behavior: impl Into<String>) -> Self {
+        self.tax_behavior = Some(tax_behavior.into());
+        self
+    }
+
     /// Validates the price data and multi-currency options.
     pub fn validate(&self) -> Result<(), PaymentLinkValidationError> {
         validate_currency(&self.currency).map_err(|_| {
