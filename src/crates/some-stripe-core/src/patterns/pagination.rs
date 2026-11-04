@@ -112,7 +112,7 @@ pub struct Paginator<'a, T> {
     has_more: bool,
     pages_fetched: usize,
     done: bool,
-    last_id_extractor: fn(&T) -> String,
+    last_id_extractor: fn(&T) -> &str,
     last_seen_cursor: Option<String>,
 }
 
@@ -122,7 +122,7 @@ impl<'a, T: serde::de::DeserializeOwned> Paginator<'a, T> {
         client: &'a StripeClient,
         path: impl Into<String>,
         limit: u32,
-        id_extractor: fn(&T) -> String,
+        id_extractor: fn(&T) -> &str,
     ) -> Self {
         Self {
             client,
@@ -182,7 +182,7 @@ impl<'a, T: serde::de::DeserializeOwned> Paginator<'a, T> {
             self.has_more = response.has_more;
 
             if let Some(last) = response.data.last() {
-                self.last_seen_cursor = Some((self.last_id_extractor)(last));
+                self.last_seen_cursor = Some((self.last_id_extractor)(last).to_string());
             }
 
             if response.data.is_empty() {

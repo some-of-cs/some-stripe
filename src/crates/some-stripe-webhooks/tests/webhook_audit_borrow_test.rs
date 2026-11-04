@@ -157,7 +157,8 @@ fn test_tc_2_2_0_law_iso_27001_audit_logging() {
     assert_eq!(audit, audit_from);
 
     // 2. Unverified Event Audit Record
-    let unverified_wrapper = StripeWebhookWrapper::new(wrapper.event.clone(), None);
+    let unverified_event: some_stripe_types::Event = serde_json::from_slice(payload).unwrap();
+    let unverified_wrapper = StripeWebhookWrapper::new(unverified_event, None);
     let unverified_audit = unverified_wrapper.audit_record();
     assert_eq!(unverified_audit.status, "unverified");
     assert_eq!(unverified_audit.verified_at, None);

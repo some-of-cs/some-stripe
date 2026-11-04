@@ -4,13 +4,13 @@ use some_stripe_core::{StripeClient, StripeError};
 use some_stripe_types::Account;
 
 /// Resource for managing Stripe Accounts (`stripe.accounts`).
-#[derive(Clone)]
-pub struct AccountsResource {
-    client: StripeClient,
+#[derive(Clone, Copy)]
+pub struct AccountsResource<'a> {
+    client: &'a StripeClient,
 }
 
-impl AccountsResource {
-    pub(crate) fn new(client: StripeClient) -> Self {
+impl<'a> AccountsResource<'a> {
+    pub(crate) fn new(client: &'a StripeClient) -> Self {
         Self { client }
     }
 

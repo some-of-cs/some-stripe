@@ -149,7 +149,8 @@ fn tc_2_2_0_03_strongly_typed_v1_snapshot_deserialization() {
     assert_eq!(event.event_type, "checkout.session.completed");
 
     // 2. Strongly typed deserialization of event data object into CheckoutSession domain model
-    let session: CheckoutSession = serde_json::from_value(event.data.object.clone())
+    use serde::Deserialize;
+    let session = CheckoutSession::deserialize(&event.data.object)
         .expect("CheckoutSession domain model must deserialize cleanly from event payload");
 
     assert_eq!(session.id, "cs_test_b1c2d3e4f5g6h7");

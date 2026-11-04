@@ -108,18 +108,18 @@ impl StripeClient {
     }
 
     /// Access the Checkout resource namespace (`stripe.checkout`).
-    pub fn checkout(&self) -> CheckoutResource {
-        CheckoutResource::new(self.0.clone())
+    pub fn checkout(&self) -> CheckoutResource<'_> {
+        CheckoutResource::new(&self.0)
     }
 
     /// Access the PaymentIntents resource namespace (`stripe.payment_intents`).
-    pub fn payment_intents(&self) -> PaymentIntentsResource {
-        PaymentIntentsResource::new(self.0.clone())
+    pub fn payment_intents(&self) -> PaymentIntentsResource<'_> {
+        PaymentIntentsResource::new(&self.0)
     }
 
     /// Access the Accounts resource namespace (`stripe.accounts`).
-    pub fn accounts(&self) -> AccountsResource {
-        AccountsResource::new(self.0.clone())
+    pub fn accounts(&self) -> AccountsResource<'_> {
+        AccountsResource::new(&self.0)
     }
 
     /// Access the Webhooks helper resource (`stripe.webhooks`).
@@ -137,29 +137,29 @@ impl From<some_stripe_core::StripeClient> for StripeClient {
 /// Extension trait mounting resource accessors directly on [`some_stripe_core::StripeClient`].
 pub trait StripeClientExt {
     /// Access the Checkout resource namespace (`stripe.checkout`).
-    fn checkout(&self) -> CheckoutResource;
+    fn checkout(&self) -> CheckoutResource<'_>;
 
     /// Access the PaymentIntents resource namespace (`stripe.payment_intents`).
-    fn payment_intents(&self) -> PaymentIntentsResource;
+    fn payment_intents(&self) -> PaymentIntentsResource<'_>;
 
     /// Access the Accounts resource namespace (`stripe.accounts`).
-    fn accounts(&self) -> AccountsResource;
+    fn accounts(&self) -> AccountsResource<'_>;
 
     /// Access the Webhooks helper resource (`stripe.webhooks`).
     fn webhooks(&self) -> WebhooksResource;
 }
 
 impl StripeClientExt for some_stripe_core::StripeClient {
-    fn checkout(&self) -> CheckoutResource {
-        CheckoutResource::new(self.clone())
+    fn checkout(&self) -> CheckoutResource<'_> {
+        CheckoutResource::new(self)
     }
 
-    fn payment_intents(&self) -> PaymentIntentsResource {
-        PaymentIntentsResource::new(self.clone())
+    fn payment_intents(&self) -> PaymentIntentsResource<'_> {
+        PaymentIntentsResource::new(self)
     }
 
-    fn accounts(&self) -> AccountsResource {
-        AccountsResource::new(self.clone())
+    fn accounts(&self) -> AccountsResource<'_> {
+        AccountsResource::new(self)
     }
 
     fn webhooks(&self) -> WebhooksResource {

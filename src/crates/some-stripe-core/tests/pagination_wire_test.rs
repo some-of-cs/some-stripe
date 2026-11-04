@@ -61,7 +61,7 @@ async fn tc_1_3_0_01_stream_traversal_across_3_pages() {
     let client = StripeClient::with_config(config);
 
     let mut paginator: Paginator<MockItem> =
-        Paginator::new(&client, "v1/test_items", 2, |item| item.id.clone());
+        Paginator::new(&client, "v1/test_items", 2, |item| &item.id);
 
     let mut collected = Vec::new();
     while let Some(item) = paginator.next_item().await.unwrap() {
