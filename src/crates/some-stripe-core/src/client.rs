@@ -1,7 +1,7 @@
 //! Stripe API client configuration and execution engine.
 
 use crate::error::StripeError;
-use crate::workflow::{DefaultErrorWorkflow, ErrorWorkflowHandler};
+use crate::workflow::{DefaultErrorWorkflow, ErrorAction, ErrorWorkflowHandler};
 use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
@@ -299,58 +299,107 @@ impl StripeClient {
             }
         }
 
-        let response = request
-            .basic_auth(self.config.secret_key.expose_secret(), None::<&str>)
-            .send()
-            .await?;
+        let max_retries = self.config.max_retries;
+        let mut attempt = 0u32;
 
-        let status = response.status();
-        let body_bytes = response.bytes().await?;
+        request = request.basic_auth(self.config.secret_key.expose_secret(), None::<&str>);
 
-        if !status.is_success() {
-            let error_json: serde_json::Value =
-                serde_json::from_slice(&body_bytes).unwrap_or_default();
-            let err_obj = error_json.get("error");
+        loop {
+            attempt += 1;
 
-            let status_code = status.as_u16();
-            let code = err_obj
-                .and_then(|e| e.get("code"))
-                .and_then(|v| v.as_str())
-                .unwrap_or("unknown")
-                .to_string();
-            let message = err_obj
-                .and_then(|e| e.get("message"))
-                .and_then(|v| v.as_str())
-                .unwrap_or("Stripe request rejected")
-                .to_string();
-            let error_type = err_obj
-                .and_then(|e| e.get("type"))
-                .and_then(|v| v.as_str())
-                .unwrap_or("api_error")
-                .to_string();
-            let doc_url = err_obj
-                .and_then(|e| e.get("doc_url"))
-                .and_then(|v| v.as_str())
-                .map(str::to_string);
+            // Clone request for potential retry if supported and more attempts remain
+            let next_request = if attempt < max_retries {
+                request.try_clone()
+            } else {
+                None
+            };
 
-            // Notify configured error workflow
-            let _ = self
-                .config
-                .error_workflow
-                .on_api_error(status_code, &code, &message, 1, self.config.max_retries)
-                .await;
+            let response_result = request.send().await;
 
-            return Err(StripeError::Api {
-                status: status_code,
-                code,
-                message,
-                error_type,
-                doc_url,
-            });
+            let response = match response_result {
+                Ok(resp) => resp,
+                Err(err) => {
+                    // Check if error workflow authorizes retry on network failure
+                    if let Some(next_req) = next_request {
+                        let action = self
+                            .config
+                            .error_workflow
+                            .on_api_error(
+                                503,
+                                "network_error",
+                                &err.to_string(),
+                                attempt,
+                                max_retries,
+                            )
+                            .await;
+                        if action == ErrorAction::Retry {
+                            let backoff_ms = 50u64.saturating_mul(1u64 << (attempt - 1).min(6));
+                            tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
+                            request = next_req;
+                            continue;
+                        }
+                    }
+                    return Err(StripeError::Http(err));
+                }
+            };
+
+            let status = response.status();
+            let body_bytes = response.bytes().await?;
+
+            if !status.is_success() {
+                let error_json: serde_json::Value =
+                    serde_json::from_slice(&body_bytes).unwrap_or_default();
+                let err_obj = error_json.get("error");
+
+                let status_code = status.as_u16();
+                let code = err_obj
+                    .and_then(|e| e.get("code"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown")
+                    .to_string();
+                let message = err_obj
+                    .and_then(|e| e.get("message"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Stripe request rejected")
+                    .to_string();
+                let error_type = err_obj
+                    .and_then(|e| e.get("type"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("api_error")
+                    .to_string();
+                let doc_url = err_obj
+                    .and_then(|e| e.get("doc_url"))
+                    .and_then(|v| v.as_str())
+                    .map(str::to_string);
+
+                // Notify configured error workflow
+                let action = self
+                    .config
+                    .error_workflow
+                    .on_api_error(status_code, &code, &message, attempt, max_retries)
+                    .await;
+
+                if action == ErrorAction::Retry
+                    && let Some(next_req) = next_request
+                {
+                    let backoff_ms = 50u64.saturating_mul(1u64 << (attempt - 1).min(6));
+                    tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
+                    request = next_req;
+                    continue;
+                }
+
+                return Err(StripeError::Api {
+                    status: status_code,
+                    code,
+                    message,
+                    error_type,
+                    doc_url,
+                });
+            }
+
+            let value: serde_json::Value = serde_json::from_slice(&body_bytes)?;
+            return Ok(value);
         }
-
-        let value: serde_json::Value = serde_json::from_slice(&body_bytes)?;
-        Ok(value)
     }
 }
 
@@ -395,5 +444,17 @@ mod tests {
         assert_eq!(opts.idempotency_key.as_deref(), Some("idemp_key_abc"));
         assert_eq!(opts.stripe_version.as_deref(), Some("2024-06-20"));
         assert_eq!(opts.timeout, Some(Duration::from_secs(10)));
+    }
+
+    #[tokio::test]
+    async fn test_error_workflow_retry_dispatch_exhaustion() {
+        let config = StripeConfig::new("sk_test_123")
+            .with_api_base("http://127.0.0.1:9") // invalid port to trigger immediate network failure
+            .with_max_retries(2);
+        let client = StripeClient::with_config(config);
+
+        let req = client.http.get("http://127.0.0.1:9/v1/test");
+        let result = client.execute(req).await;
+        assert!(result.is_err(), "must fail after retrying");
     }
 }
