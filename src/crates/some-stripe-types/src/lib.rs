@@ -1202,4 +1202,41 @@ mod tests {
             other => panic!("Expected Invoice variant, got {other:?}"),
         }
     }
+
+    #[test]
+    fn test_create_and_confirm_payment_intent_params() {
+        let create_params = CreatePaymentIntentParams {
+            amount: 5000,
+            currency: "usd".into(),
+            capture_method: Some("manual".into()),
+            description: Some("Order #1024".into()),
+            payment_method: Some("pm_test_card".into()),
+            customer: None,
+            receipt_email: None,
+            confirm: Some(true),
+            return_url: Some("https://example.com/complete".into()),
+            metadata: None,
+            idempotency_key: Some("idem_create_123".into()),
+        };
+        assert_eq!(create_params.amount, 5000);
+        assert_eq!(create_params.currency, "usd");
+        assert_eq!(create_params.confirm, Some(true));
+
+        let confirm_params = ConfirmPaymentIntentParams {
+            client_secret: None,
+            payment_method: Some("pm_test_456".into()),
+            return_url: Some("https://example.com/return".into()),
+            receipt_email: Some("billing@example.com".into()),
+            setup_future_usage: Some("off_session".into()),
+            idempotency_key: Some("idem_conf_789".into()),
+        };
+        assert_eq!(
+            confirm_params.payment_method.as_deref(),
+            Some("pm_test_456")
+        );
+        assert_eq!(
+            confirm_params.setup_future_usage.as_deref(),
+            Some("off_session")
+        );
+    }
 }
