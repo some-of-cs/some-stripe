@@ -47,6 +47,15 @@ Welcome to the **`some-stripe`** workspace. All AI agents, contributors, and aut
    - **Multi-Profile Round-Robin**: Tasks MUST be actively distributed across all 3 profiles (`agent-a`, `agent-b`, `agent-c`) to split the API quota and prevent single-account billing concentration.
    - **Automatic Quota Failover**: In case any profile exhausts quota (429 / `RESOURCE_EXHAUSTED`), agents and launchers must automatically switch and retry using the next available account profile.
 
+8. **[Mandatory Agent Audit Logging & Full Execution Reporting](.agents/rules/agent-execution-reporting.md)**:
+   - Every agent (Unit implementer, Story lead, Module lead, Gatekeeper) MUST record a comprehensive report detailing:
+     - Exact scope, role, and profile used.
+     - Complete inventory of created and modified files.
+     - Verification logs for all quality gates (G0, G-Borrow, G2, G-Law, G1, G4).
+     - Test commands and verbatim outputs.
+     - GitHub PR link, commit SHA, and pre-merge review approval.
+   - All reports MUST be committed under `.agents/reports/<module-id>/` to preserve a permanent audit trail.
+
 ---
 
 ## 2. Multi-Profile Quota Engine & Dynamic Agent Generation
