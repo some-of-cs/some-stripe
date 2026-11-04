@@ -4,10 +4,11 @@
 //! discriminated EventObject union deserialization, and PCI-DSS client secret redaction.
 
 use some_stripe_types::{
-    AccountId, CancelRefundParams, CheckoutSession, CreateRefundParams, Dispute, DisputeEvidence,
-    DisputeEvidenceDetails, DisputeId, DisputeStatus, Event, EventData, EventObject,
-    IdempotencyKey, Invoice, PaymentIntent, Refund, RefundReason, UpdateDisputeParams,
-    UpdateRefundParams, is_statutory_withdrawal_compliant,
+    AccountId, CancelRefundParams, CaptureMethod, CardPaymentMethodOptions, CheckoutSession,
+    CreateRefundParams, Dispute, DisputeEvidence, DisputeEvidenceDetails, DisputeId, DisputeStatus,
+    Event, EventData, EventObject, IdempotencyKey, Invoice, PaymentIntent, PaymentIntentStatus,
+    PaymentMethodOptions, Refund, RefundReason, UpdateDisputeParams, UpdateRefundParams,
+    is_statutory_withdrawal_compliant,
 };
 
 #[test]
@@ -32,17 +33,95 @@ fn test_payment_intent_json_roundtrip() {
         "status": "succeeded",
         "capture_method": "automatic",
         "client_secret": "pi_contract_test_secret_abc123",
-        "created": 1728345600
+        "description": "Integration test payment",
+        "created": 1728345600,
+        "payment_method_options": {
+            "card": {
+                "request_three_d_secure": "automatic",
+                "capture_method": "automatic"
+            }
+        }
     });
 
     let pi: PaymentIntent = serde_json::from_value(pi_json).expect("Deserialization failed");
     assert_eq!(pi.id, "pi_contract_test");
     assert_eq!(pi.amount, 2500);
     assert_eq!(pi.status, "succeeded");
+    assert_eq!(pi.status, PaymentIntentStatus::Succeeded);
+    assert_eq!(pi.capture_method, Some(CaptureMethod::Automatic));
+    assert_eq!(pi.description.as_deref(), Some("Integration test payment"));
+
+    let opts = pi
+        .payment_method_options
+        .as_ref()
+        .expect("Expected payment_method_options");
+    let card = opts.card.as_ref().expect("Expected card options");
+    assert_eq!(card.request_three_d_secure.as_deref(), Some("automatic"));
+    assert_eq!(card.capture_method, Some(CaptureMethod::Automatic));
 
     let debug = format!("{pi:?}");
     assert!(debug.contains("[REDACTED]"));
     assert!(!debug.contains("abc123"));
+}
+
+#[test]
+fn test_payment_intent_status_contract_and_string_conversions() {
+    use std::str::FromStr;
+
+    let cases = [
+        (
+            "requires_payment_method",
+            PaymentIntentStatus::RequiresPaymentMethod,
+        ),
+        (
+            "requires_confirmation",
+            PaymentIntentStatus::RequiresConfirmation,
+        ),
+        ("requires_action", PaymentIntentStatus::RequiresAction),
+        ("processing", PaymentIntentStatus::Processing),
+        ("requires_capture", PaymentIntentStatus::RequiresCapture),
+        ("canceled", PaymentIntentStatus::Canceled),
+        ("succeeded", PaymentIntentStatus::Succeeded),
+    ];
+
+    for (raw_str, expected_variant) in cases {
+        assert_eq!(
+            PaymentIntentStatus::from_str(raw_str).unwrap(),
+            expected_variant
+        );
+        assert_eq!(expected_variant.as_str(), raw_str);
+        assert_eq!(expected_variant.to_string(), raw_str);
+        assert_eq!(expected_variant, raw_str);
+        assert_eq!(raw_str, expected_variant);
+
+        let serialized = serde_json::to_string(&expected_variant).unwrap();
+        assert_eq!(serialized, format!("\"{raw_str}\""));
+        let deserialized: PaymentIntentStatus = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(deserialized, expected_variant);
+    }
+}
+
+#[test]
+fn test_capture_method_contract_and_string_conversions() {
+    use std::str::FromStr;
+
+    let cases = [
+        ("automatic", CaptureMethod::Automatic),
+        ("manual", CaptureMethod::Manual),
+    ];
+
+    for (raw_str, expected_variant) in cases {
+        assert_eq!(CaptureMethod::from_str(raw_str).unwrap(), expected_variant);
+        assert_eq!(expected_variant.as_str(), raw_str);
+        assert_eq!(expected_variant.to_string(), raw_str);
+        assert_eq!(expected_variant, raw_str);
+        assert_eq!(raw_str, expected_variant);
+
+        let serialized = serde_json::to_string(&expected_variant).unwrap();
+        assert_eq!(serialized, format!("\"{raw_str}\""));
+        let deserialized: CaptureMethod = serde_json::from_str(&serialized).unwrap();
+        assert_eq!(deserialized, expected_variant);
+    }
 }
 
 #[test]
@@ -477,4 +556,22 @@ fn test_refund_params_zero_clone_contract() {
 
     let cancel = CancelRefundParams::new().with_idempotency_key("idem_zc_cancel");
     assert_eq!(cancel.idempotency_key.as_deref(), Some("idem_zc_cancel"));
+}
+
+#[test]
+fn test_payment_method_options_contract() {
+    let opts = PaymentMethodOptions::new().with_card(
+        CardPaymentMethodOptions::new()
+            .with_request_three_d_secure("challenge")
+            .with_capture_method(CaptureMethod::Manual),
+    );
+
+    let json = serde_json::to_string(&opts).expect("Serialization failed");
+    let deserialized: PaymentMethodOptions =
+        serde_json::from_str(&json).expect("Deserialization failed");
+
+    assert_eq!(deserialized, opts);
+    let card = deserialized.card.unwrap();
+    assert_eq!(card.request_three_d_secure.as_deref(), Some("challenge"));
+    assert_eq!(card.capture_method, Some(CaptureMethod::Manual));
 }

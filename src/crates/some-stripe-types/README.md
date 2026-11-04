@@ -11,7 +11,8 @@ Strongly Typed Domain Models, Events & Request DTOs for [`some-stripe`](https://
 ## Architectural Highlights
 
 - **Strongly Typed Domain Entities**:
-  - Full serde JSON serialization and deserialization for core Stripe resources: `PaymentIntent`, `CheckoutSession`, `Account`, `Invoice`, `Dispute`, `Refund`, `Balance`, `BalanceTransaction`, `Event`, and `EventData`.
+  - Full serde JSON serialization and deserialization for core Stripe resources: `PaymentIntent`, `PaymentIntentStatus`, `CaptureMethod`, `PaymentMethodOptions`, `CheckoutSession`, `Account`, `Invoice`, `Dispute`, `Refund`, `Balance`, `BalanceTransaction`, `Event`, and `EventData`.
+  - Strongly typed status and lifecycle enums: `PaymentIntentStatus`, `CaptureMethod`, `DisputeStatus`, `RefundReason`.
   - Type-safe identifiers: `AccountId` (`acct_...`), `IdempotencyKey`, `DisputeId` (`dp_...`).
 - **Immutable Balance Ledger & Reconciliation (Gate G2, Gate G-Law)**:
   - `BalanceTransaction` and `Balance` entities with zero-clone stream pagination integration (`balance_transaction_id`).
@@ -33,9 +34,12 @@ Strongly Typed Domain Models, Events & Request DTOs for [`some-stripe`](https://
   - Strict custom `std::fmt::Debug` implementations masking sensitive fields (e.g. `client_secret` in `PaymentIntent`) with `[REDACTED]`.
   - Zero raw PAN or secret retention in formatted error strings and logs.
   - Minor currency integer amounts (`i64` in cents) preventing IEEE 754 floating-point rounding errors (ISO 4217).
-- **Operation-Scoped Request DTOs**:
-  - `CreateCheckoutSessionParams`, `CreatePaymentIntentParams`, `CapturePaymentIntentParams`, `CancelPaymentIntentParams`.
+- **Operation-Scoped Request DTOs & Validation (Gate G-Law & G2)**:
+  - `CreateCheckoutSessionParams`, `CreatePaymentIntentParams`, `CapturePaymentIntentParams`, `CancelPaymentIntentParams`, `ConfirmPaymentIntentParams`.
   - `CreateRefundParams`, `UpdateRefundParams`, `CancelRefundParams`, `RefundReason`.
+  - Invariant validation for ISO 4217 minor currency units (`amount > 0`, 3-letter ASCII lowercase currency codes).
+  - Fluent builder patterns and validated constructors (`CreatePaymentIntentParams::new`, `CreatePaymentIntentParams::builder`).
+  - Strict Debug redaction for `ConfirmPaymentIntentParams` masking `client_secret` as `[REDACTED]`.
   - Clean separation between immutable domain state and updatable parameters.
 
 ---
@@ -43,13 +47,25 @@ Strongly Typed Domain Models, Events & Request DTOs for [`some-stripe`](https://
 ## Quickstart
 
 ```rust
-use some_stripe_types::{AccountId, IdempotencyKey, PaymentIntent, EventData, EventObject};
+use some_stripe_types::{
+    AccountId, CaptureMethod, CreatePaymentIntentParams, EventData, EventObject,
+    IdempotencyKey, PaymentIntent,
+};
 
 let account_id = AccountId::from("acct_1H2X3Y4Z");
 assert_eq!(account_id.to_string(), "acct_1H2X3Y4Z");
 
 let idempotency_key = IdempotencyKey::from("idem_tx_checkout_88712");
 assert_eq!(idempotency_key.to_string(), "idem_tx_checkout_88712");
+
+// Validated PaymentIntent Creation Params (ISO 4217 minor currency integer)
+let params = CreatePaymentIntentParams::new(5000, "USD")
+    .unwrap()
+    .capture_method("manual")
+    .description("Annual Subscription")
+    .idempotency_key("idem_pi_unique_123");
+assert_eq!(params.amount, 5000);
+assert_eq!(params.currency, "usd"); // Automatically lowercased
 
 // EventObject Deserialization with invoice.upcoming null id support
 let data = EventData {
