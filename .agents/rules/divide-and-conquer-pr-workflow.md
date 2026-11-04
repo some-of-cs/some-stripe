@@ -87,3 +87,10 @@ To eliminate execution delays and avoid idle waiting:
    - The same streaming pipeline applies at Level 2:
    - When all units for User Story 1 (e.g., US-x.1.0) are merged, its Story PR is opened immediately and can be merged into the module branch upon review.
    - User Story 2 (US-x.2.0) opens its PR when ready, waits for Story 1 to merge into the module branch, pulls the updated module branch, runs integration validation, and merges into the module branch.
+
+### 7. Mandatory Shared Cargo Build Cache (`CARGO_TARGET_DIR`) in Git Worktrees
+- All `cargo` invocations within any worktree MUST be preceded by:
+  ```bash
+  export CARGO_TARGET_DIR=/workspaces/some-stripe/target
+  ```
+- **Prohibition on Pre-Flight Compilation**: Agents must never run baseline or pre-flight `cargo test` runs before creating child worktrees. Worktrees must be provisioned immediately via `git worktree add`, and unit implementers dispatched without delay.
