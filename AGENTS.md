@@ -38,6 +38,11 @@ Welcome to the **`some-stripe`** workspace. All AI agents, contributors, and aut
 7. **[Multi-Agent Divide-and-Conquer PR Lifecycle & Merge Protocol](.agents/rules/divide-and-conquer-pr-workflow.md)**:
    - **Mandatory `.worktrees/` Directory Invariant**: All agents MUST work strictly inside the `.worktrees/` folder in this directory (`/workspaces/some-stripe/.worktrees/<branch-sanitized-name>`). Direct code modification on `main` or at the repository root is strictly prohibited.
    - **Strict Bottom-Up PR Creation Order**: Level 3 micro-units (Unit 1 -> 5) MUST be implemented, verified, committed, pushed, and have their GitHub PR opened (`gh pr create`) BEFORE the Level 2 User Story PR is opened. Never open a parent story/module PR before child unit PRs exist.
+   - **Mandatory Branch & PR Naming with Explicit Unit Number**:
+     - **Micro-Unit Branches**: MUST strictly match `feat/us-x.y.0/unit-N-<scope>` (e.g. `feat/us-4.1.0/unit-1-session-line-item-entities`).
+     - **Micro-Unit PR Titles**: MUST strictly match `feat(us-x.y.0/unit-N): <summary>` (e.g. `feat(us-4.1.0/unit-1): checkout session and line item domain entities`). Never omit the `/unit-N` from the PR title.
+     - **User Story PR Titles**: MUST match `feat(us-x.y.0): <story-title> (Units 1..5 Promotion)`.
+     - **Module PR Titles**: MUST match `feat(module-N): <module-title>`.
    - **Multi-Tier Merge & Validation Workflow (Strictly via `gh pr merge`)**:
      - **All tier merges MUST happen over GitHub using GitHub CLI (`gh pr merge`)**. Local `git merge` commands across promotion tiers are strictly prohibited.
      - **Mandatory Pre-Merge Review Sign-Off (Gates G-Review, G2, G-Borrow)**: Before calling `gh pr merge` on ANY pull request (unit, story, or module), an explicit code review and security validation must be executed and approved via `gh pr review <PR> --approve -b '...'`. Merging without documented quality gate review is strictly prohibited.

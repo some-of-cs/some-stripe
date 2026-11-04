@@ -8,12 +8,14 @@ Orchestrate concurrent, non-blocking agent execution using a hierarchical PR rol
 ### 1. Strict Chronological Bottom-Up Promotion & PR Creation Order
 All agents and processes MUST adhere to a strict bottom-up promotion sequence. **Never open a parent PR before all of its child unit PRs are created and verified:**
 1. **Level 3 (Atomic Micro-Unit Agent)**:
-   - Operates on branch `feat/us-x.y.z/unit-w` in dedicated worktree `.worktrees/feat-us-x.y.z-unit-w`.
+   - Operates on branch `feat/us-x.y.z/unit-w-<scope>` in dedicated worktree `.worktrees/feat-us-x.y.z-unit-w-<scope>`.
+   - **Mandatory Branch Naming**: Must explicitly include `/unit-w` (e.g. `feat/us-4.1.0/unit-1-session-line-item-entities`).
    - Physically modifies files on disk in its isolated worktree.
    - Validates all local unit tests, clippy (0 warnings), and Gate G-Borrow zero-clone rules.
    - Commits with conventional commit format: `feat(scope): ...` or `test(scope): ...`.
    - Pushes branch to origin.
-   - **Immediately creates the Level 3 Unit Pull Request on GitHub** (`gh pr create`) with detailed architectural and quality gate description.
+   - **Immediately creates the Level 3 Unit Pull Request on GitHub** (`gh pr create`).
+   - **Mandatory Unit PR Title**: MUST explicitly start with `feat(us-x.y.z/unit-w): <summary>` (e.g. `feat(us-4.1.0/unit-1): checkout session and line item domain entities`). Never omit the `/unit-w` in PR titles!
    - Micro-units must be created in ascending order: Unit 1 -> Unit 2 -> Unit 3 -> Unit 4 -> Unit 5.
 2. **Level 2 (Story Lead Agent)**:
    - Operates on branch `feat/us-x.y.z` in dedicated worktree `.worktrees/feat-us-x.y.z`.
