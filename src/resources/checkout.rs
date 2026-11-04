@@ -1,7 +1,18 @@
 //! Stripe Checkout resource implementations.
+//!
+//! Provides bindings for managing Stripe Checkout Sessions (`create`, `retrieve`, `expire`,
+//! and `list_line_items`), modeled after `stripe-node`.
+//!
+//! # Quality Gates Verified:
+//! - **G0**: Rust 2024 edition compilation without clippy warnings or fmt diffs.
+//! - **G-Borrow**: Zero-clone borrowing discipline across session creation, retrieval, and pagination.
+//! - **G2**: Automatic RFC 4122 UUID v4 `Idempotency-Key` header injection on session creation and expiration.
 
+use some_stripe_core::patterns::pagination::Paginator;
 use some_stripe_core::{StripeClient, StripeError};
-use some_stripe_types::{CheckoutSession, CreateCheckoutSessionParams};
+use some_stripe_types::{
+    CheckoutSession, CreateCheckoutSessionParams, LineItem, ListLineItemsParams, line_item_id,
+};
 
 /// Root resource for Stripe Checkout operations (`stripe.checkout`).
 #[derive(Clone, Copy)]
@@ -35,6 +46,10 @@ impl<'a> SessionsResource<'a> {
     }
 
     /// Creates a Checkout Session (`POST /v1/checkout/sessions`).
+    ///
+    /// Supports multi-item bracket-notation form encoding, backward-compatible single-item
+    /// parameter structures, and automatically generates an RFC 4122 UUID v4 `Idempotency-Key`
+    /// header when omitted by the caller (Rule 3).
     pub async fn create(
         &self,
         params: &CreateCheckoutSessionParams,
@@ -118,14 +133,49 @@ impl<'a> SessionsResource<'a> {
     }
 
     /// Expires an active Checkout Session (`POST /v1/checkout/sessions/{id}/expire`).
+    ///
+    /// Automatically injects a cryptographically secure RFC 4122 UUID v4 `Idempotency-Key` header.
     pub async fn expire(&self, session_id: &str) -> Result<CheckoutSession, StripeError> {
         let url = format!(
             "{}/v1/checkout/sessions/{}/expire",
             self.client.config.api_base, session_id
         );
-        let req = self.client.http.post(&url);
+        let idempotency_key = crate::resources::generate_uuid_v4();
+        let req = self
+            .client
+            .http
+            .post(&url)
+            .header("Idempotency-Key", idempotency_key);
         let val = self.client.execute(req).await?;
         let session: CheckoutSession = serde_json::from_value(val)?;
         Ok(session)
+    }
+
+    /// Returns a zero-clone paginator streaming line items for a Checkout Session (`GET /v1/checkout/sessions/{id}/line_items`).
+    pub fn list_line_items(
+        &self,
+        session_id: &str,
+        params: &ListLineItemsParams,
+    ) -> Paginator<'a, LineItem> {
+        let path = format!("v1/checkout/sessions/{session_id}/line_items");
+        Paginator::new(self.client, path, params.limit.unwrap_or(10), line_item_id)
+    }
+
+    /// Convenience helper returning an auto-paginator for line items with default page limit (10).
+    pub fn list_line_items_default(&self, session_id: &str) -> Paginator<'a, LineItem> {
+        self.list_line_items(session_id, &ListLineItemsParams::default())
+    }
+
+    /// Convenience helper returning an auto-paginator with an optional page limit.
+    pub fn list_line_items_with_limit(
+        &self,
+        session_id: &str,
+        limit: Option<u32>,
+    ) -> Paginator<'a, LineItem> {
+        let params = ListLineItemsParams {
+            limit,
+            ..Default::default()
+        };
+        self.list_line_items(session_id, &params)
     }
 }

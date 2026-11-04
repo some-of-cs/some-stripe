@@ -27,6 +27,112 @@ pub const CHECKOUT_SESSION_MODE_SETUP: &str = "setup";
 /// Session mode for recurring subscription checkouts.
 pub const CHECKOUT_SESSION_MODE_SUBSCRIPTION: &str = "subscription";
 
+/// Minimum expiration window required by Stripe (30 minutes = 1,800 seconds).
+pub const MIN_EXPIRATION_SECONDS: i64 = 1_800;
+/// Maximum expiration window permitted by Stripe (24 hours = 86,400 seconds).
+pub const MAX_EXPIRATION_SECONDS: i64 = 86_400;
+/// Allowable clock drift tolerance guard in seconds (Gate G2: 60 seconds).
+pub const EXPIRATION_TIMESTAMP_DRIFT_GUARD_SECONDS: i64 = 60;
+
+/// Errors returned during Checkout Session expiration validation and lifecycle transitions.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CheckoutSessionLifecycleError {
+    /// Expiration timestamp is too soon (less than 30 minutes from creation).
+    ExpirationTooSoon {
+        expires_at: i64,
+        created_at: i64,
+        min_allowed: i64,
+    },
+    /// Expiration timestamp is too late (more than 24 hours from creation).
+    ExpirationTooLate {
+        expires_at: i64,
+        created_at: i64,
+        max_allowed: i64,
+    },
+    /// Expiration timestamp is in the past relative to creation time (clock drift guard).
+    ExpirationInPast { expires_at: i64, created_at: i64 },
+    /// Illegal lifecycle status transition.
+    InvalidTransition {
+        from: String,
+        to: String,
+        reason: &'static str,
+    },
+}
+
+impl std::fmt::Display for CheckoutSessionLifecycleError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::ExpirationTooSoon {
+                expires_at,
+                created_at,
+                min_allowed,
+            } => {
+                write!(
+                    f,
+                    "CheckoutSession expires_at ({expires_at}) is too soon; must be at least 30 minutes after creation ({created_at}), minimum allowed is {min_allowed}"
+                )
+            }
+            Self::ExpirationTooLate {
+                expires_at,
+                created_at,
+                max_allowed,
+            } => {
+                write!(
+                    f,
+                    "CheckoutSession expires_at ({expires_at}) is too late; must be at most 24 hours after creation ({created_at}), maximum allowed is {max_allowed}"
+                )
+            }
+            Self::ExpirationInPast {
+                expires_at,
+                created_at,
+            } => {
+                write!(
+                    f,
+                    "CheckoutSession expires_at ({expires_at}) cannot be in the past relative to creation ({created_at})"
+                )
+            }
+            Self::InvalidTransition { from, to, reason } => {
+                write!(
+                    f,
+                    "Invalid CheckoutSession lifecycle transition from '{from}' to '{to}': {reason}"
+                )
+            }
+        }
+    }
+}
+
+impl std::error::Error for CheckoutSessionLifecycleError {}
+
+/// Validates an expiration timestamp against Stripe requirements (30 mins to 24 hours).
+pub fn validate_expires_at(
+    expires_at: i64,
+    created_at: i64,
+) -> Result<(), CheckoutSessionLifecycleError> {
+    if expires_at < created_at - EXPIRATION_TIMESTAMP_DRIFT_GUARD_SECONDS {
+        return Err(CheckoutSessionLifecycleError::ExpirationInPast {
+            expires_at,
+            created_at,
+        });
+    }
+    let min_allowed = created_at + MIN_EXPIRATION_SECONDS;
+    if expires_at < min_allowed {
+        return Err(CheckoutSessionLifecycleError::ExpirationTooSoon {
+            expires_at,
+            created_at,
+            min_allowed,
+        });
+    }
+    let max_allowed = created_at + MAX_EXPIRATION_SECONDS;
+    if expires_at > max_allowed {
+        return Err(CheckoutSessionLifecycleError::ExpirationTooLate {
+            expires_at,
+            created_at,
+            max_allowed,
+        });
+    }
+    Ok(())
+}
+
 /// Returns the default object type string for CheckoutSession (`"checkout.session"`).
 #[must_use]
 pub fn default_checkout_session_object() -> String {
@@ -282,6 +388,93 @@ impl CheckoutSession {
     pub fn line_items_data(&self) -> Option<&[LineItem]> {
         self.line_items.as_ref().map(|l| l.data.as_slice())
     }
+
+    /// Validates and applies a status transition in accordance with the Stripe Checkout lifecycle state machine.
+    pub fn transition_to(&mut self, target: &str) -> Result<(), CheckoutSessionLifecycleError> {
+        let current = self
+            .status
+            .as_deref()
+            .unwrap_or(CHECKOUT_SESSION_STATUS_OPEN);
+        if current == target {
+            return Ok(());
+        }
+        match (current, target) {
+            (CHECKOUT_SESSION_STATUS_OPEN, CHECKOUT_SESSION_STATUS_COMPLETE) => {
+                self.status = Some(CHECKOUT_SESSION_STATUS_COMPLETE.into());
+                self.payment_status = Some(PAYMENT_STATUS_PAID.into());
+                Ok(())
+            }
+            (CHECKOUT_SESSION_STATUS_OPEN, CHECKOUT_SESSION_STATUS_EXPIRED) => {
+                self.status = Some(CHECKOUT_SESSION_STATUS_EXPIRED.into());
+                Ok(())
+            }
+            (CHECKOUT_SESSION_STATUS_COMPLETE, CHECKOUT_SESSION_STATUS_EXPIRED) => {
+                Err(CheckoutSessionLifecycleError::InvalidTransition {
+                    from: current.into(),
+                    to: target.into(),
+                    reason: "Cannot expire a completed checkout session",
+                })
+            }
+            (CHECKOUT_SESSION_STATUS_EXPIRED, CHECKOUT_SESSION_STATUS_COMPLETE) => {
+                Err(CheckoutSessionLifecycleError::InvalidTransition {
+                    from: current.into(),
+                    to: target.into(),
+                    reason: "Cannot complete an expired checkout session",
+                })
+            }
+            (CHECKOUT_SESSION_STATUS_COMPLETE, CHECKOUT_SESSION_STATUS_OPEN) => {
+                Err(CheckoutSessionLifecycleError::InvalidTransition {
+                    from: current.into(),
+                    to: target.into(),
+                    reason: "Cannot reopen a completed checkout session",
+                })
+            }
+            (CHECKOUT_SESSION_STATUS_EXPIRED, CHECKOUT_SESSION_STATUS_OPEN) => {
+                Err(CheckoutSessionLifecycleError::InvalidTransition {
+                    from: current.into(),
+                    to: target.into(),
+                    reason: "Cannot reopen an expired checkout session",
+                })
+            }
+            _ => Err(CheckoutSessionLifecycleError::InvalidTransition {
+                from: current.into(),
+                to: target.into(),
+                reason: "Unsupported state transition",
+            }),
+        }
+    }
+
+    /// Transitions the checkout session to `complete` upon successful payment.
+    pub fn mark_completed(&mut self) -> Result<(), CheckoutSessionLifecycleError> {
+        self.transition_to(CHECKOUT_SESSION_STATUS_COMPLETE)
+    }
+
+    /// Transitions the checkout session to `expired` upon manual expiration or timeout.
+    pub fn mark_expired(&mut self) -> Result<(), CheckoutSessionLifecycleError> {
+        self.transition_to(CHECKOUT_SESSION_STATUS_EXPIRED)
+    }
+
+    /// Returns true if the session is abandoned (status is open and current timestamp exceeds `expires_at`).
+    #[must_use]
+    pub fn is_abandoned(&self, current_timestamp: i64) -> bool {
+        if !self.is_open() {
+            return false;
+        }
+        match self.expires_at {
+            Some(exp) => current_timestamp >= exp,
+            None => false,
+        }
+    }
+
+    /// Returns a recovery URL for this checkout session to resume checkout or handle abandonment.
+    #[must_use]
+    pub fn recovery_url(&self) -> String {
+        if let Some(ref url) = self.url {
+            url.clone()
+        } else {
+            format!("https://checkout.stripe.com/c/recover/{}", self.id)
+        }
+    }
 }
 
 /// Represents a Stripe LineItem object (`item`).
@@ -475,8 +668,16 @@ impl<'a> IntoIterator for &'a LineItemList {
     }
 }
 
+/// Extracts the line item ID from a [`LineItem`].
+///
+/// Conforms to the `fn(&T) -> &str` function pointer signature required by `Paginator::new`.
+pub fn line_item_id(item: &LineItem) -> &str {
+    &item.id
+}
+
 pub use crate::params::{
-    CreateCheckoutSessionParams, LineItemParams, LineItemPriceDataParams, LineItemProductDataParams,
+    CreateCheckoutSessionParams, CreateLineItemParams, LineItemParams, LineItemPriceDataParams,
+    LineItemProductDataParams, ListLineItemsParams,
 };
 
 #[cfg(test)]
@@ -631,5 +832,120 @@ mod tests {
         assert_eq!(params.quantity, Some(1));
         assert_eq!(params.expires_at, Some(1728400000));
         assert_eq!(params.idempotency_key.as_deref(), Some("idem_checkout_123"));
+    }
+
+    #[test]
+    fn test_validate_expires_at_bounds_and_drift() {
+        let created = 1_700_000_000;
+
+        // Valid: exactly 30 minutes after creation
+        assert!(validate_expires_at(created + 1_800, created).is_ok());
+
+        // Valid: 2 hours after creation
+        assert!(validate_expires_at(created + 7_200, created).is_ok());
+
+        // Valid: exactly 24 hours after creation
+        assert!(validate_expires_at(created + 86_400, created).is_ok());
+
+        // Invalid: 29 minutes after creation (too soon)
+        let too_soon = validate_expires_at(created + 1_799, created).unwrap_err();
+        assert!(matches!(
+            too_soon,
+            CheckoutSessionLifecycleError::ExpirationTooSoon { .. }
+        ));
+
+        // Invalid: 24 hours + 1 second (too late)
+        let too_late = validate_expires_at(created + 86_401, created).unwrap_err();
+        assert!(matches!(
+            too_late,
+            CheckoutSessionLifecycleError::ExpirationTooLate { .. }
+        ));
+
+        // Invalid: in past beyond drift guard
+        let in_past = validate_expires_at(created - 100, created).unwrap_err();
+        assert!(matches!(
+            in_past,
+            CheckoutSessionLifecycleError::ExpirationInPast { .. }
+        ));
+    }
+
+    #[test]
+    fn test_session_state_machine_legal_and_illegal_transitions() {
+        let mut session =
+            CheckoutSession::new("cs_test_state").with_status(CHECKOUT_SESSION_STATUS_OPEN);
+
+        // Open -> Complete is legal
+        assert!(session.mark_completed().is_ok());
+        assert!(session.is_complete());
+        assert!(session.is_paid());
+
+        // Complete -> Expired is illegal
+        let err = session.mark_expired().unwrap_err();
+        assert!(matches!(
+            err,
+            CheckoutSessionLifecycleError::InvalidTransition { .. }
+        ));
+        assert!(
+            err.to_string()
+                .contains("Cannot expire a completed checkout session")
+        );
+
+        // Complete -> Open is illegal
+        let reopen_err = session
+            .transition_to(CHECKOUT_SESSION_STATUS_OPEN)
+            .unwrap_err();
+        assert!(
+            reopen_err
+                .to_string()
+                .contains("Cannot reopen a completed checkout session")
+        );
+
+        // Fresh session: Open -> Expired is legal
+        let mut session_expire =
+            CheckoutSession::new("cs_test_expire").with_status(CHECKOUT_SESSION_STATUS_OPEN);
+        assert!(session_expire.mark_expired().is_ok());
+        assert!(session_expire.is_expired());
+
+        // Expired -> Complete is illegal
+        let err2 = session_expire.mark_completed().unwrap_err();
+        assert!(
+            err2.to_string()
+                .contains("Cannot complete an expired checkout session")
+        );
+    }
+
+    #[test]
+    fn test_abandonment_tracking_and_recovery_url() {
+        let created = 1_700_000_000;
+        let expires_at = created + 1_800;
+
+        let mut session =
+            CheckoutSession::new("cs_test_abandon").with_status(CHECKOUT_SESSION_STATUS_OPEN);
+        session.expires_at = Some(expires_at);
+
+        // Not abandoned before expiration
+        assert!(!session.is_abandoned(created + 900));
+
+        // Abandoned once current time reaches expires_at
+        assert!(session.is_abandoned(expires_at));
+        assert!(session.is_abandoned(expires_at + 10));
+
+        // Not abandoned if completed
+        session.status = Some(CHECKOUT_SESSION_STATUS_COMPLETE.into());
+        assert!(!session.is_abandoned(expires_at + 10));
+
+        // Recovery URL generation
+        let session_no_url = CheckoutSession::new("cs_rec_123");
+        assert_eq!(
+            session_no_url.recovery_url(),
+            "https://checkout.stripe.com/c/recover/cs_rec_123"
+        );
+
+        let session_with_url = CheckoutSession::new("cs_rec_456")
+            .with_url("https://checkout.stripe.com/c/pay/cs_rec_456");
+        assert_eq!(
+            session_with_url.recovery_url(),
+            "https://checkout.stripe.com/c/pay/cs_rec_456"
+        );
     }
 }
