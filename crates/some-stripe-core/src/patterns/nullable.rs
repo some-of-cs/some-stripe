@@ -44,7 +44,7 @@ impl<T> Nullable<T> {
         match self {
             Self::Omit => Nullable::Omit,
             Self::Null => Nullable::Null,
-            Self::Value(ref v) => Nullable::Value(v),
+            Self::Value(v) => Nullable::Value(v),
         }
     }
 
