@@ -5,13 +5,14 @@
 //!
 //! ## Overview
 //!
-//! - **Domain Entities**: [`PaymentIntent`], [`CheckoutSession`], [`Account`], [`Invoice`].
+//! - **Domain Entities**: [`PaymentIntent`], [`CheckoutSession`], [`Account`], [`Invoice`], [`Refund`].
 //! - **Event Pipeline**: [`Event`], [`EventData`], [`EventObject`].
+//! - **Statutory Legal Compliance**: [`is_statutory_withdrawal_compliant`] enforces EU Directive 2011/83/EU Article 13.
 //! - **Strongly Typed Identifiers**: [`AccountId`], [`IdempotencyKey`].
 //! - **Invoice Upcoming Guard**: [`Invoice`] specifies `pub id: Option<String>` to safely accommodate
 //!   `invoice.upcoming` preview events where `id` is null on Stripe wire payloads.
 //! - **Discriminated Event Union**: [`EventObject`] provides seamless enum dispatch across
-//!   `payment_intent`, `checkout.session`, `invoice`, and unknown types via `#[serde(other)]`.
+//!   `payment_intent`, `checkout.session`, `invoice`, `refund`, and unknown types via `#[serde(other)]`.
 //! - **PCI-DSS Compliance (Gate G-Law)**: Sensitive credentials like `client_secret` in
 //!   [`PaymentIntent`] are masked as `[REDACTED]` in `Debug` implementations.
 //!
@@ -63,6 +64,9 @@
 //! ```
 
 use serde::{Deserialize, Serialize};
+
+pub mod refund;
+pub use refund::*;
 
 /// Strongly typed Stripe Connect Account ID (`acct_...`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -431,6 +435,9 @@ pub enum EventObject {
     /// Stripe Invoice payload (`object = "invoice"`), including upcoming invoices with null `id`.
     Invoice(Invoice),
 
+    /// Stripe Refund payload (`object = "refund"`).
+    Refund(Refund),
+
     /// Unrecognized, custom, or unsupported event object types.
     #[serde(other)]
     Unknown,
@@ -719,6 +726,34 @@ mod tests {
                 assert_eq!(inv.amount_due, Some(1200));
             }
             other => panic!("Expected Invoice variant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_event_object_refund() {
+        let json = serde_json::json!({
+            "id": "re_evt_refund_101",
+            "object": "refund",
+            "amount": 3500,
+            "currency": "usd",
+            "status": "succeeded",
+            "charge": "ch_parent_123"
+        });
+
+        let data = EventData { object: json };
+        let obj = data
+            .deserialize_object()
+            .expect("Failed to deserialize refund event");
+
+        match obj {
+            EventObject::Refund(r) => {
+                assert_eq!(r.id, "re_evt_refund_101");
+                assert_eq!(r.amount, 3500);
+                assert_eq!(r.currency, "usd");
+                assert_eq!(r.status, "succeeded");
+                assert_eq!(r.charge.as_deref(), Some("ch_parent_123"));
+            }
+            other => panic!("Expected Refund variant, got {other:?}"),
         }
     }
 }
