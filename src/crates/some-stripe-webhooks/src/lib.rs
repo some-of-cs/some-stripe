@@ -11,6 +11,8 @@
 //!   excessive future drift (> 60 seconds).
 //! - **Resource Limits**: Incoming payloads are strictly capped at 1 MB ([`MAX_WEBHOOK_PAYLOAD_BYTES`])
 //!   to safeguard against memory exhaustion attacks.
+//! - **Secret Pre-Validation**: Blank or whitespace-only webhook secrets are rejected immediately
+//!   with [`StripeWebhookError::BadKey`] before performing HMAC computations or allocations.
 //!
 //! ## Verification Example
 //!
@@ -29,21 +31,22 @@
 //! assert!(wrapper.is_checkout_completed());
 //! ```
 
+pub mod constants;
+pub mod error;
+pub mod validation;
+
 use openssl::hash::MessageDigest;
 use openssl::pkey::PKey;
 use openssl::sign::Signer;
-pub use some_stripe_core::error::StripeWebhookError;
 use some_stripe_types::Event;
 use subtle::ConstantTimeEq;
 
-/// Default timestamp tolerance window in seconds (5 minutes), per the Stripe specification.
-pub const DEFAULT_TOLERANCE_SECONDS: u64 = 300;
-
-/// Maximum future drift tolerance in seconds (Gate G2 / replay protection).
-pub const MAX_FUTURE_DRIFT_SECONDS: i64 = 60;
-
-/// Maximum incoming webhook payload size (1 MB / Gate G2 memory exhaustion guard).
-pub const MAX_WEBHOOK_PAYLOAD_BYTES: usize = 1_048_576;
+pub use constants::{
+    DEFAULT_TOLERANCE_SECONDS, MAX_FUTURE_DRIFT_SECONDS, MAX_WEBHOOK_PAYLOAD_BYTES,
+    TIMESTAMP_PREFIX, V1_SIGNATURE_PREFIX,
+};
+pub use error::StripeWebhookError;
+pub use validation::is_blank_webhook_secret;
 
 /// Constant-time slice comparison safe against length mismatches (Gate G2 Invariant 1).
 pub fn safe_constant_time_eq(a: &[u8], b: &[u8]) -> bool {
@@ -73,10 +76,10 @@ pub fn verify_stripe_signature(
     signature_header: &str,
     webhook_secret: &str,
 ) -> bool {
-    if payload.is_empty()
+    if is_blank_webhook_secret(webhook_secret)
+        || payload.is_empty()
         || payload.len() > MAX_WEBHOOK_PAYLOAD_BYTES
         || signature_header.trim().is_empty()
-        || webhook_secret.trim().is_empty()
     {
         return false;
     }
@@ -86,9 +89,9 @@ pub fn verify_stripe_signature(
 
     for item in signature_header.split(',') {
         let item = item.trim();
-        if let Some(t_val) = item.strip_prefix("t=") {
+        if let Some(t_val) = item.strip_prefix(TIMESTAMP_PREFIX) {
             timestamp = Some(t_val.trim());
-        } else if let Some(sig_val) = item.strip_prefix("v1=") {
+        } else if let Some(sig_val) = item.strip_prefix(V1_SIGNATURE_PREFIX) {
             signatures.push(sig_val.trim());
         }
     }
@@ -125,12 +128,18 @@ impl Webhook {
     pub const DEFAULT_TOLERANCE: u64 = DEFAULT_TOLERANCE_SECONDS;
 
     /// Verifies the authenticity and recency of an incoming webhook header.
+    ///
+    /// Rejects blank/whitespace webhook secrets immediately with [`StripeWebhookError::BadKey`]
+    /// prior to allocating buffers or computing cryptographic HMAC signatures.
     pub fn verify_header(
         payload: &[u8],
         header: &str,
         secret: &str,
         tolerance: Option<u64>,
     ) -> Result<bool, StripeWebhookError> {
+        if is_blank_webhook_secret(secret) {
+            return Err(StripeWebhookError::BadKey);
+        }
         if payload.is_empty() {
             return Err(StripeWebhookError::EmptyPayload);
         }
@@ -143,18 +152,15 @@ impl Webhook {
         if header.trim().is_empty() {
             return Err(StripeWebhookError::MissingSignatureHeader);
         }
-        if secret.trim().is_empty() {
-            return Err(StripeWebhookError::MissingSecret);
-        }
 
         let mut timestamp: Option<i64> = None;
         let mut signatures: Vec<&str> = Vec::new();
 
         for item in header.split(',') {
             let item = item.trim();
-            if let Some(t_val) = item.strip_prefix("t=") {
+            if let Some(t_val) = item.strip_prefix(TIMESTAMP_PREFIX) {
                 timestamp = t_val.parse::<i64>().ok();
-            } else if let Some(sig_val) = item.strip_prefix("v1=") {
+            } else if let Some(sig_val) = item.strip_prefix(V1_SIGNATURE_PREFIX) {
                 signatures.push(sig_val.trim());
             }
         }
@@ -230,7 +236,7 @@ impl Webhook {
         signed_payload.extend_from_slice(payload);
 
         let sig = hmac_sha256_hex(secret.as_bytes(), &signed_payload).unwrap_or_default();
-        format!("t={ts},v1={sig}")
+        format!("{TIMESTAMP_PREFIX}{ts},{V1_SIGNATURE_PREFIX}{sig}")
     }
 }
 
@@ -368,6 +374,28 @@ mod tests {
             "t=1728345600,v1=5257a869e7ecebeda32affa62cd45081b2283ddf6e6f5170c844f9152229f165";
 
         assert!(!verify_stripe_signature(payload, header, secret));
+    }
+
+    #[test]
+    fn test_blank_secret_rejected_with_bad_key() {
+        let payload = b"{\"id\":\"evt_123\"}";
+        let header = "t=1728345600,v1=abc";
+
+        // Empty secret
+        let err = Webhook::verify_header(payload, header, "", None).unwrap_err();
+        assert_eq!(err, StripeWebhookError::BadKey);
+
+        // Whitespace-only secret
+        let err2 = Webhook::verify_header(payload, header, "   \t\n  ", None).unwrap_err();
+        assert_eq!(err2, StripeWebhookError::BadKey);
+
+        // Blank secret in construct_event
+        let err3 = Webhook::construct_event(payload, header, "  ", None).unwrap_err();
+        assert_eq!(err3, StripeWebhookError::BadKey);
+
+        // Blank secret in verify_stripe_signature returns false
+        assert!(!verify_stripe_signature(payload, header, ""));
+        assert!(!verify_stripe_signature(payload, header, "   "));
     }
 
     #[test]
