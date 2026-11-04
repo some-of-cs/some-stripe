@@ -54,7 +54,7 @@ pub use escalation::{
 pub use tolerance::ToleranceConfig;
 pub use v2_events::{V2RelatedObject, V2ThinEvent, is_thin_event};
 
-pub use compare::safe_constant_time_eq;
+pub use compare::{safe_constant_time_ascii_casecmp, safe_constant_time_eq};
 pub use constants::{
     DEFAULT_TOLERANCE_SECONDS, MAX_FUTURE_DRIFT_SECONDS, MAX_WEBHOOK_PAYLOAD_BYTES,
     TIMESTAMP_PREFIX, V1_SIGNATURE_PREFIX,
@@ -144,9 +144,10 @@ pub fn verify_stripe_signature(
         Err(_) => return false,
     };
 
-    parsed_header.signatures.iter().any(|sig| {
-        safe_constant_time_eq(expected_hex.as_bytes(), sig.to_ascii_lowercase().as_bytes())
-    })
+    parsed_header
+        .signatures
+        .iter()
+        .any(|sig| safe_constant_time_ascii_casecmp(expected_hex.as_bytes(), sig.as_bytes()))
 }
 
 /// Namespace providing static webhook helper functions modeled after `stripe.webhooks`.
@@ -202,10 +203,7 @@ impl Webhook {
             compute_streaming_hmac_hex(secret.as_bytes(), parsed_header.timestamp, payload)?;
 
         let matched = parsed_header.signatures.iter().any(|sig| {
-            safe_constant_time_eq(
-                expected_signature.as_bytes(),
-                sig.to_ascii_lowercase().as_bytes(),
-            )
+            safe_constant_time_ascii_casecmp(expected_signature.as_bytes(), sig.as_bytes())
         });
 
         if matched {
