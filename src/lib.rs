@@ -149,7 +149,8 @@ mod tests {
             let n = socket.read(&mut req_buf).await.unwrap();
             let req_str = String::from_utf8(req_buf[..n].to_vec()).unwrap();
             assert!(req_str.starts_with("POST /v1/payment_intents/pi_123/capture HTTP/1.1"));
-            let cap_body = r#"{"id":"pi_123","status":"succeeded","amount_received":50000}"#;
+            assert!(req_str.contains("idempotency-key: idem_cap"));
+            let cap_body = r#"{"id":"pi_123","object":"payment_intent","amount":5000,"amount_received":5000,"currency":"usd","status":"succeeded"}"#;
             socket
                 .write_all(
                     format!(
@@ -167,7 +168,7 @@ mod tests {
             let n = socket.read(&mut req_buf).await.unwrap();
             let req_str = String::from_utf8(req_buf[..n].to_vec()).unwrap();
             assert!(req_str.starts_with("POST /v1/payment_intents/pi_456/cancel HTTP/1.1"));
-            let cancel_body = r#"{"id":"pi_456","status":"canceled"}"#;
+            let cancel_body = r#"{"id":"pi_456","object":"payment_intent","amount":5000,"currency":"usd","status":"canceled"}"#;
             socket
                 .write_all(
                     format!(
@@ -188,14 +189,15 @@ mod tests {
             .capture(
                 "pi_123",
                 Some(&CapturePaymentIntentParams {
-                    amount_to_capture: Some(50000),
+                    amount_to_capture: Some(5000),
+                    idempotency_key: Some("idem_cap".into()),
                 }),
             )
             .await
             .unwrap();
 
         assert_eq!(captured.status, "succeeded");
-        assert_eq!(captured.amount_received, Some(50000));
+        assert_eq!(captured.amount_received, Some(5000));
 
         let canceled = client.payment_intents().cancel("pi_456", None).await.unwrap();
         assert_eq!(canceled.status, "canceled");
