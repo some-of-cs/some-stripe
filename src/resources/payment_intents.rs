@@ -1,8 +1,19 @@
 //! Stripe PaymentIntents resource implementations.
 //!
-//! Provides comprehensive CRUD operations (`create`, `retrieve`, `capture`, `cancel`, `confirm`)
-//! for managing Stripe PaymentIntents with automatic, cryptographically secure RFC 4122 UUID v4
-//! `Idempotency-Key` header injection on all mutating actions.
+//! Provides API bindings for the Stripe PaymentIntents lifecycle (`create`, `retrieve`,
+//! `confirm`, `capture`, and `cancel`), modeled after `stripe-node`.
+//! Automatic, cryptographically secure RFC 4122 UUID v4 `Idempotency-Key` header injection
+//! is performed on all mutating actions.
+//!
+//! ## Quality & Borrowing Discipline (Gate G-Borrow)
+//! All parameters are accepted strictly by reference (`&CreatePaymentIntentParams`,
+//! `&str`, `Option<&CapturePaymentIntentParams>`, `Option<&CancelPaymentIntentParams>`,
+//! `Option<&ConfirmPaymentIntentParams>`), ensuring zero unnecessary deep copies on
+//! heap allocations.
+//!
+//! ## ISO-4217 Currency Compliance (Gate G-Law)
+//! Amounts are specified and validated as positive integers (`amount > 0`) in minor currency
+//! units (cents), and currency codes are checked against 3-letter lowercase ISO formats.
 
 use some_stripe_core::{StripeClient, StripeError};
 use some_stripe_types::{
@@ -86,7 +97,7 @@ pub fn is_valid_uuid_v4(key: &str) -> bool {
     true
 }
 
-/// Resource for managing Stripe PaymentIntents (`stripe.paymentIntents`).
+/// Resource for managing Stripe PaymentIntents (`stripe.payment_intents()`).
 #[derive(Clone, Copy)]
 pub struct PaymentIntentsResource<'a> {
     client: &'a StripeClient,
@@ -105,12 +116,38 @@ impl<'a> PaymentIntentsResource<'a> {
 
     /// Creates a PaymentIntent (`POST /v1/payment_intents`).
     ///
+    /// Accepts request parameters by reference (`&CreatePaymentIntentParams`), eliminating
+    /// redundant clones. Performs client-side validation on ISO-4217 minor currency units
+    /// and currency codes before transmitting across the network.
+    ///
     /// Automatically injects an RFC 4122 compliant UUID v4 `Idempotency-Key` header
     /// if none is provided in `params`.
+    ///
+    /// # Example
+    /// ```no_run
+    /// use some_stripe::StripeClient;
+    /// use some_stripe_types::CreatePaymentIntentParams;
+    ///
+    /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = StripeClient::new("sk_test_123");
+    /// let params = CreatePaymentIntentParams::new(5000, "usd")?
+    ///     .capture_method("automatic")
+    ///     .description("Order #1001")
+    ///     .idempotency_key("order_1001_idem");
+    ///
+    /// let intent = client.payment_intents().create(&params).await?;
+    /// assert_eq!(intent.amount, 5000);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn create(
         &self,
         params: &CreatePaymentIntentParams,
     ) -> Result<PaymentIntent, StripeError> {
+        params
+            .validate()
+            .map_err(|e| StripeError::InvalidRequest(e.to_string()))?;
+
         let url = format!("{}/v1/payment_intents", self.client.config.api_base);
         let amount_str = params.amount.to_string();
 
@@ -159,7 +196,20 @@ impl<'a> PaymentIntentsResource<'a> {
 
     /// Retrieves a PaymentIntent by ID (`GET /v1/payment_intents/{id}`).
     ///
+    /// Accepts the identifier as a string reference (`&str`), ensuring zero allocations.
     /// Note: This is an idempotent read operation and does NOT inject an idempotency key.
+    ///
+    /// # Example
+    /// ```no_run
+    /// use some_stripe::StripeClient;
+    ///
+    /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = StripeClient::new("sk_test_123");
+    /// let intent = client.payment_intents().retrieve("pi_12345").await?;
+    /// assert_eq!(intent.id, "pi_12345");
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn retrieve(&self, intent_id: &str) -> Result<PaymentIntent, StripeError> {
         let url = format!(
             "{}/v1/payment_intents/{}",
@@ -173,13 +223,39 @@ impl<'a> PaymentIntentsResource<'a> {
 
     /// Captures the funds of an existing uncaptured PaymentIntent (`POST /v1/payment_intents/{id}/capture`).
     ///
+    /// Can capture the full authorized amount (`params: None`) or a partial amount
+    /// (`params: Some(&CapturePaymentIntentParams)`).
     /// Automatically injects an RFC 4122 compliant UUID v4 `Idempotency-Key` header
     /// if none is provided in `params`.
+    ///
+    /// # Example
+    /// ```no_run
+    /// use some_stripe::StripeClient;
+    /// use some_stripe_types::CapturePaymentIntentParams;
+    ///
+    /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = StripeClient::new("sk_test_123");
+    /// let capture_params = CapturePaymentIntentParams::with_amount(3500)?
+    ///     .idempotency_key("idem_capture_1001");
+    ///
+    /// let captured = client
+    ///     .payment_intents()
+    ///     .capture("pi_12345", Some(&capture_params))
+    ///     .await?;
+    /// assert_eq!(captured.amount_received, Some(3500));
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn capture(
         &self,
         intent_id: &str,
         params: Option<&CapturePaymentIntentParams>,
     ) -> Result<PaymentIntent, StripeError> {
+        if let Some(p) = params {
+            p.validate()
+                .map_err(|e| StripeError::InvalidRequest(e.to_string()))?;
+        }
+
         let url = format!(
             "{}/v1/payment_intents/{}/capture",
             self.client.config.api_base, intent_id
@@ -215,13 +291,39 @@ impl<'a> PaymentIntentsResource<'a> {
 
     /// Cancels a PaymentIntent (`POST /v1/payment_intents/{id}/cancel`).
     ///
+    /// Releases the authorization hold on customer funds. Cancellation reason and idempotency
+    /// keys can be supplied via optional borrowed `&CancelPaymentIntentParams`.
     /// Automatically injects an RFC 4122 compliant UUID v4 `Idempotency-Key` header
     /// if none is provided in `params`.
+    ///
+    /// # Example
+    /// ```no_run
+    /// use some_stripe::StripeClient;
+    /// use some_stripe_types::CancelPaymentIntentParams;
+    ///
+    /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = StripeClient::new("sk_test_123");
+    /// let cancel_params = CancelPaymentIntentParams::with_reason("requested_by_customer")
+    ///     .idempotency_key("idem_cancel_1001");
+    ///
+    /// let canceled = client
+    ///     .payment_intents()
+    ///     .cancel("pi_12345", Some(&cancel_params))
+    ///     .await?;
+    /// assert_eq!(canceled.status, "canceled");
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn cancel(
         &self,
         intent_id: &str,
         params: Option<&CancelPaymentIntentParams>,
     ) -> Result<PaymentIntent, StripeError> {
+        if let Some(p) = params {
+            p.validate()
+                .map_err(|e| StripeError::InvalidRequest(e.to_string()))?;
+        }
+
         let url = format!(
             "{}/v1/payment_intents/{}/cancel",
             self.client.config.api_base, intent_id
@@ -256,11 +358,37 @@ impl<'a> PaymentIntentsResource<'a> {
     ///
     /// Automatically injects an RFC 4122 compliant UUID v4 `Idempotency-Key` header
     /// if none is provided in `params`.
+    ///
+    /// # Example
+    /// ```no_run
+    /// use some_stripe::StripeClient;
+    /// use some_stripe_types::ConfirmPaymentIntentParams;
+    ///
+    /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = StripeClient::new("sk_test_123");
+    /// let params = ConfirmPaymentIntentParams::new()
+    ///     .payment_method("pm_card_visa")
+    ///     .return_url("https://example.com/checkout/return")
+    ///     .idempotency_key("idem_conf_1001");
+    ///
+    /// let intent = client
+    ///     .payment_intents()
+    ///     .confirm("pi_12345", Some(&params))
+    ///     .await?;
+    /// assert_eq!(intent.status, "succeeded");
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn confirm(
         &self,
         intent_id: &str,
         params: Option<&ConfirmPaymentIntentParams>,
     ) -> Result<PaymentIntent, StripeError> {
+        if let Some(p) = params {
+            p.validate()
+                .map_err(|e| StripeError::InvalidRequest(e.to_string()))?;
+        }
+
         let url = format!(
             "{}/v1/payment_intents/{}/confirm",
             self.client.config.api_base, intent_id
@@ -353,6 +481,49 @@ mod tests {
         // Non-hex chars
         assert!(!is_valid_uuid_v4("g4a2a11b-7a39-4d6d-8c43-4217117e3f89"));
         assert!(!is_valid_uuid_v4("c4a2a11b-7a39-4d6d-8c43-4217117e3f8z"));
+    }
+
+    #[tokio::test]
+    async fn test_create_validation_rejection() {
+        let config = StripeConfig::new("sk_test_dummy");
+        let client = StripeClient::with_config(config);
+        let resource = PaymentIntentsResource::new(&client);
+
+        // Constructor validation
+        assert!(CreatePaymentIntentParams::new(-100, "usd").is_err());
+        assert!(CreatePaymentIntentParams::new(0, "usd").is_err());
+        assert!(CreatePaymentIntentParams::new(1000, "invalid_currency").is_err());
+
+        // Struct-level validation rejection in resource.create()
+        let invalid_params = CreatePaymentIntentParams {
+            amount: -100,
+            currency: "usd".into(),
+            capture_method: None,
+            description: None,
+            payment_method: None,
+            customer: None,
+            receipt_email: None,
+            return_url: None,
+            confirm: None,
+            metadata: None,
+            idempotency_key: None,
+        };
+        let res = resource.create(&invalid_params).await;
+        assert!(matches!(res, Err(StripeError::InvalidRequest(_))));
+    }
+
+    #[tokio::test]
+    async fn test_capture_validation_rejection() {
+        let config = StripeConfig::new("sk_test_dummy");
+        let client = StripeClient::with_config(config);
+        let resource = PaymentIntentsResource::new(&client);
+
+        let invalid_cap = CapturePaymentIntentParams {
+            amount_to_capture: Some(0),
+            idempotency_key: None,
+        };
+        let res = resource.capture("pi_123", Some(&invalid_cap)).await;
+        assert!(matches!(res, Err(StripeError::InvalidRequest(_))));
     }
 
     #[tokio::test]

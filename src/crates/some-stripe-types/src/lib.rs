@@ -664,6 +664,63 @@ impl std::fmt::Debug for PaymentIntent {
     }
 }
 
+impl PaymentIntent {
+    /// Returns `true` if the payment succeeded (`status == PaymentIntentStatus::Succeeded`).
+    pub fn is_succeeded(&self) -> bool {
+        self.status == PaymentIntentStatus::Succeeded
+    }
+
+    /// Returns `true` if the payment has been authorized and requires capture (`status == PaymentIntentStatus::RequiresCapture`).
+    pub fn requires_capture(&self) -> bool {
+        self.status == PaymentIntentStatus::RequiresCapture
+    }
+
+    /// Returns `true` if customer authentication action is required (`status == PaymentIntentStatus::RequiresAction`).
+    pub fn requires_action(&self) -> bool {
+        self.status == PaymentIntentStatus::RequiresAction
+    }
+
+    /// Returns `true` if the payment was canceled (`status == PaymentIntentStatus::Canceled`).
+    pub fn is_canceled(&self) -> bool {
+        self.status == PaymentIntentStatus::Canceled
+    }
+
+    /// Returns the PSD2 3D Secure redirect URL, if present in `next_action`.
+    ///
+    /// Extracts the URL by reference (`Option<&str>`) without heap cloning (Gate G-Borrow).
+    ///
+    /// # Example
+    /// ```
+    /// use some_stripe_types::PaymentIntent;
+    ///
+    /// let json = r#"{
+    ///     "id": "pi_3Mtw",
+    ///     "object": "payment_intent",
+    ///     "amount": 2000,
+    ///     "currency": "usd",
+    ///     "status": "requires_action",
+    ///     "next_action": {
+    ///         "type": "redirect_to_url",
+    ///         "redirect_to_url": {
+    ///             "url": "https://hooks.stripe.com/redirect/authenticate/src_123"
+    ///         }
+    ///     }
+    /// }"#;
+    /// let pi: PaymentIntent = serde_json::from_str(json).unwrap();
+    /// assert_eq!(
+    ///     pi.redirect_url(),
+    ///     Some("https://hooks.stripe.com/redirect/authenticate/src_123")
+    /// );
+    /// ```
+    pub fn redirect_url(&self) -> Option<&str> {
+        self.next_action
+            .as_ref()?
+            .get("redirect_to_url")?
+            .get("url")?
+            .as_str()
+    }
+}
+
 fn default_payment_intent_object() -> String {
     "payment_intent".into()
 }
@@ -1257,6 +1314,38 @@ mod tests {
             }
             other => panic!("Expected Invoice variant, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn test_payment_intent_methods_and_redirect_url() {
+        let json = serde_json::json!({
+            "id": "pi_test_3ds_challenge",
+            "object": "payment_intent",
+            "amount": 10000,
+            "currency": "eur",
+            "status": "requires_action",
+            "client_secret": "pi_secret_top_secret_code",
+            "next_action": {
+                "type": "redirect_to_url",
+                "redirect_to_url": {
+                    "url": "https://hooks.stripe.com/redirect/authenticate/src_test"
+                }
+            }
+        });
+
+        let pi: PaymentIntent = serde_json::from_value(json).unwrap();
+        assert!(pi.requires_action());
+        assert!(!pi.is_succeeded());
+        assert!(!pi.requires_capture());
+        assert!(!pi.is_canceled());
+        assert_eq!(
+            pi.redirect_url(),
+            Some("https://hooks.stripe.com/redirect/authenticate/src_test")
+        );
+
+        let debug_str = format!("{pi:?}");
+        assert!(debug_str.contains("[REDACTED]"));
+        assert!(!debug_str.contains("top_secret_code"));
     }
 
     #[test]

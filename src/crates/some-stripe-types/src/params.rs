@@ -339,6 +339,46 @@ impl CreatePaymentIntentParams {
         self
     }
 
+    /// Sets the capture method (alias for [`Self::capture_method`]).
+    pub fn with_capture_method(self, capture_method: impl Into<String>) -> Self {
+        self.capture_method(capture_method)
+    }
+
+    /// Sets the payment description (alias for [`Self::description`]).
+    pub fn with_description(self, desc: impl Into<String>) -> Self {
+        self.description(desc)
+    }
+
+    /// Sets the payment method identifier (alias for [`Self::payment_method`]).
+    pub fn with_payment_method(self, pm: impl Into<String>) -> Self {
+        self.payment_method(pm)
+    }
+
+    /// Sets the customer identifier (alias for [`Self::customer`]).
+    pub fn with_customer(self, cus: impl Into<String>) -> Self {
+        self.customer(cus)
+    }
+
+    /// Sets the receipt email (alias for [`Self::receipt_email`]).
+    pub fn with_receipt_email(self, email: impl Into<String>) -> Self {
+        self.receipt_email(email)
+    }
+
+    /// Sets the return URL (alias for [`Self::return_url`]).
+    pub fn with_return_url(self, return_url: impl Into<String>) -> Self {
+        self.return_url(return_url)
+    }
+
+    /// Sets whether to confirm the payment immediately (alias for [`Self::confirm`]).
+    pub fn with_confirm(self, confirm: bool) -> Self {
+        self.confirm(confirm)
+    }
+
+    /// Attaches an idempotency key (alias for [`Self::idempotency_key`]).
+    pub fn with_idempotency_key(self, key: impl Into<String>) -> Self {
+        self.idempotency_key(key)
+    }
+
     /// Validates all parameters and invariants against Stripe requirements.
     ///
     /// # Errors
