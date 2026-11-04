@@ -1,8 +1,8 @@
 [workspace]
 members = [
-    "crates/some-stripe-core",
-    "crates/some-stripe-types",
-    "crates/some-stripe-webhooks",
+    "src/crates/some-stripe-core",
+    "src/crates/some-stripe-types",
+    "src/crates/some-stripe-webhooks",
     ".",
 ]
 exclude = [".worktrees"]
@@ -21,9 +21,9 @@ categories = ["api-bindings", "finance", "web-programming"]
 readme = "README.md"
 
 [dependencies]
-some-stripe-core = { path = "crates/some-stripe-core" }
-some-stripe-types = { path = "crates/some-stripe-types" }
-some-stripe-webhooks = { path = "crates/some-stripe-webhooks" }
+some-stripe-core = { path = "src/crates/some-stripe-core" }
+some-stripe-types = { path = "src/crates/some-stripe-types" }
+some-stripe-webhooks = { path = "src/crates/some-stripe-webhooks" }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.154", features = ["arbitrary_precision"] }
 sha2 = "0.11.1"

@@ -1,8 +1,7 @@
 //! Stripe PaymentIntents resource implementations.
 
-use crate::client::StripeClient;
-use crate::error::StripeError;
-use crate::types::{
+use some_stripe_core::{StripeClient, StripeError};
+use some_stripe_types::{
     CancelPaymentIntentParams, CapturePaymentIntentParams, CreatePaymentIntentParams, PaymentIntent,
 };
 

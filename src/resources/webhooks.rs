@@ -1,8 +1,7 @@
 //! Stripe Webhooks resource and event constructor, modeled after `stripe.webhooks`.
 
-use crate::error::StripeWebhookError;
-use crate::types::Event;
-use crate::webhook::Webhook;
+use some_stripe_types::Event;
+use some_stripe_webhooks::{StripeWebhookError, Webhook};
 
 /// Webhook verification resource (`stripe.webhooks`).
 #[derive(Clone, Default)]

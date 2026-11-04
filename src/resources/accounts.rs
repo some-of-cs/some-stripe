@@ -1,8 +1,7 @@
 //! Stripe Accounts resource implementations.
 
-use crate::client::StripeClient;
-use crate::error::StripeError;
-use crate::types::Account;
+use some_stripe_core::{StripeClient, StripeError};
+use some_stripe_types::Account;
 
 /// Resource for managing Stripe Accounts (`stripe.accounts`).
 #[derive(Clone)]

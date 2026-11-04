@@ -53,28 +53,116 @@
 //! assert!(wrapper.is_checkout_completed());
 //! ```
 
-pub mod client;
-pub mod error;
-pub mod patterns;
-pub mod resources;
-pub mod types;
-pub mod webhook;
-pub mod workflow;
+pub use some_stripe_core as core;
+pub use some_stripe_types as types;
+pub use some_stripe_webhooks as webhooks;
 
-pub use client::{ClientInner, RequestOptions, SecretKey, StripeClient, StripeConfig};
-pub use error::{StripeError, StripeWebhookError};
+pub use some_stripe_core::client::{
+    ClientInner, RequestOptions, SecretKey, StripeConfig, StripeHeaderExt,
+};
+pub use some_stripe_core::error::{StripeError, StripeWebhookError};
+pub use some_stripe_core::patterns;
+pub use some_stripe_core::workflow;
+pub use some_stripe_core::workflow::{
+    DefaultErrorWorkflow, ErrorAction, ErrorSeverity, ErrorWorkflowHandler,
+};
+
+pub use some_stripe_types::*;
+pub use some_stripe_webhooks::{
+    DEFAULT_TOLERANCE_SECONDS, MAX_FUTURE_DRIFT_SECONDS, MAX_WEBHOOK_PAYLOAD_BYTES,
+    StripeWebhookWrapper, Webhook, safe_constant_time_eq, verify_stripe_signature,
+};
+
+pub mod resources;
 pub use resources::{
     AccountsResource, CheckoutResource, PaymentIntentsResource, SessionsResource, WebhooksResource,
 };
-pub use types::*;
-pub use webhook::{
-    DEFAULT_TOLERANCE_SECONDS, StripeWebhookWrapper, Webhook, safe_constant_time_eq,
-    verify_stripe_signature,
-};
-pub use workflow::{
-    CustomErrorWorkflowBuilder, DefaultErrorWorkflow, ErrorResolution, ErrorSeverity,
-    ErrorWorkflowHandler, StripeApiErrorHook, StripeSecurityHook,
-};
+
+/// The main Stripe client used to interact with the Stripe API, modeled after `stripe-node`.
+///
+/// Wraps the thread-safe `some_stripe_core::StripeClient` microkernel and provides top-level
+/// resource accessors (`client.checkout()`, `client.payment_intents()`, `client.accounts()`, `client.webhooks()`).
+#[derive(Clone, Debug)]
+pub struct StripeClient(pub some_stripe_core::StripeClient);
+
+impl std::ops::Deref for StripeClient {
+    type Target = some_stripe_core::StripeClient;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl StripeClient {
+    /// Creates a new `StripeClient` configured with default settings and the provided secret key.
+    pub fn new(secret_key: impl Into<SecretKey>) -> Self {
+        Self(some_stripe_core::StripeClient::new(secret_key))
+    }
+
+    /// Creates a new `StripeClient` with custom [`StripeConfig`].
+    pub fn with_config(config: StripeConfig) -> Self {
+        Self(some_stripe_core::StripeClient::with_config(config))
+    }
+
+    /// Access the Checkout resource namespace (`stripe.checkout`).
+    pub fn checkout(&self) -> CheckoutResource {
+        CheckoutResource::new(self.0.clone())
+    }
+
+    /// Access the PaymentIntents resource namespace (`stripe.payment_intents`).
+    pub fn payment_intents(&self) -> PaymentIntentsResource {
+        PaymentIntentsResource::new(self.0.clone())
+    }
+
+    /// Access the Accounts resource namespace (`stripe.accounts`).
+    pub fn accounts(&self) -> AccountsResource {
+        AccountsResource::new(self.0.clone())
+    }
+
+    /// Access the Webhooks helper resource (`stripe.webhooks`).
+    pub fn webhooks(&self) -> WebhooksResource {
+        WebhooksResource::new()
+    }
+}
+
+impl From<some_stripe_core::StripeClient> for StripeClient {
+    fn from(core: some_stripe_core::StripeClient) -> Self {
+        Self(core)
+    }
+}
+
+/// Extension trait mounting resource accessors directly on [`some_stripe_core::StripeClient`].
+pub trait StripeClientExt {
+    /// Access the Checkout resource namespace (`stripe.checkout`).
+    fn checkout(&self) -> CheckoutResource;
+
+    /// Access the PaymentIntents resource namespace (`stripe.payment_intents`).
+    fn payment_intents(&self) -> PaymentIntentsResource;
+
+    /// Access the Accounts resource namespace (`stripe.accounts`).
+    fn accounts(&self) -> AccountsResource;
+
+    /// Access the Webhooks helper resource (`stripe.webhooks`).
+    fn webhooks(&self) -> WebhooksResource;
+}
+
+impl StripeClientExt for some_stripe_core::StripeClient {
+    fn checkout(&self) -> CheckoutResource {
+        CheckoutResource::new(self.clone())
+    }
+
+    fn payment_intents(&self) -> PaymentIntentsResource {
+        PaymentIntentsResource::new(self.clone())
+    }
+
+    fn accounts(&self) -> AccountsResource {
+        AccountsResource::new(self.clone())
+    }
+
+    fn webhooks(&self) -> WebhooksResource {
+        WebhooksResource::new()
+    }
+}
 
 #[cfg(test)]
 mod tests {
