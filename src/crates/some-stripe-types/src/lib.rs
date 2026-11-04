@@ -64,6 +64,9 @@
 //! }
 //! ```
 
+pub mod next_action;
+
+pub use next_action::{NextAction, NextActionType, RedirectToUrl};
 use serde::{Deserialize, Serialize};
 
 /// Strongly typed Stripe Connect Account ID (`acct_...`).
@@ -582,6 +585,59 @@ impl PaymentIntent {
             description: None,
             payment_method_options: None,
         }
+    }
+
+    /// Returns the strongly typed 3D Secure / PSD2 [`NextAction`] payload, if present and valid.
+    ///
+    /// # Example
+    /// ```
+    /// use some_stripe_types::{NextActionType, PaymentIntent};
+    ///
+    /// let json = r#"{
+    ///     "id": "pi_3Mtw",
+    ///     "object": "payment_intent",
+    ///     "amount": 2000,
+    ///     "currency": "usd",
+    ///     "status": "requires_action",
+    ///     "next_action": {
+    ///         "type": "redirect_to_url",
+    ///         "redirect_to_url": {
+    ///             "url": "https://hooks.stripe.com/3d_secure_2/hosted",
+    ///             "return_url": "https://example.com/return"
+    ///         }
+    ///     }
+    /// }"#;
+    /// let pi: PaymentIntent = serde_json::from_str(json).unwrap();
+    /// let action = pi.next_action().expect("next_action must be present");
+    /// assert_eq!(action.r#type, NextActionType::RedirectToUrl);
+    /// assert_eq!(action.redirect_url(), Some("https://hooks.stripe.com/3d_secure_2/hosted"));
+    /// ```
+    pub fn next_action(&self) -> Option<NextAction> {
+        self.parse_next_action().ok().flatten()
+    }
+
+    /// Parses the raw `next_action` JSON payload into a strongly-typed [`NextAction`].
+    ///
+    /// # Errors
+    /// Returns `Err(serde_json::Error)` if `next_action` is present but does not match
+    /// the expected [`NextAction`] schema.
+    pub fn parse_next_action(&self) -> Result<Option<NextAction>, serde_json::Error> {
+        match &self.next_action {
+            Some(value) => NextAction::deserialize(value).map(Some),
+            None => Ok(None),
+        }
+    }
+
+    /// Sets the strongly typed [`NextAction`] payload.
+    pub fn set_next_action(
+        &mut self,
+        next_action: Option<NextAction>,
+    ) -> Result<(), serde_json::Error> {
+        self.next_action = match next_action {
+            Some(action) => Some(serde_json::to_value(action)?),
+            None => None,
+        };
+        Ok(())
     }
 }
 
