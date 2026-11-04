@@ -91,6 +91,12 @@ Welcome to the **`some-stripe`** workspace. All AI agents, contributors, and aut
    - **Persistent Checkpoint Store**: Maintain `.agents/checkpoints/<module-id>/checkpoint.json` continuously updated on every worktree creation, PR creation, and PR merge.
    - **Zero-Duplication Resume**: In the event of quota exhaustion (429) or restart, agents must load `checkpoint.json`, reconcile with GitHub/Git, and resume strictly from the exact pending micro-unit or story without re-executing finished tasks or burning extra quota.
 
+15. **[Mandatory Live Kanban Board Task Status Updating](.agents/rules/mandatory-kanban-status-tracking.md)**:
+   - **Active Task State Transition**: Every subagent assigned to a task MUST update the module's `docs/user-stories/<module-dir>/KANBAN.md` file:
+     - On task start: Move task to `🔄 In Progress`.
+     - On PR creation: Move task to `🔍 In Review / PR Open` with PR link.
+     - On PR merge: Move task to `✅ Merged` with commit SHA.
+
 ---
 
 ## 2. Multi-Profile Quota Engine & Dynamic Agent Generation

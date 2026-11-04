@@ -120,3 +120,11 @@ To eliminate execution delays and avoid idle waiting:
 - **Failover / Resume Guarantee**:
   - When quota is depleted or an account switches, execution state is already persisted on disk.
   - On restart, read `checkpoint.json` and resume execution directly from the pending micro-unit or promotion step with zero duplicate agent calls.
+
+### 12. Mandatory Live Kanban Board Task Status Updating
+- **Dedicated Module Kanban**: Every module has a live `docs/user-stories/<module-dir>/KANBAN.md`.
+- **Mandatory Transitions**:
+  - On task start: Update Kanban board task status to `🔄 In Progress`.
+  - On PR creation: Update Kanban board task status to `🔍 In Review / PR Open (#XX)`.
+  - On PR merge: Update Kanban board task status to `✅ Merged` with commit SHA.
+- **Pre-Provisioning Invariant**: All worktrees for the module, stories, and units MUST be pre-provisioned via `git worktree add` before agent generation begins.
