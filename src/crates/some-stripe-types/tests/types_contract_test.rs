@@ -4,8 +4,9 @@
 //! discriminated EventObject union deserialization, and PCI-DSS client secret redaction.
 
 use some_stripe_types::{
-    AccountId, CheckoutSession, Event, EventData, EventObject, IdempotencyKey, Invoice,
-    PaymentIntent,
+    AccountId, CancelRefundParams, CheckoutSession, CreateRefundParams, Event, EventData,
+    EventObject, IdempotencyKey, Invoice, PaymentIntent, Refund, RefundReason, UpdateRefundParams,
+    is_statutory_withdrawal_compliant,
 };
 
 #[test]
@@ -186,4 +187,125 @@ fn test_event_object_unknown_fallback_contract() {
         .deserialize_object()
         .expect("Should safely resolve to Unknown");
     assert!(matches!(obj, EventObject::Unknown));
+}
+
+#[test]
+fn test_refund_json_roundtrip_contract() {
+    let refund_json = serde_json::json!({
+        "id": "re_contract_test_01",
+        "object": "refund",
+        "amount": 4200,
+        "currency": "eur",
+        "status": "succeeded",
+        "charge": "ch_source_charge_99",
+        "payment_intent": "pi_source_pi_88",
+        "reason": "requested_by_customer",
+        "description": "Statutory withdrawal within 14 days",
+        "receipt_number": "REC-EU-14D",
+        "balance_transaction": "txn_settle_42",
+        "created": 1728345600
+    });
+
+    let refund: Refund =
+        serde_json::from_value(refund_json).expect("Refund deserialization failed");
+    assert_eq!(refund.id, "re_contract_test_01");
+    assert_eq!(refund.object, "refund");
+    assert_eq!(refund.amount, 4200);
+    assert_eq!(refund.currency, "eur");
+    assert_eq!(refund.status, "succeeded");
+    assert!(refund.is_succeeded());
+    assert_eq!(refund.charge.as_deref(), Some("ch_source_charge_99"));
+    assert_eq!(refund.payment_intent.as_deref(), Some("pi_source_pi_88"));
+    assert_eq!(
+        refund.parsed_reason(),
+        Some(RefundReason::RequestedByCustomer)
+    );
+    assert_eq!(
+        refund.description.as_deref(),
+        Some("Statutory withdrawal within 14 days")
+    );
+    assert_eq!(refund.receipt_number.as_deref(), Some("REC-EU-14D"));
+    assert_eq!(refund.balance_transaction.as_deref(), Some("txn_settle_42"));
+}
+
+#[test]
+fn test_event_object_refund_contract() {
+    let refund_raw = serde_json::json!({
+        "id": "re_contract_evt_55",
+        "object": "refund",
+        "amount": 9900,
+        "currency": "usd",
+        "status": "succeeded"
+    });
+
+    let data = EventData { object: refund_raw };
+    match data.deserialize_object().unwrap() {
+        EventObject::Refund(r) => {
+            assert_eq!(r.id, "re_contract_evt_55");
+            assert_eq!(r.amount, 9900);
+            assert_eq!(r.currency, "usd");
+            assert_eq!(r.status, "succeeded");
+        }
+        other => panic!("Expected EventObject::Refund, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_statutory_withdrawal_eu_directive_contract() {
+    let charge_ts = 1_710_000_000;
+    let charge_amount = 7500; // $75.00
+
+    // Full refund 10 days later -> valid
+    let refund_ts = charge_ts + (10 * 86_400);
+    assert!(is_statutory_withdrawal_compliant(
+        charge_amount,
+        charge_amount,
+        charge_ts,
+        refund_ts
+    ));
+
+    // Boundary: exactly 14 days (14 * 86,400s) -> valid
+    let boundary_ts = charge_ts + (14 * 86_400);
+    assert!(is_statutory_withdrawal_compliant(
+        charge_amount,
+        charge_amount,
+        charge_ts,
+        boundary_ts
+    ));
+
+    // Exceeded boundary: 14 days + 1 second -> invalid
+    assert!(!is_statutory_withdrawal_compliant(
+        charge_amount,
+        charge_amount,
+        charge_ts,
+        boundary_ts + 1
+    ));
+
+    // Partial refund (deduction violation under Directive 2011/83/EU Art 13) -> invalid
+    assert!(!is_statutory_withdrawal_compliant(
+        charge_amount - 100,
+        charge_amount,
+        charge_ts,
+        refund_ts
+    ));
+}
+
+#[test]
+fn test_refund_params_zero_clone_contract() {
+    let params = CreateRefundParams::for_charge("ch_test_zero_clone")
+        .with_amount(5000)
+        .with_reason(RefundReason::Fraudulent)
+        .with_idempotency_key("idem_zc_1");
+
+    // Borrowing references directly without cloning
+    let charge_ref: Option<&str> = params.charge.as_deref();
+    assert_eq!(charge_ref, Some("ch_test_zero_clone"));
+    assert_eq!(params.amount, Some(5000));
+    assert_eq!(params.reason.as_deref(), Some("fraudulent"));
+
+    let update = UpdateRefundParams::new().with_idempotency_key("idem_zc_upd");
+    assert_eq!(update.idempotency_key.as_deref(), Some("idem_zc_upd"));
+
+    let cancel = CancelRefundParams::new().with_idempotency_key("idem_zc_cancel");
+    assert_eq!(cancel.idempotency_key.as_deref(), Some("idem_zc_cancel"));
 }
