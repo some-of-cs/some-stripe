@@ -17,9 +17,10 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 #[test]
 fn test_gate_g_borrow_zero_clone_parameter_borrowing() {
     let params = CreatePaymentIntentParams::new(10000, "usd")
-        .with_capture_method("manual")
-        .with_description("Audit Order #999")
-        .with_idempotency_key("idem_audit_borrow_001");
+        .unwrap()
+        .capture_method("manual")
+        .description("Audit Order #999")
+        .idempotency_key("idem_audit_borrow_001");
 
     // Borrowing references without cloning
     let borrowed_ref: &CreatePaymentIntentParams = &params;
@@ -40,8 +41,8 @@ fn test_gate_g_borrow_zero_clone_parameter_borrowing() {
 
     // Cancel params zero-clone borrow
     let cancel = CancelPaymentIntentParams::new()
-        .with_cancellation_reason("requested_by_customer")
-        .with_idempotency_key("idem_cancel_001");
+        .cancellation_reason("requested_by_customer")
+        .idempotency_key("idem_cancel_001");
     let cancel_ref: &CancelPaymentIntentParams = &cancel;
     assert_eq!(
         cancel_ref.cancellation_reason.as_deref(),
@@ -51,9 +52,9 @@ fn test_gate_g_borrow_zero_clone_parameter_borrowing() {
 
     // Confirm params zero-clone borrow
     let confirm = ConfirmPaymentIntentParams::new()
-        .with_payment_method("pm_123")
-        .with_return_url("https://example.com")
-        .with_idempotency_key("idem_confirm_001");
+        .payment_method("pm_123")
+        .return_url("https://example.com")
+        .idempotency_key("idem_confirm_001");
     let confirm_ref: &ConfirmPaymentIntentParams = &confirm;
     assert_eq!(confirm_ref.payment_method.as_deref(), Some("pm_123"));
     assert_eq!(confirm.return_url.as_deref(), Some("https://example.com"));
@@ -125,44 +126,57 @@ fn test_gate_g2_pci_dss_debug_redaction_invariant() {
 fn test_gate_g_law_iso_4217_minor_currency_validation() {
     // Valid positive integer in minor units
     let valid = CreatePaymentIntentParams::new(5000, "usd");
-    assert!(valid.validate().is_ok());
+    assert!(valid.is_ok());
 
     // Zero amount rejection (statutory minor currency rule)
     let zero = CreatePaymentIntentParams::new(0, "usd");
     assert!(
-        zero.validate().is_err(),
+        zero.is_err(),
         "Gate G-Law violation: zero amount must be rejected"
     );
 
     // Negative amount rejection
     let negative = CreatePaymentIntentParams::new(-100, "usd");
     assert!(
-        negative.validate().is_err(),
+        negative.is_err(),
         "Gate G-Law violation: negative amount must be rejected"
     );
 
-    // Uppercase currency rejection (ISO-4217 codes in Stripe must be lowercase)
-    let upper = CreatePaymentIntentParams::new(5000, "USD");
-    assert!(
-        upper.validate().is_err(),
-        "Gate G-Law violation: uppercase currency must be rejected"
-    );
+    // Normalized currency (lowercase conversion)
+    let upper = CreatePaymentIntentParams::new(5000, "USD").unwrap();
+    assert_eq!(upper.currency, "usd");
 
     // Invalid length currency rejection
     let short = CreatePaymentIntentParams::new(5000, "us");
-    assert!(short.validate().is_err());
+    assert!(short.is_err());
     let long = CreatePaymentIntentParams::new(5000, "usdt");
-    assert!(long.validate().is_err());
+    assert!(long.is_err());
+
+    // Struct-level validate() checks
+    let invalid_struct = CreatePaymentIntentParams {
+        amount: -250,
+        currency: "usd".into(),
+        capture_method: None,
+        description: None,
+        payment_method: None,
+        customer: None,
+        receipt_email: None,
+        return_url: None,
+        confirm: None,
+        metadata: None,
+        idempotency_key: None,
+    };
+    assert!(invalid_struct.validate().is_err());
 
     // Partial capture validation
-    let cap_valid = CapturePaymentIntentParams::new().with_amount_to_capture(2500);
-    assert!(cap_valid.validate().is_ok());
+    let cap_valid = CapturePaymentIntentParams::with_amount(2500);
+    assert!(cap_valid.is_ok());
 
-    let cap_zero = CapturePaymentIntentParams::new().with_amount_to_capture(0);
-    assert!(cap_zero.validate().is_err());
+    let cap_zero = CapturePaymentIntentParams::with_amount(0);
+    assert!(cap_zero.is_err());
 
-    let cap_neg = CapturePaymentIntentParams::new().with_amount_to_capture(-500);
-    assert!(cap_neg.validate().is_err());
+    let cap_neg = CapturePaymentIntentParams::with_amount(-500);
+    assert!(cap_neg.is_err());
 }
 
 #[tokio::test]
@@ -256,7 +270,19 @@ async fn test_payment_intents_lifecycle_mock_wire() {
     let client = StripeClient::with_config(config);
 
     // Pre-flight validation rejection test
-    let invalid_params = CreatePaymentIntentParams::new(-50, "usd");
+    let invalid_params = CreatePaymentIntentParams {
+        amount: -50,
+        currency: "usd".into(),
+        capture_method: None,
+        description: None,
+        payment_method: None,
+        customer: None,
+        receipt_email: None,
+        return_url: None,
+        confirm: None,
+        metadata: None,
+        idempotency_key: None,
+    };
     let err = client
         .payment_intents()
         .create(&invalid_params)
@@ -266,8 +292,9 @@ async fn test_payment_intents_lifecycle_mock_wire() {
 
     // 1. Create with manual capture
     let create_params = CreatePaymentIntentParams::new(10000, "usd")
-        .with_capture_method("manual")
-        .with_idempotency_key("idem_mock_flow_01");
+        .unwrap()
+        .capture_method("manual")
+        .idempotency_key("idem_mock_flow_01");
 
     let intent = client
         .payment_intents()
@@ -288,9 +315,9 @@ async fn test_payment_intents_lifecycle_mock_wire() {
     assert!(retrieved.requires_capture());
 
     // 3. Partial Capture (75%)
-    let cap_params = CapturePaymentIntentParams::new()
-        .with_amount_to_capture(7500)
-        .with_idempotency_key("idem_mock_capture_01");
+    let cap_params = CapturePaymentIntentParams::with_amount(7500)
+        .unwrap()
+        .idempotency_key("idem_mock_capture_01");
     let captured = client
         .payment_intents()
         .capture("pi_mock_lifecycle_100", Some(&cap_params))
