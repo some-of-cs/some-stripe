@@ -12,8 +12,10 @@
 //!   `invoice.upcoming` preview events where `id` is null on Stripe wire payloads.
 //! - **Discriminated Event Union**: [`EventObject`] provides seamless enum dispatch across
 //!   `payment_intent`, `checkout.session`, `invoice`, and unknown types via `#[serde(other)]`.
-//! - **PCI-DSS Compliance (Gate G-Law)**: Sensitive credentials like `client_secret` in
-//!   [`PaymentIntent`] are masked as `[REDACTED]` in `Debug` implementations.
+//! - **Request Parameter Schemas & ISO 4217 Validation**: [`CreatePaymentIntentParams`],
+//!   [`CapturePaymentIntentParams`], [`CancelPaymentIntentParams`], [`ConfirmPaymentIntentParams`].
+//! - **PCI-DSS Compliance (Gate G-Law & G2)**: Sensitive credentials like `client_secret` in
+//!   [`PaymentIntent`] and [`ConfirmPaymentIntentParams`] are masked as `[REDACTED]` in `Debug` implementations.
 //!
 //! ## Type Construction & Deserialization Example
 //!
@@ -666,47 +668,8 @@ fn default_payment_intent_object() -> String {
     "payment_intent".into()
 }
 
-/// Parameters for creating a Stripe PaymentIntent.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CreatePaymentIntentParams {
-    /// Amount intended to be collected in minor currency units.
-    pub amount: i64,
-
-    /// Three-letter ISO currency code.
-    pub currency: String,
-
-    /// Capture method: `automatic` (default) or `manual`.
-    pub capture_method: Option<String>,
-
-    /// Description of the payment.
-    pub description: Option<String>,
-
-    /// Unique idempotency key.
-    #[serde(skip)]
-    pub idempotency_key: Option<String>,
-}
-
-/// Parameters for capturing a PaymentIntent.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct CapturePaymentIntentParams {
-    /// The amount to capture from the authorization. If omitted, captures full amount.
-    pub amount_to_capture: Option<i64>,
-
-    /// Unique idempotency key.
-    #[serde(skip)]
-    pub idempotency_key: Option<String>,
-}
-
-/// Parameters for canceling a PaymentIntent.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
-pub struct CancelPaymentIntentParams {
-    /// Reason for canceling this PaymentIntent.
-    pub cancellation_reason: Option<String>,
-
-    /// Unique idempotency key.
-    #[serde(skip)]
-    pub idempotency_key: Option<String>,
-}
+pub mod params;
+pub use params::*;
 
 /// Represents a Stripe Account object (merchant profile).
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1294,5 +1257,42 @@ mod tests {
             }
             other => panic!("Expected Invoice variant, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn test_create_and_confirm_payment_intent_params() {
+        let create_params = CreatePaymentIntentParams {
+            amount: 5000,
+            currency: "usd".into(),
+            capture_method: Some("manual".into()),
+            description: Some("Order #1024".into()),
+            payment_method: Some("pm_test_card".into()),
+            customer: None,
+            receipt_email: None,
+            confirm: Some(true),
+            return_url: Some("https://example.com/complete".into()),
+            metadata: None,
+            idempotency_key: Some("idem_create_123".into()),
+        };
+        assert_eq!(create_params.amount, 5000);
+        assert_eq!(create_params.currency, "usd");
+        assert_eq!(create_params.confirm, Some(true));
+
+        let confirm_params = ConfirmPaymentIntentParams {
+            client_secret: None,
+            payment_method: Some("pm_test_456".into()),
+            return_url: Some("https://example.com/return".into()),
+            receipt_email: Some("billing@example.com".into()),
+            setup_future_usage: Some("off_session".into()),
+            idempotency_key: Some("idem_conf_789".into()),
+        };
+        assert_eq!(
+            confirm_params.payment_method.as_deref(),
+            Some("pm_test_456")
+        );
+        assert_eq!(
+            confirm_params.setup_future_usage.as_deref(),
+            Some("off_session")
+        );
     }
 }
