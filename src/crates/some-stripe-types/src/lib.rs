@@ -5,9 +5,11 @@
 //!
 //! ## Overview
 //!
-//! - **Domain Entities**: [`PaymentIntent`], [`CheckoutSession`], [`Account`], [`Invoice`].
+//! - **Domain Entities**: [`PaymentIntent`], [`CheckoutSession`], [`Account`], [`Invoice`], [`Dispute`].
 //! - **Event Pipeline**: [`Event`], [`EventData`], [`EventObject`].
-//! - **Strongly Typed Identifiers**: [`AccountId`], [`IdempotencyKey`].
+//! - **Strongly Typed Identifiers**: [`AccountId`], [`IdempotencyKey`], [`DisputeId`].
+//! - **Dispute & Evidence Management**: [`Dispute`], [`DisputeEvidence`], [`DisputeEvidenceDetails`],
+//!   [`DisputeStatus`], and [`UpdateDisputeParams`] with submission locking invariants.
 //! - **Invoice Upcoming Guard**: [`Invoice`] specifies `pub id: Option<String>` to safely accommodate
 //!   `invoice.upcoming` preview events where `id` is null on Stripe wire payloads.
 //! - **Discriminated Event Union**: [`EventObject`] provides seamless enum dispatch across
@@ -63,6 +65,9 @@
 //! ```
 
 use serde::{Deserialize, Serialize};
+
+pub mod dispute;
+pub use dispute::*;
 
 /// Strongly typed Stripe Connect Account ID (`acct_...`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -420,6 +425,7 @@ fn default_invoice_object() -> String {
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "object", rename_all = "snake_case")]
+#[allow(clippy::large_enum_variant)]
 pub enum EventObject {
     /// Stripe PaymentIntent payload (`object = "payment_intent"`).
     PaymentIntent(PaymentIntent),
@@ -430,6 +436,9 @@ pub enum EventObject {
 
     /// Stripe Invoice payload (`object = "invoice"`), including upcoming invoices with null `id`.
     Invoice(Invoice),
+
+    /// Stripe Dispute payload (`object = "dispute"`).
+    Dispute(Dispute),
 
     /// Unrecognized, custom, or unsupported event object types.
     #[serde(other)]
@@ -719,6 +728,33 @@ mod tests {
                 assert_eq!(inv.amount_due, Some(1200));
             }
             other => panic!("Expected Invoice variant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_event_object_dispute() {
+        let json = serde_json::json!({
+            "id": "dp_event_test_1",
+            "object": "dispute",
+            "amount": 3500,
+            "currency": "usd",
+            "status": "needs_response",
+            "reason": "fraudulent"
+        });
+
+        let data = EventData { object: json };
+        let obj = data
+            .deserialize_object()
+            .expect("Failed to deserialize dispute event");
+
+        match obj {
+            EventObject::Dispute(dp) => {
+                assert_eq!(dp.id, "dp_event_test_1");
+                assert_eq!(dp.amount, 3500);
+                assert_eq!(dp.status, DisputeStatus::NeedsResponse);
+                assert!(!dp.is_evidence_locked());
+            }
+            other => panic!("Expected Dispute variant, got {other:?}"),
         }
     }
 }

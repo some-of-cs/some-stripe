@@ -4,8 +4,9 @@
 //! discriminated EventObject union deserialization, and PCI-DSS client secret redaction.
 
 use some_stripe_types::{
-    AccountId, CheckoutSession, Event, EventData, EventObject, IdempotencyKey, Invoice,
-    PaymentIntent,
+    AccountId, CheckoutSession, Dispute, DisputeEvidence, DisputeEvidenceDetails, DisputeId,
+    DisputeStatus, Event, EventData, EventObject, IdempotencyKey, Invoice, PaymentIntent,
+    UpdateDisputeParams,
 };
 
 #[test]
@@ -186,4 +187,171 @@ fn test_event_object_unknown_fallback_contract() {
         .deserialize_object()
         .expect("Should safely resolve to Unknown");
     assert!(matches!(obj, EventObject::Unknown));
+}
+
+#[test]
+fn test_event_object_dispute_discriminated_union_contract() {
+    let dispute_raw = serde_json::json!({
+        "id": "dp_contract_evt_101",
+        "object": "dispute",
+        "amount": 4200,
+        "currency": "usd",
+        "status": "needs_response",
+        "reason": "duplicate"
+    });
+    let data_dp = EventData {
+        object: dispute_raw,
+    };
+    match data_dp.deserialize_object().unwrap() {
+        EventObject::Dispute(dp) => {
+            assert_eq!(dp.id, "dp_contract_evt_101");
+            assert_eq!(dp.amount, 4200);
+            assert_eq!(dp.currency, "usd");
+            assert_eq!(dp.status, DisputeStatus::NeedsResponse);
+            assert_eq!(dp.reason.as_deref(), Some("duplicate"));
+            assert!(!dp.is_evidence_locked());
+        }
+        other => panic!("Expected Dispute variant, got {other:?}"),
+    }
+}
+
+#[test]
+fn test_dispute_evidence_locking_contract() {
+    // 1. Open state: needs_response, no details
+    let mut dp = Dispute {
+        id: "dp_lock_test".into(),
+        object: "dispute".into(),
+        amount: 3000,
+        currency: "usd".into(),
+        status: DisputeStatus::NeedsResponse,
+        reason: None,
+        charge: None,
+        payment_intent: None,
+        evidence: DisputeEvidence::default(),
+        evidence_details: None,
+        is_charge_refundable: None,
+        livemode: None,
+        metadata: None,
+        created: None,
+        balance_transactions: None,
+    };
+    assert!(!dp.is_evidence_locked());
+
+    // 2. Open state: warning_needs_response
+    dp.status = DisputeStatus::WarningNeedsResponse;
+    assert!(!dp.is_evidence_locked());
+
+    // 3. Locked state: past_due flag set to true overrides open status
+    dp.evidence_details = Some(DisputeEvidenceDetails {
+        due_by: Some(1730000000),
+        has_evidence: Some(false),
+        past_due: Some(true),
+        submission_count: Some(0),
+    });
+    assert!(dp.is_evidence_locked());
+
+    // 4. Locked states: status transitions to closed / under_review / won / lost / charge_refunded
+    let all_locked_statuses = [
+        DisputeStatus::UnderReview,
+        DisputeStatus::WarningUnderReview,
+        DisputeStatus::WarningClosed,
+        DisputeStatus::ChargeRefunded,
+        DisputeStatus::Won,
+        DisputeStatus::Lost,
+    ];
+    for status in all_locked_statuses {
+        dp.status = status;
+        dp.evidence_details = None;
+        assert!(
+            dp.is_evidence_locked(),
+            "Status {status:?} should be locked"
+        );
+    }
+
+    // 5. UpdateDisputeParams submit flag
+    let params_draft = UpdateDisputeParams::new().with_submit(false);
+    assert!(!params_draft.is_submission_final());
+
+    let params_final = UpdateDisputeParams::new().with_submit(true);
+    assert!(params_final.is_submission_final());
+}
+
+#[test]
+fn test_dispute_all_evidence_fields_contract() {
+    let evidence = DisputeEvidence {
+        customer_communication: Some("email_chain_555".into()),
+        customer_email_address: Some("buyer@test.io".into()),
+        customer_name: Some("Arthur Dent".into()),
+        customer_purchase_ip: Some("10.0.0.1".into()),
+        billing_address: Some("42 Country Lane, Cottington".into()),
+        shipping_address: Some("42 Country Lane, Cottington".into()),
+        shipping_date: Some("2026-05-12".into()),
+        shipping_documentation: Some("file_ship_proof_99".into()),
+        shipping_tracking_number: Some("TRK424242".into()),
+        service_date: Some("2026-05-13".into()),
+        service_documentation: Some("file_svc_proof_99".into()),
+        duplicate_charge_documentation: Some("file_dup_proof_99".into()),
+        duplicate_charge_explanation: Some("Authorized subscription billing".into()),
+        duplicate_charge_id: Some("ch_original_99".into()),
+        refund_refusal_explanation: Some("Customer consumed digital good completely".into()),
+        cancellation_policy: Some("file_policy_99".into()),
+        cancellation_policy_disclosure: Some("Presented at signup".into()),
+        receipt: Some("file_receipt_99".into()),
+        uncategorized_documentation: Some("file_extra_99".into()),
+        uncategorized_text: Some("Customer confirmed receipt via telephone call".into()),
+    };
+
+    let dp = Dispute {
+        id: "dp_evidence_all".into(),
+        object: "dispute".into(),
+        amount: 4200,
+        currency: "gbp".into(),
+        status: DisputeStatus::NeedsResponse,
+        reason: Some("fraudulent".into()),
+        charge: Some("ch_auth_42".into()),
+        payment_intent: Some("pi_auth_42".into()),
+        evidence,
+        evidence_details: Some(DisputeEvidenceDetails {
+            due_by: Some(1730000000),
+            has_evidence: Some(true),
+            past_due: Some(false),
+            submission_count: Some(1),
+        }),
+        is_charge_refundable: Some(false),
+        livemode: Some(false),
+        metadata: None,
+        created: Some(1728000000),
+        balance_transactions: Some(vec!["txn_dp_42".into()]),
+    };
+
+    let serialized = serde_json::to_string(&dp).expect("Dispute serialization failed");
+    let deserialized: Dispute =
+        serde_json::from_str(&serialized).expect("Dispute deserialization failed");
+
+    assert_eq!(deserialized.id, "dp_evidence_all");
+    assert_eq!(deserialized.amount, 4200);
+    assert_eq!(deserialized.currency, "gbp");
+    assert_eq!(
+        deserialized.evidence.customer_name.as_deref(),
+        Some("Arthur Dent")
+    );
+    assert_eq!(
+        deserialized.evidence.uncategorized_text.as_deref(),
+        Some("Customer confirmed receipt via telephone call")
+    );
+    assert_eq!(
+        deserialized
+            .evidence_details
+            .as_ref()
+            .unwrap()
+            .submission_count,
+        Some(1)
+    );
+}
+
+#[test]
+fn test_dispute_id_typed_contract() {
+    let id = DisputeId::from("dp_typed_123");
+    assert_eq!(id.to_string(), "dp_typed_123");
+    assert_eq!(&*id, "dp_typed_123");
 }
