@@ -1303,6 +1303,221 @@ impl std::fmt::Display for PaymentLinkValidationError {
 impl std::error::Error for PaymentLinkValidationError {}
 
 // ============================================================================
+// LineItem Domain Entity & Paginator Extractor (US-4.2.0 Unit 3)
+// ============================================================================
+
+/// Returns the default object type string for LineItem (`"item"`).
+#[must_use]
+pub fn default_line_item_object() -> String {
+    "item".into()
+}
+
+/// Returns the default object type string for LineItemPrice (`"price"`).
+#[must_use]
+pub fn default_price_object() -> String {
+    "price".into()
+}
+
+/// Price object associated with a [`LineItem`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LineItemPrice {
+    /// Unique identifier for the price (`price_...`).
+    pub id: String,
+
+    /// Object type, always `price`.
+    #[serde(default = "default_price_object")]
+    pub object: String,
+
+    /// Whether the price is currently active.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active: Option<bool>,
+
+    /// Three-letter ISO currency code in lowercase.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub currency: Option<String>,
+
+    /// The unit amount in minor currency units (e.g., cents).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unit_amount: Option<i64>,
+
+    /// The ID of the product this price belongs to.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub product: Option<String>,
+}
+
+impl LineItemPrice {
+    /// Creates a minimal [`LineItemPrice`].
+    pub fn new(id: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            object: default_price_object(),
+            active: None,
+            currency: None,
+            unit_amount: None,
+            product: None,
+        }
+    }
+
+    /// Fluent builder method to attach `unit_amount` and `currency`.
+    #[must_use]
+    pub fn with_amount(mut self, unit_amount: i64, currency: impl Into<String>) -> Self {
+        self.unit_amount = Some(unit_amount);
+        self.currency = Some(currency.into());
+        self
+    }
+}
+
+/// Represents a Stripe LineItem object (`item`).
+///
+/// A LineItem represents an item being purchased via a Payment Link or Checkout Session.
+///
+/// # Example
+/// ```
+/// use some_stripe_types::{LineItem, line_item_id};
+///
+/// let item = LineItem::new("li_test_123", 2500, 2500, "usd")
+///     .with_description("E-book Download")
+///     .with_quantity(1);
+/// assert_eq!(item.id, "li_test_123");
+/// assert_eq!(line_item_id(&item), "li_test_123");
+/// assert_eq!(item.amount_total, 2500);
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LineItem {
+    /// Unique identifier for the line item (`li_...`).
+    pub id: String,
+
+    /// Object type, always `item`.
+    #[serde(default = "default_line_item_object")]
+    pub object: String,
+
+    /// An arbitrary string attached to the object, often useful for displaying to users.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+
+    /// Total amount of the line item in minor units (e.g., cents) after discounts and taxes.
+    pub amount_total: i64,
+
+    /// Total of the line item before discounts or taxes in minor units (e.g., cents).
+    pub amount_subtotal: i64,
+
+    /// The amount of tax calculated for this line item in minor units.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub amount_tax: Option<i64>,
+
+    /// The amount of discount applied to this line item in minor units.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub amount_discount: Option<i64>,
+
+    /// Three-letter ISO currency code in lowercase (e.g., `usd`, `eur`).
+    pub currency: String,
+
+    /// The quantity of the item purchased.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quantity: Option<u32>,
+
+    /// The price used for this line item, if available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub price: Option<LineItemPrice>,
+}
+
+impl LineItem {
+    /// Creates a new `LineItem` with mandatory amount and currency fields.
+    pub fn new(
+        id: impl Into<String>,
+        amount_subtotal: i64,
+        amount_total: i64,
+        currency: impl Into<String>,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            object: default_line_item_object(),
+            description: None,
+            amount_total,
+            amount_subtotal,
+            amount_tax: None,
+            amount_discount: None,
+            currency: currency.into(),
+            quantity: None,
+            price: None,
+        }
+    }
+
+    /// Sets the optional description.
+    #[must_use]
+    pub fn with_description(mut self, description: impl Into<String>) -> Self {
+        self.description = Some(description.into());
+        self
+    }
+
+    /// Sets the optional quantity.
+    #[must_use]
+    pub fn with_quantity(mut self, quantity: u32) -> Self {
+        self.quantity = Some(quantity);
+        self
+    }
+
+    /// Sets the optional price.
+    #[must_use]
+    pub fn with_price(mut self, price: LineItemPrice) -> Self {
+        self.price = Some(price);
+        self
+    }
+}
+
+/// Extracts the line item ID from a [`LineItem`].
+///
+/// Conforms strictly to the `fn(&T) -> &str` function pointer signature required by `Paginator::new`.
+#[must_use]
+pub fn line_item_id(item: &LineItem) -> &str {
+    &item.id
+}
+
+/// Parameters for listing line items of a payment link (`GET /v1/payment_links/{id}/line_items`).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListLineItemsParams {
+    /// A limit on the number of objects to be returned (1 to 100). Default: 10.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u32>,
+
+    /// A cursor for use in pagination: an object ID defining your place in the list.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub starting_after: Option<String>,
+
+    /// A cursor for use in backward pagination.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ending_before: Option<String>,
+}
+
+impl ListLineItemsParams {
+    /// Constructs a new, default [`ListLineItemsParams`].
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets the maximum number of items to return (clamped to 100).
+    #[must_use]
+    pub fn limit(mut self, limit: u32) -> Self {
+        self.limit = Some(limit.clamp(1, 100));
+        self
+    }
+
+    /// Fetches the page of objects immediately following this object ID.
+    #[must_use]
+    pub fn starting_after(mut self, id: impl Into<String>) -> Self {
+        self.starting_after = Some(id.into());
+        self
+    }
+
+    /// Fetches the page of objects immediately preceding this object ID.
+    #[must_use]
+    pub fn ending_before(mut self, id: impl Into<String>) -> Self {
+        self.ending_before = Some(id.into());
+        self
+    }
+}
+
+// ============================================================================
 // Unit Tests (PaymentLink & Params)
 // ============================================================================
 
@@ -1457,5 +1672,42 @@ mod tests {
         let json = serde_json::to_string(&update).expect("Serialize");
         assert!(!json.contains("idem_upd_123"));
         assert!(json.contains(r#""active":false"#));
+    }
+
+    #[test]
+    fn test_line_item_serde_and_extractor() {
+        let price = LineItemPrice::new("price_test_999").with_amount(2500, "usd");
+        let item = LineItem::new("li_test_999", 2500, 2500, "usd")
+            .with_description("Premium Course")
+            .with_quantity(2)
+            .with_price(price);
+
+        assert_eq!(line_item_id(&item), "li_test_999");
+        assert_eq!(item.amount_total, 2500);
+        assert_eq!(item.quantity, Some(2));
+        assert_eq!(item.price.as_ref().unwrap().id, "price_test_999");
+
+        let json = serde_json::to_string(&item).expect("Serialize");
+        let deserialized: LineItem = serde_json::from_str(&json).expect("Deserialize");
+        assert_eq!(deserialized.id, "li_test_999");
+        assert_eq!(line_item_id(&deserialized), "li_test_999");
+        assert_eq!(deserialized.amount_total, 2500);
+        assert_eq!(deserialized.currency, "usd");
+    }
+
+    #[test]
+    fn test_list_line_items_params() {
+        let params = ListLineItemsParams::new()
+            .limit(25)
+            .starting_after("li_prev_123")
+            .ending_before("li_next_456");
+
+        assert_eq!(params.limit, Some(25));
+        assert_eq!(params.starting_after.as_deref(), Some("li_prev_123"));
+        assert_eq!(params.ending_before.as_deref(), Some("li_next_456"));
+
+        let json = serde_json::to_string(&params).expect("Serialize");
+        assert!(json.contains(r#""limit":25"#));
+        assert!(json.contains(r#""starting_after":"li_prev_123""#));
     }
 }

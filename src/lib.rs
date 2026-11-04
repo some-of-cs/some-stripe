@@ -80,8 +80,8 @@ pub use some_stripe_webhooks::{
 pub mod resources;
 pub use resources::{
     AccountsResource, BalanceResource, BalanceTransactionsResource, CheckoutResource,
-    DisputesResource, PaymentIntentsResource, RefundsResource, SessionsResource, WebhooksResource,
-    generate_uuid_v4, is_valid_uuid_v4,
+    DisputesResource, PaymentIntentsResource, PaymentLinksResource, RefundsResource,
+    SessionsResource, WebhooksResource, generate_uuid_v4, is_valid_uuid_v4,
 };
 
 /// The main Stripe client used to interact with the Stripe API, modeled after `stripe-node`.
@@ -149,6 +149,11 @@ impl StripeClient {
     pub fn balance_transactions(&self) -> BalanceTransactionsResource<'_> {
         BalanceTransactionsResource::new(&self.0)
     }
+
+    /// Access the PaymentLinks resource namespace (`stripe.payment_links`).
+    pub fn payment_links(&self) -> PaymentLinksResource<'_> {
+        PaymentLinksResource::new(&self.0)
+    }
 }
 
 impl From<some_stripe_core::StripeClient> for StripeClient {
@@ -182,6 +187,9 @@ pub trait StripeClientExt {
 
     /// Access the BalanceTransactions resource namespace (`stripe.balance_transactions`).
     fn balance_transactions(&self) -> BalanceTransactionsResource<'_>;
+
+    /// Access the PaymentLinks resource namespace (`stripe.payment_links`).
+    fn payment_links(&self) -> PaymentLinksResource<'_>;
 }
 
 impl StripeClientExt for some_stripe_core::StripeClient {
@@ -215,6 +223,10 @@ impl StripeClientExt for some_stripe_core::StripeClient {
 
     fn balance_transactions(&self) -> BalanceTransactionsResource<'_> {
         BalanceTransactionsResource::new(self)
+    }
+
+    fn payment_links(&self) -> PaymentLinksResource<'_> {
+        PaymentLinksResource::new(self)
     }
 }
 
