@@ -43,7 +43,10 @@ pub mod constants;
 pub mod crypto;
 pub mod error;
 pub mod header;
+pub mod tolerance;
 pub mod validation;
+
+pub use tolerance::ToleranceConfig;
 
 pub use compare::safe_constant_time_eq;
 pub use constants::{
@@ -157,6 +160,17 @@ impl Webhook {
         secret: &str,
         tolerance: Option<u64>,
     ) -> Result<bool, StripeWebhookError> {
+        let config = tolerance.map_or_else(ToleranceConfig::default, ToleranceConfig::new);
+        Self::verify_header_with_config(payload, header, secret, &config)
+    }
+
+    /// Verifies the authenticity and recency of an incoming webhook header using a [`ToleranceConfig`].
+    pub fn verify_header_with_config(
+        payload: &[u8],
+        header: &str,
+        secret: &str,
+        config: &ToleranceConfig,
+    ) -> Result<bool, StripeWebhookError> {
         if is_blank_webhook_secret(secret) {
             return Err(StripeWebhookError::BadKey);
         }
@@ -174,24 +188,11 @@ impl Webhook {
         }
 
         let parsed_header = parse_signature_header(header)?;
-        let timestamp = parsed_header.timestamp;
+        let now = chrono::Utc::now().timestamp();
+        config.check_timestamp(parsed_header.timestamp, now)?;
 
-        let tolerance_secs = tolerance.unwrap_or(Self::DEFAULT_TOLERANCE);
-        if tolerance_secs > 0 {
-            let now = chrono::Utc::now().timestamp();
-            // Check past tolerance AND future drift bound (Gate G2)
-            if timestamp < now - (tolerance_secs as i64)
-                || timestamp > now + MAX_FUTURE_DRIFT_SECONDS
-            {
-                return Err(StripeWebhookError::TimestampOutsideTolerance {
-                    timestamp,
-                    now,
-                    tolerance: tolerance_secs,
-                });
-            }
-        }
-
-        let expected_signature = compute_streaming_hmac_hex(secret.as_bytes(), timestamp, payload)?;
+        let expected_signature =
+            compute_streaming_hmac_hex(secret.as_bytes(), parsed_header.timestamp, payload)?;
 
         let matched = parsed_header.signatures.iter().any(|sig| {
             safe_constant_time_eq(
@@ -215,6 +216,19 @@ impl Webhook {
         tolerance: Option<u64>,
     ) -> Result<Event, StripeWebhookError> {
         Self::verify_header(payload, sig_header, secret, tolerance)?;
+
+        serde_json::from_slice::<Event>(payload)
+            .map_err(|e| StripeWebhookError::MalformedPayload(e.to_string()))
+    }
+
+    /// Verifies an incoming webhook payload using a [`ToleranceConfig`] and parses it into a strongly-typed [`Event`].
+    pub fn construct_event_with_config(
+        payload: &[u8],
+        sig_header: &str,
+        secret: &str,
+        config: &ToleranceConfig,
+    ) -> Result<Event, StripeWebhookError> {
+        Self::verify_header_with_config(payload, sig_header, secret, config)?;
 
         serde_json::from_slice::<Event>(payload)
             .map_err(|e| StripeWebhookError::MalformedPayload(e.to_string()))
@@ -250,6 +264,18 @@ impl StripeWebhookWrapper {
         tolerance: Option<u64>,
     ) -> Result<Self, StripeWebhookError> {
         let event = Webhook::construct_event(payload, header, secret, tolerance)?;
+        let verified_at = Some(chrono::Utc::now().timestamp());
+        Ok(Self::new(event, verified_at))
+    }
+
+    /// Constructs a verified wrapper directly using a custom [`ToleranceConfig`].
+    pub fn from_raw_with_config(
+        payload: &[u8],
+        header: &str,
+        secret: &str,
+        config: &ToleranceConfig,
+    ) -> Result<Self, StripeWebhookError> {
+        let event = Webhook::construct_event_with_config(payload, header, secret, config)?;
         let verified_at = Some(chrono::Utc::now().timestamp());
         Ok(Self::new(event, verified_at))
     }
