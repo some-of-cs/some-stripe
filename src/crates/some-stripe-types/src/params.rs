@@ -877,6 +877,9 @@ pub struct LineItemParams {
     pub price_data: Option<LineItemPriceDataParams>,
 }
 
+/// Type alias for [`LineItemParams`] matching Stripe parameter naming conventions.
+pub type CreateLineItemParams = LineItemParams;
+
 impl LineItemParams {
     /// Creates an empty `LineItemParams`.
     pub fn new() -> Self {
@@ -1242,6 +1245,82 @@ impl CreateCheckoutSessionParams {
         }
 
         Ok(())
+    }
+}
+
+/// Query parameters for listing line items of a Checkout Session (`GET /v1/checkout/sessions/{id}/line_items`).
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ListLineItemsParams {
+    /// Limit on the number of objects returned (between 1 and 100). Default is 10.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u32>,
+
+    /// A cursor for use in pagination: an object ID defining your place in the list.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub starting_after: Option<String>,
+
+    /// A cursor for use in backward pagination: an object ID defining your place in the list.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ending_before: Option<String>,
+}
+
+impl ListLineItemsParams {
+    /// Creates default empty parameters.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets the limit on the number of objects to be returned.
+    pub fn limit(mut self, limit: u32) -> Self {
+        self.limit = Some(limit);
+        self
+    }
+
+    /// Sets the `starting_after` cursor.
+    pub fn starting_after(mut self, cursor: impl Into<String>) -> Self {
+        self.starting_after = Some(cursor.into());
+        self
+    }
+
+    /// Sets the `ending_before` cursor.
+    pub fn ending_before(mut self, cursor: impl Into<String>) -> Self {
+        self.ending_before = Some(cursor.into());
+        self
+    }
+
+    /// Builder alias with_limit.
+    pub fn with_limit(self, limit: u32) -> Self {
+        self.limit(limit)
+    }
+
+    /// Builder alias with_starting_after.
+    pub fn with_starting_after(self, cursor: impl Into<String>) -> Self {
+        self.starting_after(cursor)
+    }
+
+    /// Builder alias with_ending_before.
+    pub fn with_ending_before(self, cursor: impl Into<String>) -> Self {
+        self.ending_before(cursor)
+    }
+}
+
+impl From<Option<u32>> for ListLineItemsParams {
+    fn from(limit: Option<u32>) -> Self {
+        Self {
+            limit,
+            starting_after: None,
+            ending_before: None,
+        }
+    }
+}
+
+impl From<u32> for ListLineItemsParams {
+    fn from(limit: u32) -> Self {
+        Self {
+            limit: Some(limit),
+            starting_after: None,
+            ending_before: None,
+        }
     }
 }
 

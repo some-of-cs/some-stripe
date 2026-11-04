@@ -124,9 +124,11 @@ impl<'a, T: serde::de::DeserializeOwned> Paginator<'a, T> {
         limit: u32,
         id_extractor: fn(&T) -> &str,
     ) -> Self {
+        let path_str = path.into();
+        let path = path_str.trim_start_matches('/').to_string();
         Self {
             client,
-            path: path.into(),
+            path,
             limit: limit.clamp(1, 100),
             buffer: VecDeque::new(),
             loop_detector: CursorLoopDetector::new(),
