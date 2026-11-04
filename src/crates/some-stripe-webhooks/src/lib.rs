@@ -42,8 +42,15 @@ pub mod compare;
 pub mod constants;
 pub mod crypto;
 pub mod error;
+pub mod escalation;
 pub mod header;
+pub mod v2_events;
 pub mod validation;
+
+pub use escalation::{
+    WebhookEscalationBridge, determine_severity, escalate_webhook_error, is_security_incident,
+};
+pub use v2_events::{V2RelatedObject, V2ThinEvent, is_thin_event};
 
 pub use compare::safe_constant_time_eq;
 pub use constants::{
@@ -208,6 +215,18 @@ impl Webhook {
     }
 
     /// Verifies an incoming webhook payload and parses it into a strongly-typed [`Event`].
+    /// Verifies an incoming webhook payload and parses it into a strongly-typed [`V2ThinEvent`].
+    pub fn construct_v2_thin_event(
+        payload: &[u8],
+        sig_header: &str,
+        secret: &str,
+        tolerance: Option<u64>,
+    ) -> Result<V2ThinEvent, StripeWebhookError> {
+        Self::verify_header(payload, sig_header, secret, tolerance)?;
+
+        serde_json::from_slice::<V2ThinEvent>(payload)
+            .map_err(|e| StripeWebhookError::MalformedPayload(e.to_string()))
+    }
     pub fn construct_event(
         payload: &[u8],
         sig_header: &str,
