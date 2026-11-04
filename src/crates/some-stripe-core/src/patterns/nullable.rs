@@ -5,6 +5,41 @@
 //! - `Nullable::Null`: Emits an empty string (`key=""`) in API v1 form-encoded requests
 //!   or `null` in API v2 JSON requests, clearing the stored value on Stripe servers.
 //! - `Nullable::Omit`: Skips the field entirely during serialization.
+//!
+//! # ⚠️ Mandatory Serde Invariant
+//!
+//! When defining request parameter structs containing [`Nullable<T>`], you **MUST** annotate
+//! the struct field with `#[serde(default, skip_serializing_if = "Nullable::is_omit")]`.
+//!
+//! ```rust
+//! use serde::Serialize;
+//! use some_stripe_core::patterns::nullable::Nullable;
+//!
+//! #[derive(Serialize, Default)]
+//! struct UpdateCustomerParams<'a> {
+//!     #[serde(default, skip_serializing_if = "Nullable::is_omit")]
+//!     description: Nullable<&'a str>,
+//! }
+//!
+//! // 1. Omit state: field is omitted entirely from JSON / form payload
+//! let omit_params = UpdateCustomerParams::default();
+//! let json = serde_json::to_string(&omit_params).unwrap();
+//! assert_eq!(json, "{}");
+//!
+//! // 2. Null state: field is emitted as null / empty string (clears remote field)
+//! let null_params = UpdateCustomerParams { description: Nullable::Null };
+//! let json = serde_json::to_string(&null_params).unwrap();
+//! assert_eq!(json, r#"{"description":null}"#);
+//!
+//! // 3. Value state: field emits updated concrete value
+//! let val_params = UpdateCustomerParams { description: Nullable::Value("VIP Client") };
+//! let json = serde_json::to_string(&val_params).unwrap();
+//! assert_eq!(json, r#"{"description":"VIP Client"}"#);
+//! ```
+//!
+//! Without `skip_serializing_if = "Nullable::is_omit"`, serde serializes both `Omit` and `Null`
+//! to `null`, which causes the form serializer to transmit `key=""` and inadvertently clear
+//! the remote Stripe field!
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
