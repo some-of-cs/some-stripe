@@ -6,14 +6,120 @@ use crate::resources::checkout::CheckoutResource;
 use crate::resources::payment_intents::PaymentIntentsResource;
 use crate::resources::webhooks::WebhooksResource;
 use crate::workflow::{DefaultErrorWorkflow, ErrorWorkflowHandler};
+use std::ops::Deref;
 use std::sync::Arc;
 use std::time::Duration;
+use zeroize::{Zeroize, ZeroizeOnDrop};
+
+/// A secret API key securely stored in memory, automatically zeroized on drop,
+/// and redacted from all `Debug` and `Display` implementations (PCI-DSS 4.0 / Gate G2).
+#[derive(Clone, Zeroize, ZeroizeOnDrop)]
+pub struct SecretKey {
+    inner: String,
+}
+
+impl SecretKey {
+    /// Creates a new securely held [`SecretKey`].
+    pub fn new(key: impl Into<String>) -> Self {
+        Self { inner: key.into() }
+    }
+
+    /// Exposes the underlying secret string for authenticated HTTP transmissions.
+    pub fn expose_secret(&self) -> &str {
+        &self.inner
+    }
+}
+
+impl Deref for SecretKey {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl AsRef<str> for SecretKey {
+    fn as_ref(&self) -> &str {
+        &self.inner
+    }
+}
+
+impl<T: Into<String>> From<T> for SecretKey {
+    fn from(s: T) -> Self {
+        Self::new(s)
+    }
+}
+
+impl std::fmt::Debug for SecretKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[REDACTED]")
+    }
+}
+
+impl std::fmt::Display for SecretKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[REDACTED]")
+    }
+}
+
+impl PartialEq for SecretKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.inner == other.inner
+    }
+}
+
+impl Eq for SecretKey {}
+
+/// Per-request options allowing callers to override multi-tenant headers, idempotency keys,
+/// API versions, or network timeouts on a specific call without mutating the base client.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RequestOptions {
+    /// Connected account ID for Stripe Connect multi-tenancy (`Stripe-Account` header).
+    pub stripe_account: Option<String>,
+    /// Unique idempotency key to prevent duplicate mutations (`Idempotency-Key` header).
+    pub idempotency_key: Option<String>,
+    /// Pinned Stripe API version override (`Stripe-Version` header).
+    pub stripe_version: Option<String>,
+    /// Per-request execution timeout override.
+    pub timeout: Option<Duration>,
+}
+
+impl RequestOptions {
+    /// Creates empty, default [`RequestOptions`].
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Attaches a `Stripe-Account` connected account header for Connect multi-tenancy.
+    pub fn stripe_account(mut self, account_id: impl Into<String>) -> Self {
+        self.stripe_account = Some(account_id.into());
+        self
+    }
+
+    /// Attaches an `Idempotency-Key` header to protect mutations from duplicate execution.
+    pub fn idempotency_key(mut self, key: impl Into<String>) -> Self {
+        self.idempotency_key = Some(key.into());
+        self
+    }
+
+    /// Attaches a `Stripe-Version` header override.
+    pub fn stripe_version(mut self, version: impl Into<String>) -> Self {
+        self.stripe_version = Some(version.into());
+        self
+    }
+
+    /// Sets a per-request execution timeout.
+    pub fn timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = Some(timeout);
+        self
+    }
+}
 
 /// Configuration options for initializing a [`StripeClient`].
 #[derive(Clone)]
 pub struct StripeConfig {
     /// Secret API key for authentication (`sk_live_...` or `sk_test_...`).
-    pub secret_key: String,
+    pub secret_key: SecretKey,
 
     /// Base URL of the Stripe REST API. Defaults to `https://api.stripe.com`.
     pub api_base: String,
@@ -42,7 +148,7 @@ impl std::fmt::Debug for StripeConfig {
 
 impl StripeConfig {
     /// Creates a new configuration with default settings and the given secret key.
-    pub fn new(secret_key: impl Into<String>) -> Self {
+    pub fn new(secret_key: impl Into<SecretKey>) -> Self {
         Self {
             secret_key: secret_key.into(),
             api_base: "https://api.stripe.com".into(),
@@ -77,16 +183,42 @@ impl StripeConfig {
     }
 }
 
+/// Thread-safe interior state for [`StripeClient`] shared across clones.
+pub struct ClientInner {
+    /// Active Stripe configuration.
+    pub config: StripeConfig,
+    /// Shared HTTP client connection pool.
+    pub http: reqwest::Client,
+}
+
+impl std::fmt::Debug for ClientInner {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ClientInner")
+            .field("config", &self.config)
+            .finish()
+    }
+}
+
 /// The main Stripe client used to interact with the Stripe API, modeled after `stripe-node`.
-#[derive(Clone)]
+///
+/// Backed by an `Arc<ClientInner>` to guarantee lock-free, zero-contention concurrency across
+/// thousands of asynchronous tasks while enforcing Rust zero-clone borrowing discipline.
+#[derive(Clone, Debug)]
 pub struct StripeClient {
-    pub(crate) config: Arc<StripeConfig>,
-    pub(crate) http: reqwest::Client,
+    pub(crate) inner: Arc<ClientInner>,
+}
+
+impl Deref for StripeClient {
+    type Target = ClientInner;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
 }
 
 impl StripeClient {
     /// Creates a new `StripeClient` configured with default settings and the provided secret key.
-    pub fn new(secret_key: impl Into<String>) -> Self {
+    pub fn new(secret_key: impl Into<SecretKey>) -> Self {
         Self::with_config(StripeConfig::new(secret_key))
     }
 
@@ -99,9 +231,13 @@ impl StripeClient {
             .unwrap_or_default();
 
         Self {
-            config: Arc::new(config),
-            http,
+            inner: Arc::new(ClientInner { config, http }),
         }
+    }
+
+    /// Reference to the underlying atomic inner state.
+    pub fn inner(&self) -> &Arc<ClientInner> {
+        &self.inner
     }
 
     /// Access the configured error workflow handler.
@@ -129,13 +265,37 @@ impl StripeClient {
         WebhooksResource::new()
     }
 
-    /// Internal HTTP helper for sending requests to the Stripe API.
+    /// Internal HTTP helper for sending requests to the Stripe API without extra options.
     pub(crate) async fn execute(
         &self,
         request: reqwest::RequestBuilder,
     ) -> Result<serde_json::Value, StripeError> {
+        self.execute_with_options(request, None).await
+    }
+
+    /// Internal HTTP helper for sending requests to the Stripe API with optional [`RequestOptions`].
+    pub(crate) async fn execute_with_options(
+        &self,
+        mut request: reqwest::RequestBuilder,
+        options: Option<&RequestOptions>,
+    ) -> Result<serde_json::Value, StripeError> {
+        if let Some(opts) = options {
+            if let Some(acct) = &opts.stripe_account {
+                request = request.header("Stripe-Account", acct);
+            }
+            if let Some(idemp) = &opts.idempotency_key {
+                request = request.header("Idempotency-Key", idemp);
+            }
+            if let Some(ver) = &opts.stripe_version {
+                request = request.header("Stripe-Version", ver);
+            }
+            if let Some(to) = opts.timeout {
+                request = request.timeout(to);
+            }
+        }
+
         let response = request
-            .basic_auth(&self.config.secret_key, None::<&str>)
+            .basic_auth(self.config.secret_key.expose_secret(), None::<&str>)
             .send()
             .await?;
 

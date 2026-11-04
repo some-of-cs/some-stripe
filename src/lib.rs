@@ -61,7 +61,7 @@ pub mod types;
 pub mod webhook;
 pub mod workflow;
 
-pub use client::{StripeClient, StripeConfig};
+pub use client::{ClientInner, RequestOptions, SecretKey, StripeClient, StripeConfig};
 pub use error::{StripeError, StripeWebhookError};
 pub use resources::{
     AccountsResource, CheckoutResource, PaymentIntentsResource, SessionsResource, WebhooksResource,
