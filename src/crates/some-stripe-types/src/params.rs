@@ -576,6 +576,19 @@ impl CapturePaymentIntentParams {
         self
     }
 
+    /// Sets the amount to capture (alias for [`Self::amount_to_capture`]).
+    ///
+    /// # Errors
+    /// Returns [`PaymentIntentValidationError::InvalidCaptureAmount`] if `amount <= 0`.
+    pub fn with_amount_to_capture(self, amount: i64) -> Result<Self, PaymentIntentValidationError> {
+        self.amount_to_capture(amount)
+    }
+
+    /// Attaches an idempotency key (alias for [`Self::idempotency_key`]).
+    pub fn with_idempotency_key(self, key: impl Into<String>) -> Self {
+        self.idempotency_key(key)
+    }
+
     /// Validates the capture parameters.
     ///
     /// # Errors
@@ -640,6 +653,16 @@ impl CancelPaymentIntentParams {
     pub fn idempotency_key(mut self, key: impl Into<String>) -> Self {
         self.idempotency_key = Some(key.into());
         self
+    }
+
+    /// Sets the cancellation reason (alias for [`Self::cancellation_reason`]).
+    pub fn with_cancellation_reason(self, reason: impl Into<String>) -> Self {
+        self.cancellation_reason(reason)
+    }
+
+    /// Attaches an idempotency key (alias for [`Self::idempotency_key`]).
+    pub fn with_idempotency_key(self, key: impl Into<String>) -> Self {
+        self.idempotency_key(key)
     }
 
     /// Validates the cancellation parameters.
@@ -730,6 +753,36 @@ impl ConfirmPaymentIntentParams {
     pub fn idempotency_key(mut self, key: impl Into<String>) -> Self {
         self.idempotency_key = Some(key.into());
         self
+    }
+
+    /// Sets the payment method ID (alias for [`Self::payment_method`]).
+    pub fn with_payment_method(self, pm: impl Into<String>) -> Self {
+        self.payment_method(pm)
+    }
+
+    /// Sets the return URL (alias for [`Self::return_url`]).
+    pub fn with_return_url(self, url: impl Into<String>) -> Self {
+        self.return_url(url)
+    }
+
+    /// Sets the receipt email address (alias for [`Self::receipt_email`]).
+    pub fn with_receipt_email(self, email: impl Into<String>) -> Self {
+        self.receipt_email(email)
+    }
+
+    /// Sets `setup_future_usage` (alias for [`Self::setup_future_usage`]).
+    pub fn with_setup_future_usage(self, usage: impl Into<String>) -> Self {
+        self.setup_future_usage(usage)
+    }
+
+    /// Sets the client secret (alias for [`Self::client_secret`]).
+    pub fn with_client_secret(self, secret: impl Into<String>) -> Self {
+        self.client_secret(secret)
+    }
+
+    /// Attaches an idempotency key (alias for [`Self::idempotency_key`]).
+    pub fn with_idempotency_key(self, key: impl Into<String>) -> Self {
+        self.idempotency_key(key)
     }
 
     /// Validates the confirmation parameters.
