@@ -3,7 +3,7 @@
 //! Verifies zero-clone borrowing discipline, streaming HMAC allocations, and PCI-DSS / PSD2 compliance.
 
 use some_stripe_core::error::StripeWebhookError;
-use some_stripe_types::{Event, EventData, PaymentIntent};
+use some_stripe_types::{CaptureMethod, Event, EventData, PaymentIntent, PaymentIntentStatus};
 use some_stripe_webhooks::{
     MAX_FUTURE_DRIFT_SECONDS, MAX_WEBHOOK_PAYLOAD_BYTES, StripeWebhookWrapper, Webhook,
     hmac_sha256_hex, safe_constant_time_eq, streaming_hmac_sha256_hex, verify_stripe_signature,
@@ -153,8 +153,8 @@ fn test_tc_2_1_0_law_pci_dss_and_psd2_compliance() {
         amount: 25000,
         amount_received: Some(25000),
         currency: "usd".into(),
-        status: "requires_action".into(),
-        capture_method: Some("automatic".into()),
+        status: PaymentIntentStatus::RequiresAction,
+        capture_method: Some(CaptureMethod::Automatic),
         client_secret: Some("pi_pci_audit_123_secret_SensitiveLiveClientSecretToken".into()),
         next_action: Some(serde_json::json!({
             "type": "redirect_to_url",
@@ -165,6 +165,8 @@ fn test_tc_2_1_0_law_pci_dss_and_psd2_compliance() {
         })),
         created: Some(1728345600),
         cancellation_reason: None,
+        description: None,
+        payment_method_options: None,
     };
 
     let pi_debug = format!("{sensitive_pi:?}");
