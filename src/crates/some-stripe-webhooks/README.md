@@ -13,6 +13,9 @@ Cryptographic Webhook Signature Verification, Replay Guards & Edge Runtime Inges
 - **Constant-Time Verification (Gate G2 Invariant 1)**:
   - HMAC-SHA256 signature verification executed strictly using constant-time byte comparisons (`safe_constant_time_eq` / `subtle::ConstantTimeEq`).
   - Safe against length-mismatch side channels and timing attacks.
+- **Zero-Clone Streaming HMAC (Gate G-Borrow)**:
+  - Streaming HMAC computation via [`streaming_hmac_sha256_hex`] eliminates intermediate heap-allocated `${timestamp}.${payload}` vectors.
+  - Zero copies of the raw webhook payload during verification.
 - **Timestamp Replay Protection (Gate G2 Invariant 2)**:
   - Default 300-second drift tolerance window (`DEFAULT_TOLERANCE_SECONDS = 300`).
   - Strict 60-second future drift limit (`MAX_FUTURE_DRIFT_SECONDS = 60`) preventing pre-dated signature replay.
@@ -22,6 +25,9 @@ Cryptographic Webhook Signature Verification, Replay Guards & Edge Runtime Inges
 - **Zero-Allocation Ingestion Wrapper (`StripeWebhookWrapper`)**:
   - Direct pointer parsing for high-throughput webhook handling (`order_id`, `customer_id`, `payment_intent_id`, `amount_total`).
   - Helper predicate `is_checkout_completed()` checking both event type and nested status properties.
+- **Statutory Financial Compliance (Gate G-Law)**:
+  - Zero raw PAN handling; error and wrapper types redact secrets in `Debug` / `Display`.
+  - PSD2 SCA 3DS 2.0 challenge structures preserved without modification.
 
 ---
 
@@ -39,15 +45,3 @@ let wrapper = StripeWebhookWrapper::from_raw(payload, &header, secret, None).unw
 
 assert_eq!(wrapper.event_id(), "evt_123");
 assert!(wrapper.is_checkout_completed());
-```
-
----
-
-## Quality Gates & Verification
-
-| Gate | Criterion | Status | Evidence |
-| :--- | :--- | :---: | :--- |
-| **G0** | Compilation & Clippy | **PASS** | 0 warnings (`cargo clippy -- -D warnings`), 0 fmt diffs |
-| **G2** | Timing Resistance | **PASS** | `safe_constant_time_eq` verified against timing leaks |
-| **G2** | Drift & Replay Guard | **PASS** | Reject timestamps > 300s old or > 60s in the future |
-| **G2** | Payload Ceiling | **PASS** | Reject payloads exceeding 1 MB with `PayloadTooLarge` |
