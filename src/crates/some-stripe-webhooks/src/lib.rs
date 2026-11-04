@@ -7,6 +7,8 @@
 //!
 //! - **Constant-Time Verification**: HMAC-SHA256 signature comparison executed strictly in
 //!   constant time via [`safe_constant_time_eq`] to prevent timing side-channel attacks.
+//! - **Streaming Zero-Allocation HMAC**: Signatures computed via [`compute_streaming_hmac_hex`]
+//!   streaming raw payload slices without heap buffers (Gate G-Borrow).
 //! - **Replay Protection**: Enforces timestamp tolerance (default 300 seconds) and rejects
 //!   excessive future drift (> 60 seconds).
 //! - **Zero-Copy Streaming Header Parser**: Parses `Stripe-Signature` headers with zero heap allocation
@@ -33,32 +35,26 @@
 //! assert!(wrapper.is_checkout_completed());
 //! ```
 
+pub mod compare;
 pub mod constants;
+pub mod crypto;
 pub mod error;
 pub mod header;
 pub mod validation;
-pub use header::{StripeSignatureHeader, parse_signature_header};
 
-use openssl::hash::MessageDigest;
-use openssl::pkey::PKey;
-use openssl::sign::Signer;
-use some_stripe_types::Event;
-use subtle::ConstantTimeEq;
-
+pub use compare::safe_constant_time_eq;
 pub use constants::{
     DEFAULT_TOLERANCE_SECONDS, MAX_FUTURE_DRIFT_SECONDS, MAX_WEBHOOK_PAYLOAD_BYTES,
     TIMESTAMP_PREFIX, V1_SIGNATURE_PREFIX,
 };
+pub use crypto::compute_streaming_hmac_hex;
 pub use error::StripeWebhookError;
+pub use header::{StripeSignatureHeader, parse_signature_header};
+use openssl::hash::MessageDigest;
+use openssl::pkey::PKey;
+use openssl::sign::Signer;
+use some_stripe_types::Event;
 pub use validation::is_blank_webhook_secret;
-
-/// Constant-time slice comparison safe against length mismatches (Gate G2 Invariant 1).
-pub fn safe_constant_time_eq(a: &[u8], b: &[u8]) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    a.ct_eq(b).into()
-}
 
 /// Computes HMAC-SHA256 over `data` using `key`, returning the lowercase hexadecimal string.
 pub fn hmac_sha256_hex(key: &[u8], data: &[u8]) -> Option<String> {
@@ -93,15 +89,13 @@ pub fn verify_stripe_signature(
         Err(_) => return false,
     };
 
-    let ts_str = parsed_header.timestamp.to_string();
-    let mut signed_payload = Vec::with_capacity(ts_str.len() + 1 + payload.len());
-    signed_payload.extend_from_slice(ts_str.as_bytes());
-    signed_payload.push(b'.');
-    signed_payload.extend_from_slice(payload);
-
-    let expected_hex = match hmac_sha256_hex(webhook_secret.as_bytes(), &signed_payload) {
-        Some(hex) => hex,
-        None => return false,
+    let expected_hex = match compute_streaming_hmac_hex(
+        webhook_secret.as_bytes(),
+        parsed_header.timestamp,
+        payload,
+    ) {
+        Ok(hex) => hex,
+        Err(_) => return false,
     };
 
     parsed_header.signatures.iter().any(|sig| {
@@ -160,14 +154,7 @@ impl Webhook {
             }
         }
 
-        let ts_str = timestamp.to_string();
-        let mut signed_payload = Vec::with_capacity(ts_str.len() + 1 + payload.len());
-        signed_payload.extend_from_slice(ts_str.as_bytes());
-        signed_payload.push(b'.');
-        signed_payload.extend_from_slice(payload);
-
-        let expected_signature = hmac_sha256_hex(secret.as_bytes(), &signed_payload)
-            .ok_or(StripeWebhookError::BadSignature)?;
+        let expected_signature = compute_streaming_hmac_hex(secret.as_bytes(), timestamp, payload)?;
 
         let matched = parsed_header.signatures.iter().any(|sig| {
             safe_constant_time_eq(
@@ -203,14 +190,7 @@ impl Webhook {
         timestamp: Option<i64>,
     ) -> String {
         let ts = timestamp.unwrap_or_else(|| chrono::Utc::now().timestamp());
-        let ts_str = ts.to_string();
-
-        let mut signed_payload = Vec::with_capacity(ts_str.len() + 1 + payload.len());
-        signed_payload.extend_from_slice(ts_str.as_bytes());
-        signed_payload.push(b'.');
-        signed_payload.extend_from_slice(payload);
-
-        let sig = hmac_sha256_hex(secret.as_bytes(), &signed_payload).unwrap_or_default();
+        let sig = compute_streaming_hmac_hex(secret.as_bytes(), ts, payload).unwrap_or_default();
         format!("{TIMESTAMP_PREFIX}{ts},{V1_SIGNATURE_PREFIX}{sig}")
     }
 }
