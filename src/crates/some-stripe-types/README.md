@@ -11,7 +11,7 @@ Strongly Typed Domain Models, Events & Request DTOs for [`some-stripe`](https://
 ## Architectural Highlights
 
 - **Strongly Typed Domain Entities**:
-  - Full serde JSON serialization and deserialization for core Stripe resources: `PaymentIntent`, `CheckoutSession`, `Account`, `Invoice`, `Dispute`, `Event`, and `EventData`.
+  - Full serde JSON serialization and deserialization for core Stripe resources: `PaymentIntent`, `CheckoutSession`, `Account`, `Invoice`, `Dispute`, `Refund`, `Event`, and `EventData`.
   - Type-safe identifiers: `AccountId` (`acct_...`), `IdempotencyKey`, `DisputeId` (`dp_...`).
 - **Disputes Management & Evidence Submission Locking**:
   - Complete 8-status dispute lifecycle state machine (`DisputeStatus`).
@@ -19,14 +19,16 @@ Strongly Typed Domain Models, Events & Request DTOs for [`some-stripe`](https://
   - Evidence submission tracking (`DisputeEvidenceDetails`) with due dates and past-due detection.
   - Submission locking invariants: `Dispute::is_evidence_locked` and `UpdateDisputeParams::is_submission_final` prevent modifying finalized or closed dispute evidence.
 - **Discriminated Event Union & Upcoming Invoice Guard**:
-  - `EventObject` tagged union (`payment_intent`, `checkout.session`, `invoice`, `dispute`, with `#[serde(other)] Unknown` fallback).
+  - `EventObject` tagged union (`payment_intent`, `checkout.session`, `invoice`, `dispute`, `refund`, with `#[serde(other)] Unknown` fallback).
   - `Invoice.id` is typed as `Option<String>` to safely accommodate `invoice.upcoming` preview events where `id` is null on Stripe payloads.
 - **Statutory Financial & PCI-DSS 4.0 Compliance (Gate G-Law)**:
+  - EU Directive 2011/83/EU Article 13 statutory 14-day consumer withdrawal compliance validator (`is_statutory_withdrawal_compliant`).
   - Strict custom `std::fmt::Debug` implementations masking sensitive fields (e.g. `client_secret` in `PaymentIntent`) with `[REDACTED]`.
   - Zero raw PAN or secret retention in formatted error strings and logs.
   - Minor currency integer amounts (`i64` in cents) preventing IEEE 754 floating-point rounding errors (ISO 4217).
 - **Operation-Scoped Request DTOs**:
   - `CreateCheckoutSessionParams`, `CreatePaymentIntentParams`, `CapturePaymentIntentParams`, `CancelPaymentIntentParams`.
+  - `CreateRefundParams`, `UpdateRefundParams`, `CancelRefundParams`, `RefundReason`.
   - Clean separation between immutable domain state and updatable parameters.
 
 ---
@@ -59,3 +61,11 @@ match data.deserialize_object().unwrap() {
     }
     _ => panic!("Expected Invoice"),
 }
+
+// Refund and Statutory 14-Day Consumer Withdrawal (EU Directive 2011/83/EU)
+use some_stripe_types::{Refund, is_statutory_withdrawal_compliant};
+
+let charge_created = 1_700_000_000;
+let refund_requested = charge_created + (7 * 86_400); // 7 days later
+assert!(is_statutory_withdrawal_compliant(5000, 5000, charge_created, refund_requested));
+```
