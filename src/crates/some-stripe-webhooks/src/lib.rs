@@ -42,8 +42,17 @@ pub mod compare;
 pub mod constants;
 pub mod crypto;
 pub mod error;
+pub mod escalation;
 pub mod header;
+pub mod tolerance;
+pub mod v2_events;
 pub mod validation;
+
+pub use escalation::{
+    WebhookEscalationBridge, determine_severity, escalate_webhook_error, is_security_incident,
+};
+pub use tolerance::ToleranceConfig;
+pub use v2_events::{V2RelatedObject, V2ThinEvent, is_thin_event};
 
 pub use compare::safe_constant_time_eq;
 pub use constants::{
@@ -53,6 +62,7 @@ pub use constants::{
 pub use crypto::compute_streaming_hmac_hex;
 pub use error::StripeWebhookError;
 pub use header::{StripeSignatureHeader, parse_signature_header};
+
 use openssl::hash::MessageDigest;
 use openssl::pkey::PKey;
 use openssl::sign::Signer;
@@ -157,6 +167,17 @@ impl Webhook {
         secret: &str,
         tolerance: Option<u64>,
     ) -> Result<bool, StripeWebhookError> {
+        let config = tolerance.map_or_else(ToleranceConfig::default, ToleranceConfig::new);
+        Self::verify_header_with_config(payload, header, secret, &config)
+    }
+
+    /// Verifies the authenticity and recency of an incoming webhook header using a [`ToleranceConfig`].
+    pub fn verify_header_with_config(
+        payload: &[u8],
+        header: &str,
+        secret: &str,
+        config: &ToleranceConfig,
+    ) -> Result<bool, StripeWebhookError> {
         if is_blank_webhook_secret(secret) {
             return Err(StripeWebhookError::BadKey);
         }
@@ -174,24 +195,11 @@ impl Webhook {
         }
 
         let parsed_header = parse_signature_header(header)?;
-        let timestamp = parsed_header.timestamp;
+        let now = chrono::Utc::now().timestamp();
+        config.check_timestamp(parsed_header.timestamp, now)?;
 
-        let tolerance_secs = tolerance.unwrap_or(Self::DEFAULT_TOLERANCE);
-        if tolerance_secs > 0 {
-            let now = chrono::Utc::now().timestamp();
-            // Check past tolerance AND future drift bound (Gate G2)
-            if timestamp < now - (tolerance_secs as i64)
-                || timestamp > now + MAX_FUTURE_DRIFT_SECONDS
-            {
-                return Err(StripeWebhookError::TimestampOutsideTolerance {
-                    timestamp,
-                    now,
-                    tolerance: tolerance_secs,
-                });
-            }
-        }
-
-        let expected_signature = compute_streaming_hmac_hex(secret.as_bytes(), timestamp, payload)?;
+        let expected_signature =
+            compute_streaming_hmac_hex(secret.as_bytes(), parsed_header.timestamp, payload)?;
 
         let matched = parsed_header.signatures.iter().any(|sig| {
             safe_constant_time_eq(
@@ -208,6 +216,18 @@ impl Webhook {
     }
 
     /// Verifies an incoming webhook payload and parses it into a strongly-typed [`Event`].
+    /// Verifies an incoming webhook payload and parses it into a strongly-typed [`V2ThinEvent`].
+    pub fn construct_v2_thin_event(
+        payload: &[u8],
+        sig_header: &str,
+        secret: &str,
+        tolerance: Option<u64>,
+    ) -> Result<V2ThinEvent, StripeWebhookError> {
+        Self::verify_header(payload, sig_header, secret, tolerance)?;
+
+        serde_json::from_slice::<V2ThinEvent>(payload)
+            .map_err(|e| StripeWebhookError::MalformedPayload(e.to_string()))
+    }
     pub fn construct_event(
         payload: &[u8],
         sig_header: &str,
@@ -215,6 +235,19 @@ impl Webhook {
         tolerance: Option<u64>,
     ) -> Result<Event, StripeWebhookError> {
         Self::verify_header(payload, sig_header, secret, tolerance)?;
+
+        serde_json::from_slice::<Event>(payload)
+            .map_err(|e| StripeWebhookError::MalformedPayload(e.to_string()))
+    }
+
+    /// Verifies an incoming webhook payload using a [`ToleranceConfig`] and parses it into a strongly-typed [`Event`].
+    pub fn construct_event_with_config(
+        payload: &[u8],
+        sig_header: &str,
+        secret: &str,
+        config: &ToleranceConfig,
+    ) -> Result<Event, StripeWebhookError> {
+        Self::verify_header_with_config(payload, sig_header, secret, config)?;
 
         serde_json::from_slice::<Event>(payload)
             .map_err(|e| StripeWebhookError::MalformedPayload(e.to_string()))
@@ -233,6 +266,36 @@ impl Webhook {
 }
 
 /// Ergonomic wrapper providing typed accessors over raw webhook [`Event`] instances.
+/// Immutable, timestamped audit record produced upon webhook verification,
+/// satisfying ISO/IEC 27001:2022 Control A.8.15 (Logging and Monitoring).
+///
+/// Holds borrowed string references (`&'a str`) to prevent unnecessary heap allocation
+/// in compliance with Gate G-Borrow zero-clone invariants.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WebhookAuditRecord<'a> {
+    /// Unique identifier of the Stripe event (`evt_...`).
+    pub event_id: &'a str,
+    /// Classification type of the event (e.g., `checkout.session.completed`).
+    pub event_type: &'a str,
+    /// UNIX epoch timestamp when verification succeeded, if verified.
+    pub verified_at: Option<i64>,
+    /// Verification status indicator (`"verified"` or `"unverified"`).
+    pub status: &'a str,
+}
+
+impl<'a> WebhookAuditRecord<'a> {
+    /// Returns `true` if this audit record represents a successfully verified event.
+    pub fn is_verified(&self) -> bool {
+        self.status == "verified" && self.verified_at.is_some()
+    }
+}
+
+impl<'a> From<&'a StripeWebhookWrapper> for WebhookAuditRecord<'a> {
+    fn from(wrapper: &'a StripeWebhookWrapper) -> Self {
+        wrapper.audit_record()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct StripeWebhookWrapper {
     /// Parsed event object.
@@ -254,6 +317,18 @@ impl StripeWebhookWrapper {
         Ok(Self::new(event, verified_at))
     }
 
+    /// Constructs a verified wrapper directly using a custom [`ToleranceConfig`].
+    pub fn from_raw_with_config(
+        payload: &[u8],
+        header: &str,
+        secret: &str,
+        config: &ToleranceConfig,
+    ) -> Result<Self, StripeWebhookError> {
+        let event = Webhook::construct_event_with_config(payload, header, secret, config)?;
+        let verified_at = Some(chrono::Utc::now().timestamp());
+        Ok(Self::new(event, verified_at))
+    }
+
     /// Access the event ID string slice.
     pub fn event_id(&self) -> &str {
         &self.event.id
@@ -264,34 +339,46 @@ impl StripeWebhookWrapper {
         Self { event, verified_at }
     }
 
-    /// Extracts the order ID from `/data/object/id`.
-    pub fn order_id(&self) -> Option<String> {
+    /// Produces an immutable, timestamped audit record for this event,
+    /// satisfying ISO/IEC 27001:2022 Control A.8.15.
+    pub fn audit_record(&self) -> WebhookAuditRecord<'_> {
+        WebhookAuditRecord {
+            event_id: &self.event.id,
+            event_type: &self.event.event_type,
+            verified_at: self.verified_at,
+            status: if self.verified_at.is_some() {
+                "verified"
+            } else {
+                "unverified"
+            },
+        }
+    }
+
+    /// Extracts the order ID from `/data/object/id` as a borrowed string slice (Gate G-Borrow zero-clone).
+    pub fn order_id(&self) -> Option<&str> {
         self.event
             .data
             .object
             .pointer("/id")
             .and_then(|v| v.as_str())
-            .map(str::to_string)
     }
 
-    /// Extracts the customer ID from `/data/object/customer`.
-    pub fn customer_id(&self) -> Option<String> {
+    /// Extracts the customer ID from `/data/object/customer` as a borrowed string slice (Gate G-Borrow zero-clone).
+    pub fn customer_id(&self) -> Option<&str> {
         self.event
             .data
             .object
             .pointer("/customer")
             .and_then(|v| v.as_str())
-            .map(str::to_string)
     }
 
-    /// Extracts the PaymentIntent ID from `/data/object/payment_intent`.
-    pub fn payment_intent_id(&self) -> Option<String> {
+    /// Extracts the PaymentIntent ID from `/data/object/payment_intent` as a borrowed string slice (Gate G-Borrow zero-clone).
+    pub fn payment_intent_id(&self) -> Option<&str> {
         self.event
             .data
             .object
             .pointer("/payment_intent")
             .and_then(|v| v.as_str())
-            .map(str::to_string)
     }
 
     /// Checks if the event represents a completed checkout session.
@@ -403,7 +490,7 @@ mod tests {
         assert_eq!(event.event_type, "checkout.session.completed");
 
         let wrapper = StripeWebhookWrapper::new(event, Some(now));
-        assert_eq!(wrapper.order_id().as_deref(), Some("cs_test_123"));
+        assert_eq!(wrapper.order_id(), Some("cs_test_123"));
         assert_eq!(wrapper.amount_total(), Some(5000));
         assert_eq!(wrapper.currency().as_deref(), Some("USD"));
         assert!(wrapper.is_checkout_completed());

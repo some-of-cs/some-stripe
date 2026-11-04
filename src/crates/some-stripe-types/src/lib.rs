@@ -5,9 +5,13 @@
 //!
 //! ## Overview
 //!
-//! - **Domain Entities**: [`PaymentIntent`], [`CheckoutSession`], [`Account`].
-//! - **Event Pipeline**: [`Event`], [`EventData`].
+//! - **Domain Entities**: [`PaymentIntent`], [`CheckoutSession`], [`Account`], [`Invoice`].
+//! - **Event Pipeline**: [`Event`], [`EventData`], [`EventObject`].
 //! - **Strongly Typed Identifiers**: [`AccountId`], [`IdempotencyKey`].
+//! - **Invoice Upcoming Guard**: [`Invoice`] specifies `pub id: Option<String>` to safely accommodate
+//!   `invoice.upcoming` preview events where `id` is null on Stripe wire payloads.
+//! - **Discriminated Event Union**: [`EventObject`] provides seamless enum dispatch across
+//!   `payment_intent`, `checkout.session`, `invoice`, and unknown types via `#[serde(other)]`.
 //! - **PCI-DSS Compliance (Gate G-Law)**: Sensitive credentials like `client_secret` in
 //!   [`PaymentIntent`] are masked as `[REDACTED]` in `Debug` implementations.
 //!
@@ -32,6 +36,30 @@
 //! let pi: PaymentIntent = serde_json::from_str(json).unwrap();
 //! assert_eq!(pi.id, "pi_3Mtw");
 //! assert_eq!(pi.amount, 2000);
+//! ```
+//!
+//! ## Discriminated EventObject Example
+//!
+//! ```
+//! use some_stripe_types::{EventData, EventObject};
+//!
+//! let data = EventData {
+//!     object: serde_json::json!({
+//!         "id": null,
+//!         "object": "invoice",
+//!         "customer": "cus_preview_123",
+//!         "amount_due": 3500
+//!     }),
+//! };
+//!
+//! match data.deserialize_object().unwrap() {
+//!     EventObject::Invoice(inv) => {
+//!         assert!(inv.id.is_none());
+//!         assert_eq!(inv.customer.as_deref(), Some("cus_preview_123"));
+//!         assert_eq!(inv.amount_due, Some(3500));
+//!     }
+//!     _ => panic!("Expected Invoice variant"),
+//! }
 //! ```
 
 use serde::{Deserialize, Serialize};
@@ -293,6 +321,121 @@ fn default_account_object() -> String {
     "account".into()
 }
 
+/// Represents a Stripe Invoice object.
+///
+/// Handles `invoice.upcoming` preview events where `id` is `None` (JSON `null`).
+///
+/// # Example
+/// ```
+/// use some_stripe_types::Invoice;
+///
+/// let json = r#"{
+///     "id": null,
+///     "object": "invoice",
+///     "customer": "cus_test_123",
+///     "amount_due": 4500,
+///     "currency": "usd"
+/// }"#;
+/// let invoice: Invoice = serde_json::from_str(json).unwrap();
+/// assert!(invoice.id.is_none());
+/// assert_eq!(invoice.amount_due, Some(4500));
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Invoice {
+    /// Unique identifier for the invoice (`in_...`).
+    ///
+    /// For upcoming invoice preview events (`invoice.upcoming`), `id` is `None` (JSON `null`).
+    pub id: Option<String>,
+
+    /// Object type, always `invoice`.
+    #[serde(default = "default_invoice_object")]
+    pub object: String,
+
+    /// The ID of the customer who will be billed.
+    pub customer: Option<String>,
+
+    /// Final amount due at this time for this invoice in minor currency units (e.g., cents).
+    pub amount_due: Option<i64>,
+
+    /// The amount, in minor currency units, that was paid.
+    pub amount_paid: Option<i64>,
+
+    /// The difference between amount_due and amount_paid, in minor currency units.
+    pub amount_remaining: Option<i64>,
+
+    /// Total after discounts and taxes in minor currency units.
+    pub total: Option<i64>,
+
+    /// Total of all items before discounts and taxes in minor currency units.
+    pub subtotal: Option<i64>,
+
+    /// Three-letter ISO currency code in lowercase.
+    pub currency: Option<String>,
+
+    /// The status of the invoice: `draft`, `open`, `paid`, `uncollectible`, or `void`.
+    pub status: Option<String>,
+
+    /// Whether payment was successfully made for this invoice.
+    pub paid: Option<bool>,
+
+    /// The ID of the subscription that this invoice was prepared for, if any.
+    pub subscription: Option<String>,
+
+    /// Start of the usage period that this invoice covers (UNIX epoch seconds).
+    pub period_start: Option<i64>,
+
+    /// End of the usage period that this invoice covers (UNIX epoch seconds).
+    pub period_end: Option<i64>,
+
+    /// Time at which the object was created (UNIX epoch seconds).
+    pub created: Option<i64>,
+}
+
+fn default_invoice_object() -> String {
+    "invoice".into()
+}
+
+/// Strongly typed, discriminated union of Stripe event payload objects.
+///
+/// Tagged internally by the `"object"` field in JSON payloads.
+/// Unrecognized or future object types cleanly fall back to [`EventObject::Unknown`]
+/// without deserialization failure or panics.
+///
+/// # Example
+/// ```
+/// use some_stripe_types::EventObject;
+///
+/// let json = r#"{
+///     "id": "pi_test_123",
+///     "object": "payment_intent",
+///     "amount": 2000,
+///     "currency": "usd",
+///     "status": "succeeded"
+/// }"#;
+/// let obj: EventObject = serde_json::from_str(json).unwrap();
+/// match obj {
+///     EventObject::PaymentIntent(pi) => assert_eq!(pi.id, "pi_test_123"),
+///     _ => panic!("Expected PaymentIntent"),
+/// }
+/// ```
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(tag = "object", rename_all = "snake_case")]
+pub enum EventObject {
+    /// Stripe PaymentIntent payload (`object = "payment_intent"`).
+    PaymentIntent(PaymentIntent),
+
+    /// Stripe CheckoutSession payload (`object = "checkout.session"`).
+    #[serde(rename = "checkout.session")]
+    CheckoutSession(CheckoutSession),
+
+    /// Stripe Invoice payload (`object = "invoice"`), including upcoming invoices with null `id`.
+    Invoice(Invoice),
+
+    /// Unrecognized, custom, or unsupported event object types.
+    #[serde(other)]
+    Unknown,
+}
+
 /// Represents a Stripe Webhook Event object.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Event {
@@ -317,6 +460,37 @@ pub struct Event {
     pub data: EventData,
 }
 
+impl Event {
+    /// Deserializes the inner event data payload into a strongly typed [`EventObject`] discriminated union.
+    ///
+    /// # Example
+    /// ```
+    /// use some_stripe_types::{Event, EventData, EventObject};
+    ///
+    /// let event = Event {
+    ///     id: "evt_test".into(),
+    ///     object: "event".into(),
+    ///     api_version: None,
+    ///     created: 1728345600,
+    ///     event_type: "invoice.upcoming".into(),
+    ///     data: EventData {
+    ///         object: serde_json::json!({
+    ///             "id": null,
+    ///             "object": "invoice",
+    ///             "customer": "cus_123"
+    ///         }),
+    ///     },
+    /// };
+    /// match event.deserialize_object().unwrap() {
+    ///     EventObject::Invoice(inv) => assert!(inv.id.is_none()),
+    ///     _ => panic!("Expected Invoice"),
+    /// }
+    /// ```
+    pub fn deserialize_object(&self) -> Result<EventObject, serde_json::Error> {
+        self.data.deserialize_object()
+    }
+}
+
 fn default_event_object() -> String {
     "event".into()
 }
@@ -324,8 +498,42 @@ fn default_event_object() -> String {
 /// Container for the data object payload of an Event.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct EventData {
-    /// Raw JSON object containing the payload (e.g. CheckoutSession or PaymentIntent).
+    /// Raw JSON object containing the payload (e.g. CheckoutSession, PaymentIntent, or Invoice).
     pub object: serde_json::Value,
+}
+
+impl EventData {
+    /// Deserializes the inner raw JSON `object` into a strongly typed [`EventObject`] discriminated union.
+    ///
+    /// Handles `checkout.session`, `payment_intent`, and `invoice` (including `invoice.upcoming`
+    /// where `id` is null). Unrecognized or future object types cleanly deserialize into
+    /// [`EventObject::Unknown`] without error or panic.
+    ///
+    /// # Errors
+    /// Returns `Err(serde_json::Error)` if the payload cannot be parsed as an [`EventObject`].
+    ///
+    /// # Example
+    /// ```
+    /// use some_stripe_types::{EventData, EventObject};
+    ///
+    /// let data = EventData {
+    ///     object: serde_json::json!({
+    ///         "id": null,
+    ///         "object": "invoice",
+    ///         "amount_due": 1200
+    ///     }),
+    /// };
+    /// match data.deserialize_object().unwrap() {
+    ///     EventObject::Invoice(inv) => {
+    ///         assert!(inv.id.is_none());
+    ///         assert_eq!(inv.amount_due, Some(1200));
+    ///     }
+    ///     _ => panic!("Expected Invoice"),
+    /// }
+    /// ```
+    pub fn deserialize_object(&self) -> Result<EventObject, serde_json::Error> {
+        EventObject::deserialize(&self.object)
+    }
 }
 
 #[cfg(test)]
@@ -351,5 +559,166 @@ mod tests {
         let debug_str = format!("{pi:?}");
         assert!(debug_str.contains("[REDACTED]"));
         assert!(!debug_str.contains("xyzSuperSecretToken"));
+    }
+
+    #[test]
+    fn test_event_object_checkout_session() {
+        let json = serde_json::json!({
+            "id": "cs_test_session_456",
+            "object": "checkout.session",
+            "status": "complete",
+            "payment_status": "paid",
+            "amount_total": 4500,
+            "currency": "usd"
+        });
+
+        let data = EventData { object: json };
+        let obj = data
+            .deserialize_object()
+            .expect("Failed to deserialize checkout session");
+
+        match obj {
+            EventObject::CheckoutSession(cs) => {
+                assert_eq!(cs.id, "cs_test_session_456");
+                assert_eq!(cs.status.as_deref(), Some("complete"));
+                assert_eq!(cs.payment_status.as_deref(), Some("paid"));
+                assert_eq!(cs.amount_total, Some(4500));
+                assert_eq!(cs.currency.as_deref(), Some("usd"));
+            }
+            other => panic!("Expected CheckoutSession variant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_event_object_payment_intent() {
+        let json = serde_json::json!({
+            "id": "pi_test_intent_789",
+            "object": "payment_intent",
+            "amount": 9000,
+            "currency": "eur",
+            "status": "succeeded"
+        });
+
+        let data = EventData { object: json };
+        let obj = data
+            .deserialize_object()
+            .expect("Failed to deserialize payment intent");
+
+        match obj {
+            EventObject::PaymentIntent(pi) => {
+                assert_eq!(pi.id, "pi_test_intent_789");
+                assert_eq!(pi.amount, 9000);
+                assert_eq!(pi.currency, "eur");
+                assert_eq!(pi.status, "succeeded");
+            }
+            other => panic!("Expected PaymentIntent variant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_event_object_invoice_upcoming_null_id() {
+        let json = serde_json::json!({
+            "id": null,
+            "object": "invoice",
+            "customer": "cus_upcoming_user",
+            "amount_due": 1999,
+            "currency": "usd",
+            "status": "draft"
+        });
+
+        let data = EventData { object: json };
+        let obj = data
+            .deserialize_object()
+            .expect("Failed to deserialize invoice.upcoming with null id");
+
+        match obj {
+            EventObject::Invoice(inv) => {
+                assert!(inv.id.is_none(), "Upcoming invoice id must be None");
+                assert_eq!(inv.object, "invoice");
+                assert_eq!(inv.customer.as_deref(), Some("cus_upcoming_user"));
+                assert_eq!(inv.amount_due, Some(1999));
+                assert_eq!(inv.currency.as_deref(), Some("usd"));
+                assert_eq!(inv.status.as_deref(), Some("draft"));
+            }
+            other => panic!("Expected Invoice variant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_event_object_invoice_with_id() {
+        let json = serde_json::json!({
+            "id": "in_finalized_123",
+            "object": "invoice",
+            "customer": "cus_customer_123",
+            "amount_due": 5000,
+            "amount_paid": 5000,
+            "amount_remaining": 0,
+            "currency": "usd",
+            "status": "paid"
+        });
+
+        let data = EventData { object: json };
+        let obj = data
+            .deserialize_object()
+            .expect("Failed to deserialize finalized invoice");
+
+        match obj {
+            EventObject::Invoice(inv) => {
+                assert_eq!(inv.id.as_deref(), Some("in_finalized_123"));
+                assert_eq!(inv.amount_due, Some(5000));
+                assert_eq!(inv.amount_paid, Some(5000));
+                assert_eq!(inv.amount_remaining, Some(0));
+                assert_eq!(inv.status.as_deref(), Some("paid"));
+            }
+            other => panic!("Expected Invoice variant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_event_object_unrecognized_fallback_to_unknown() {
+        let json = serde_json::json!({
+            "id": "ch_custom_charge_456",
+            "object": "charge",
+            "amount": 2500,
+            "currency": "usd"
+        });
+
+        let data = EventData { object: json };
+        let obj = data
+            .deserialize_object()
+            .expect("Should cleanly fall back to EventObject::Unknown");
+
+        assert!(matches!(obj, EventObject::Unknown));
+    }
+
+    #[test]
+    fn test_event_deserialize_object_passthrough() {
+        let event = Event {
+            id: "evt_123".into(),
+            object: "event".into(),
+            api_version: Some("2024-06-20".into()),
+            created: 1728345600,
+            event_type: "invoice.upcoming".into(),
+            data: EventData {
+                object: serde_json::json!({
+                    "id": null,
+                    "object": "invoice",
+                    "customer": "cus_pass_777",
+                    "amount_due": 1200
+                }),
+            },
+        };
+
+        let obj = event
+            .deserialize_object()
+            .expect("Event::deserialize_object failed");
+        match obj {
+            EventObject::Invoice(inv) => {
+                assert!(inv.id.is_none());
+                assert_eq!(inv.customer.as_deref(), Some("cus_pass_777"));
+                assert_eq!(inv.amount_due, Some(1200));
+            }
+            other => panic!("Expected Invoice variant, got {other:?}"),
+        }
     }
 }
