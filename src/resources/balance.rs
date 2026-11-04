@@ -2,11 +2,7 @@
 
 use some_stripe_core::patterns::pagination::Paginator;
 use some_stripe_core::{StripeClient, StripeError};
-use some_stripe_types::{Balance, BalanceTransaction};
-
-fn balance_transaction_id_extractor(txn: &BalanceTransaction) -> &str {
-    txn.id.as_str()
-}
+use some_stripe_types::{Balance, BalanceTransaction, balance_transaction_id};
 
 /// Resource for inspecting the merchant's account balance (`stripe.balance`).
 #[derive(Clone, Copy)]
@@ -58,7 +54,7 @@ impl<'a> BalanceTransactionsResource<'a> {
             self.client,
             "v1/balance_transactions",
             limit.unwrap_or(10),
-            balance_transaction_id_extractor,
+            balance_transaction_id,
         )
     }
 }

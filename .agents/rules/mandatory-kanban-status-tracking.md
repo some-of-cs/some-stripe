@@ -38,12 +38,12 @@ Every subagent (Unit Implementer, Story Leader, Module Leader) assigned to any t
      - Move its task line under the `in_progress` column.
      - In the Task Allocation table, change its status from `📋 Ready` to `🔄 In Progress`.
 2. **Phase 2: PR Creation (`in_progress` $\to$ `review`)**:
-   - Immediately after running `gh pr create`, the agent MUST edit `KANBAN.md`:
+   - Immediately after `Git Workflow Master` (Skills: `antigravity-guide`, `stripe-best-practices`) opens the PR via `gh pr create`, the agent or `Git Workflow Master` MUST edit `KANBAN.md`:
      - Move its task line under the `review` column.
      - Update the `ticket` metadata with the GitHub PR number (e.g. `@{ ticket: '50', assigned: 'agent-a', priority: 'High' }`).
      - In the Task Allocation table, change status to `🔍 PR #XX Open` with the clickable PR link.
 3. **Phase 3: PR Merged (`review` $\to$ `done`)**:
-   - Once the pull request passes gatekeeper review and is merged over GitHub CLI/API (`gh pr merge` / GitHub API), the agent MUST edit `KANBAN.md`:
+   - Once the pull request passes gatekeeper review and `Git Workflow Master` (Skills: `antigravity-guide`, `stripe-best-practices`) merges it over GitHub CLI (`gh pr merge <PR> --merge`), the agent or `Git Workflow Master` MUST edit `KANBAN.md`:
      - Move its task line under the `done` column.
      - In the Task Allocation table, change status to `✅ Merged (commit: <sha>)`.
 

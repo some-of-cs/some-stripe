@@ -52,7 +52,7 @@ Every agent working at any tier (Level 3 Unit, Level 2 Story, Level 1 Module, or
 - Reports MUST be committed to Git so they persist permanently in repository history.
 
 ### 3. Mandatory PR Body Attachment Invariant
-When opening ANY pull request on GitHub (`gh pr create` / `gh pr edit`), the agent MUST directly embed the full report into the PR body or attach it as a primary audit comment.
+When opening ANY pull request on GitHub (`gh pr create` / `gh pr edit`), `Git Workflow Master` (Skills: `antigravity-guide`, `stripe-best-practices`) MUST directly embed the implementer's full execution report into the PR body or attach it as a primary audit comment.
 The attached PR report MUST include:
 - Scope and architectural deliverables.
 - Complete inventory of created and modified files.

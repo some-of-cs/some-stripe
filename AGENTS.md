@@ -44,8 +44,11 @@ Welcome to the **`some-stripe`** workspace. All AI agents, contributors, and aut
    - GDPR Article 15/17 consumer data rights and ISO 4217 minor currency unit arithmetic.
 
 7. **[Multi-Agent Divide-and-Conquer PR Lifecycle & Merge Protocol](.agents/rules/divide-and-conquer-pr-workflow.md)**:
-   - **Mandatory `.worktrees/` Directory Invariant**: All agents MUST work strictly inside the `.worktrees/` folder in this directory (`/workspaces/some-stripe/.worktrees/<branch-sanitized-name>`). Direct code modification on `main` or at the repository root is strictly prohibited.
-   - **Strict Bottom-Up PR Creation Order**: Level 3 micro-units (Unit 1 -> 5) MUST be implemented, verified, committed, pushed, and have their GitHub PR opened (`gh pr create`) BEFORE the Level 2 User Story PR is opened. Never open a parent story/module PR before child unit PRs exist.
+   - **Mandatory Git, Worktree & GitHub Lifecycle Subagent (`Git Workflow Master`)**:
+     - All operations involving Git repositories, worktrees, branches, and GitHub CLI across all tiers MUST be managed and executed by the specialized subagent **`Git Workflow Master`** ([`.agents/agents/engineering-git-workflow-master.md`](.agents/agents/engineering-git-workflow-master.md)) paired with mandatory skills `antigravity-guide` and `stripe-best-practices`.
+     - Implementers write and verify code locally, then hand off to `Git Workflow Master` (Skills: `antigravity-guide`, `stripe-best-practices`) to stage atomic conventional commits, set up upstream tracking (`git push -u origin <branch>`), author GitHub Pull Requests (`gh pr create`), and execute cascading promotion merges (`gh pr merge`).
+   - **Mandatory `.worktrees/` Directory Invariant**: All agents MUST work strictly inside the `.worktrees/` folder in this directory (`/workspaces/some-stripe/.worktrees/<branch-sanitized-name>`). Direct code modification on `main` or at the repository root is strictly prohibited. Worktrees are provisioned and pruned exclusively by `Git Workflow Master` (Skills: `antigravity-guide`, `stripe-best-practices`).
+   - **Strict Bottom-Up PR Creation Order**: Level 3 micro-units (Unit 1 -> 5) MUST be implemented, verified, committed, pushed, and have their GitHub PR opened (`gh pr create`) by `Git Workflow Master` (Skills: `antigravity-guide`, `stripe-best-practices`) BEFORE the Level 2 User Story PR is opened. Never open a parent story/module PR before child unit PRs exist.
    - **Mandatory Branch & PR Naming with Explicit Unit Number**:
      - **Micro-Unit Branches**: MUST strictly match `feat/us-x.y.0/unit-N-<scope>` (e.g. `feat/us-4.1.0/unit-1-session-line-item-entities`).
      - **Micro-Unit PR Titles**: MUST strictly match `feat(us-x.y.0/unit-N): <summary>` (e.g. `feat(us-4.1.0/unit-1): checkout session and line item domain entities`). Never omit the `/unit-N` from the PR title.
@@ -54,16 +57,16 @@ Welcome to the **`some-stripe`** workspace. All AI agents, contributors, and aut
    - **Multi-Tier Merge & Validation Workflow (Strictly via `gh pr merge`)**:
      - **All tier merges MUST happen over GitHub using GitHub CLI (`gh pr merge`)**. Local `git merge` commands across promotion tiers are strictly prohibited.
      - **Mandatory Pre-Merge Review Sign-Off (Gates G-Review, G2, G-Borrow)**: Before calling `gh pr merge` on ANY pull request (unit, story, or module), an explicit code review and security validation must be executed and approved by an independent `Code Reviewer` subagent via `gh pr comment <PR> --body '### Gate G-Review Approval...'`. Merging without documented independent quality gate review is strictly prohibited. Self-approval by the authoring implementer is rejected.
-     1. Run tests over all 5 Level 3 units in a user story -> review & approve -> merge units into the story branch via `gh pr merge <PR> --merge`.
-     2. Pull updated story branch, run story integration and contract wire tests -> review & approve -> merge user story PRs into the module branch via `gh pr merge <PR> --merge`.
-     3. Pull updated module branch, run workspace-wide test suite (`cargo test --workspace`) and quality gates -> review & approve -> merge the module PR into `main` via `gh pr merge <PR> --merge`.
+     1. Run tests over all 5 Level 3 units in a user story -> review & approve -> `Git Workflow Master` (Skills: `antigravity-guide`, `stripe-best-practices`) merges units into the story branch via `gh pr merge <PR> --merge`.
+     2. Pull updated story branch, run story integration and contract wire tests -> review & approve -> `Git Workflow Master` (Skills: `antigravity-guide`, `stripe-best-practices`) merges user story PRs into the module branch via `gh pr merge <PR> --merge`.
+     3. Pull updated module branch, run workspace-wide test suite (`cargo test --workspace`) and quality gates -> review & approve -> `Git Workflow Master` (Skills: `antigravity-guide`, `stripe-best-practices`) merges the module PR into `main` via `gh pr merge <PR> --merge`.
    - **Streaming Pipelined PR Creation & Ordered Cascading Merge Queue**:
      - Subagents MUST be granted full read, write, and command execution tools (`EnableWriteTools: true`).
-     - As soon as each micro-unit finishes implementation and local tests, it MUST immediately push and open its GitHub PR (`gh pr create`) without waiting for other units.
+     - As soon as each micro-unit finishes implementation and local tests, `Git Workflow Master` (Skills: `antigravity-guide`, `stripe-best-practices`) MUST immediately commit, push, and open its GitHub PR (`gh pr create`) without waiting for other units.
      - Merges MUST follow the strict sequential dependency order ($1 \to 2 \to 3 \to 4 \to 5$):
-       - Unit 1 merges into the story branch immediately upon completion and gate review.
-       - Unit 2 waits for Unit 1 to merge, then pulls/merges the updated story branch, runs full validation (`cargo test`, `cargo clippy`, `cargo fmt`), passes gate review, and merges into the story branch.
-       - Unit 3 waits for Unit 2 to merge, updates against the story branch, validates, and merges.
+       - Unit 1 merges into the story branch immediately upon completion and gate review via `Git Workflow Master`.
+       - Unit 2 waits for Unit 1 to merge, then pulls/merges the updated story branch, runs full validation (`cargo test`, `cargo clippy`, `cargo fmt`), passes gate review, and `Git Workflow Master` merges it into the story branch.
+       - Unit 3 waits for Unit 2 to merge, updates against the story branch, validates, and `Git Workflow Master` merges it.
        - Units 4 and 5 follow the exact same cascading merge sequence.
        - The same streaming pipeline and cascading merge applies for User Story PRs into the Module branch.
    - **Multi-Profile Round-Robin**: Tasks MUST be actively distributed across all 3 profiles (`agent-a`, `agent-b`, `agent-c`) to split the API quota and prevent single-account billing concentration.
@@ -131,8 +134,8 @@ Profiles are **universal agent generators** tied to independent billing accounts
     - **`microkernel-architect`** (Skills: `stripe-docs`, `stripe-best-practices`): Audits Gate G3 (lean microkernel architecture, progressive Cargo features, dual-protocol serializers).
     - **`Technical Writer`** (Skill: `stripe-docs`): Audits Gate G-Docs (`cargo test --doc`, crate README.md).
     - **`Code Reviewer`** (Skills: `security-audit`, `stripe-best-practices`): Council President for Gate G-Review sign-off.
-    - **`Git Workflow Master`**: Worktree orchestration, branching discipline, cascading merge resolution.
-    - **`DevOps Automator`**: Cargo target cache (`CARGO_TARGET_DIR`), CI/CD pipeline management.
+    - **`Git Workflow Master`** (Skills: `antigravity-guide`, `stripe-best-practices`): Mandatory manager for all Git and GitHub operations across all tiers—including worktree provisioning/pruning (`git worktree add`/`remove`), branch creation, atomic conventional commits, remote tracking (`git push -u`), GitHub PR creation (`gh pr create` with strict unit naming), and cascading promotion merges (`gh pr merge`).
+    - **`DevOps Automator`** (Skills: `antigravity-guide`, `stripe-best-practices`): Cargo target cache (`CARGO_TARGET_DIR`), CI/CD pipeline management.
   - Tasks and gatekeeper reviews must be dispatched across the 3 profile generators in a round-robin / quota-balanced manner to evenly split the quota bill.
 - **Hierarchical Validation & Merge Pipeline**:
   - `Units (1..5) Tested` -> `Merge to Story Branch` -> `Story Integration Validated` -> `Merge to Module Branch` -> `Full Workspace Validated` -> `Merge to Main`.

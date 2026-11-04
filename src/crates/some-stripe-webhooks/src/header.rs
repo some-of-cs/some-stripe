@@ -119,6 +119,10 @@ pub fn parse_signature_header<'a>(
         }
 
         if let Some(t_val) = token.strip_prefix("t=") {
+            if timestamp.is_some() {
+                // Reject duplicate timestamp declarations to prevent HTTP parameter pollution or drift bypass
+                return Err(StripeWebhookError::InvalidTimestamp);
+            }
             let t_str = t_val.trim();
             match t_str.parse::<i64>() {
                 Ok(ts) => timestamp = Some(ts),
@@ -255,5 +259,12 @@ mod tests {
             sig_ptr >= raw_ptr_start && sig_ptr < raw_ptr_end,
             "Signature slice must be borrowed directly from the input header buffer"
         );
+    }
+
+    #[test]
+    fn test_rejects_duplicate_timestamp_header() {
+        let raw = "t=1728345600,v1=valid_v1_sig,t=1728345700";
+        let err = parse_signature_header(raw).expect_err("must reject duplicate t= tokens");
+        assert_eq!(err, StripeWebhookError::InvalidTimestamp);
     }
 }
