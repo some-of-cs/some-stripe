@@ -53,17 +53,17 @@ config:
 ---
 kanban
   todo[📋 Backlog / Ready]
-    u411[Unit 1: CheckoutSession & LineItem Entities]@{ ticket: 'unit-1', assigned: 'agent-a', priority: 'High' }
-    u412[Unit 2: CreateCheckoutSessionParams Builder & Bracket Serde]@{ ticket: 'unit-2', assigned: 'agent-b', priority: 'High' }
-    u413[Unit 3: SessionsResource CRUD & Expire Endpoint]@{ ticket: 'unit-3', assigned: 'agent-c', priority: 'High' }
-    u414[Unit 4: Async Payment Fulfillment Guard & Open Redirect Protection]@{ ticket: 'unit-4', assigned: 'agent-a', priority: 'High' }
-    u415[Unit 5: Gate G-Borrow Audit, Doctests & Mock Suite]@{ ticket: 'unit-5', assigned: 'agent-b', priority: 'High' }
-    s41_pr[US-4.1.0 Story Integration Review & Promotion PR to Module]@{ ticket: 'feat/us-4.1.0-checkout-sessions', assigned: 'agent-b', priority: 'Very High' }
+    s41_pr[US-4.1.0 Story Integration Review & Promotion PR to Module]@{ ticket: 'feat/us-4.1.0-checkout-sessions', assigned: 'agent-a', priority: 'Very High' }
   spawning[🤖 Subagent Creating]
-    s41_spawn[Spawn Units 1..5 Implementers across Worktrees]@{ ticket: 'feat/us-4.1.0-checkout-sessions', assigned: 'agent-b', priority: 'Very High' }
+    s41_spawn[Spawn Units 1..5 Implementers across Worktrees]@{ ticket: 'feat/us-4.1.0-checkout-sessions', assigned: 'agent-a', priority: 'Very High' }
   in_progress[🔄 Units In Progress]
+    u412[Unit 2: CreateCheckoutSessionParams Builder & Bracket Serde]@{ ticket: 'unit-2', assigned: 'agent-a', priority: 'High' }
+    u413[Unit 3: SessionsResource CRUD & Expire Endpoint]@{ ticket: 'unit-3', assigned: 'agent-a', priority: 'High' }
+    u414[Unit 4: Async Payment Fulfillment Guard & Open Redirect Protection]@{ ticket: 'unit-4', assigned: 'agent-a', priority: 'High' }
+    u415[Unit 5: Gate G-Borrow Audit, Doctests & Mock Suite]@{ ticket: 'unit-5', assigned: 'agent-a', priority: 'High' }
   review[🔍 PR Open / Gate Review]
   done[✅ Merged into Story]
+    u411[Unit 1: CheckoutSession & LineItem Entities]@{ ticket: '53', assigned: 'agent-a', priority: 'High' }
 ```
 
 ---
@@ -80,17 +80,17 @@ config:
 ---
 kanban
   todo[📋 Backlog / Ready]
-    u421[Unit 1: PaymentLink Domain Entity & Status State Machine]@{ ticket: 'unit-1', assigned: 'agent-c', priority: 'High' }
-    u422[Unit 2: CreatePaymentLinkParams & Multi-Currency Schemas]@{ ticket: 'unit-2', assigned: 'agent-a', priority: 'High' }
-    u423[Unit 3: PaymentLinksResource CRUD & Line Items]@{ ticket: 'unit-3', assigned: 'agent-b', priority: 'High' }
-    u424[Unit 4: EU Omnibus Directive 2019/2161 Price Wire Mock Suite]@{ ticket: 'unit-4', assigned: 'agent-c', priority: 'High' }
-    u425[Unit 5: Gate G-Borrow Audit, Doctests & Reconciliation Guide]@{ ticket: 'unit-5', assigned: 'agent-a', priority: 'High' }
-    s42_pr[US-4.2.0 Story Integration Review & Promotion PR to Module]@{ ticket: 'feat/us-4.2.0-payment-links', assigned: 'agent-c', priority: 'Very High' }
+    s42_pr[US-4.2.0 Story Integration Review & Promotion PR to Module]@{ ticket: 'feat/us-4.2.0-payment-links', assigned: 'agent-a', priority: 'Very High' }
   spawning[🤖 Subagent Creating]
-    s42_spawn[Spawn Units 1..5 Implementers across Worktrees]@{ ticket: 'feat/us-4.2.0-payment-links', assigned: 'agent-c', priority: 'Very High' }
+    s42_spawn[Spawn Units 1..5 Implementers across Worktrees]@{ ticket: 'feat/us-4.2.0-payment-links', assigned: 'agent-a', priority: 'Very High' }
   in_progress[🔄 Units In Progress]
+    u422[Unit 2: CreatePaymentLinkParams & Multi-Currency Schemas]@{ ticket: 'unit-2', assigned: 'agent-a', priority: 'High' }
+    u423[Unit 3: PaymentLinksResource CRUD & Line Items]@{ ticket: 'unit-3', assigned: 'agent-a', priority: 'High' }
+    u424[Unit 4: EU Omnibus Directive 2019/2161 Price Wire Mock Suite]@{ ticket: 'unit-4', assigned: 'agent-a', priority: 'High' }
+    u425[Unit 5: Gate G-Borrow Audit, Doctests & Reconciliation Guide]@{ ticket: 'unit-5', assigned: 'agent-a', priority: 'High' }
   review[🔍 PR Open / Gate Review]
   done[✅ Merged into Story]
+    u421[Unit 1: PaymentLink Domain Entity & Status State Machine]@{ ticket: '54', assigned: 'agent-a', priority: 'High' }
 ```
 
 ---
@@ -100,17 +100,17 @@ kanban
 | Task ID | Level | Mandatory PR Title Format | Implementer & Profile | Implementer Skill | Gatekeeper Subagents | Gatekeeper Skills | Worktree Directory | Branch | Status |
 | :--- | :---: | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :---: |
 | **M4-SETUP** | Module | `N/A (Baseline Commit)` | `Supervisor` (`agent-a`) | `agy-customizations` | `Main Supervisor Watchdog` | `antigravity-guide` | `.worktrees/feat-module-4-checkout-and-links` | `feat/module-4-checkout-and-links` | ✅ Done |
-| **M4-SPAWN** | Module | `N/A (Agent Dispatch)` | `Module 4 Lead` (`agent-a`) | `stripe-best-practices` | `Main Supervisor Watchdog` | `antigravity-guide` | `.worktrees/feat-module-4-checkout-and-links` | `feat/module-4-checkout-and-links` | 🤖 Spawning |
-| **U-4.1.0-1** | Unit | `feat(us-4.1.0/unit-1): checkout session and line item domain entities` | `Entity Specialist` (`agent-a`) | `stripe-docs` | `Rust Refactoring Specialist`<br>`Code Reviewer` | `upgrade-stripe`<br>`security-audit` | `.worktrees/feat-us-410-unit-1-session-line-item-entities` | `feat/us-4.1.0/unit-1-session-line-item-entities` | 📋 Ready |
-| **U-4.1.0-2** | Unit | `feat(us-4.1.0/unit-2): create checkout session parameter schemas and bracket notation` | `Schema Specialist` (`agent-b`) | `stripe-docs`<br>`stripe-best-practices` | `microkernel-architect`<br>`Code Reviewer` | `stripe-docs`<br>`stripe-best-practices` | `.worktrees/feat-us-410-unit-2-params-and-bracket-serialization` | `feat/us-4.1.0/unit-2-params-and-bracket-serialization` | 📋 Ready |
-| **U-4.1.0-3** | Unit | `feat(us-4.1.0/unit-3): sessions resource crud and session expire endpoint` | `CRUD Implementer` (`agent-c`) | `stripe-docs`<br>`stripe-best-practices` | `API Tester`<br>`Code Reviewer` | `stripe-docs`<br>`stripe-best-practices` | `.worktrees/feat-us-410-unit-3-sessions-resource-crud` | `feat/us-4.1.0/unit-3-sessions-resource-crud` | 📋 Ready |
-| **U-4.1.0-4** | Unit | `feat(us-4.1.0/unit-4): async payment fulfillment deferral and open redirect guard` | `AppSec Engineer` (`agent-a`) | `security-audit`<br>`stripe-best-practices` | `Application Security Engineer`<br>`Code Reviewer` | `security-audit`<br>`stripe-best-practices` | `.worktrees/feat-us-410-unit-4-async-fulfillment-wire-tests` | `feat/us-4.1.0/unit-4-async-fulfillment-wire-tests` | 📋 Ready |
-| **U-4.1.0-5** | Unit | `feat(us-4.1.0/unit-5): gate g-borrow zero-clone audit, doctests and mock test suite` | `QA Specialist` (`agent-b`) | `stripe-docs` | `Rust Refactoring Specialist`<br>`Technical Writer`<br>`Code Reviewer` | `upgrade-stripe`<br>`stripe-docs`<br>`security-audit` | `.worktrees/feat-us-410-unit-5-borrow-audit-and-doctests` | `feat/us-4.1.0/unit-5-borrow-audit-and-doctests` | 📋 Ready |
-| **US-4.1.0** | Story | `feat(us-4.1.0): hosted checkout sessions & line items (Units 1..5 Promotion)` | `US-4.1.0 Story Lead` (`agent-b`) | `stripe-best-practices` | `API Tester`<br>`microkernel-architect`<br>`Code Reviewer` | `stripe-docs`<br>`stripe-best-practices`<br>`security-audit` | `.worktrees/feat-us-410-checkout-sessions` | `feat/us-4.1.0-checkout-sessions` | 📋 Ready |
-| **U-4.2.0-1** | Unit | `feat(us-4.2.0/unit-1): payment link domain entities and status state machine` | `Entity Specialist` (`agent-c`) | `stripe-docs` | `Rust Refactoring Specialist`<br>`Code Reviewer` | `upgrade-stripe`<br>`security-audit` | `.worktrees/feat-us-420-unit-1-payment-link-entities` | `feat/us-4.2.0/unit-1-payment-link-entities` | 📋 Ready |
-| **U-4.2.0-2** | Unit | `feat(us-4.2.0/unit-2): create payment link params and multi-currency schemas` | `Schema Specialist` (`agent-a`) | `stripe-docs`<br>`stripe-best-practices` | `microkernel-architect`<br>`Code Reviewer` | `stripe-docs`<br>`stripe-best-practices` | `.worktrees/feat-us-420-unit-2-payment-link-params` | `feat/us-4.2.0/unit-2-payment-link-params` | 📋 Ready |
-| **U-4.2.0-3** | Unit | `feat(us-4.2.0/unit-3): payment links resource crud and line item listing` | `CRUD Implementer` (`agent-b`) | `stripe-docs`<br>`stripe-best-practices` | `API Tester`<br>`Code Reviewer` | `stripe-docs`<br>`stripe-best-practices` | `.worktrees/feat-us-420-unit-3-payment-links-resource-crud` | `feat/us-4.2.0/unit-3-payment-links-resource-crud` | 📋 Ready |
-| **U-4.2.0-4** | Unit | `feat(us-4.2.0/unit-4): eu omnibus directive 2019/2161 price wire mock suite` | `AppSec Engineer` (`agent-c`) | `security-audit`<br>`stripe-best-practices` | `Application Security Engineer`<br>`Code Reviewer` | `security-audit`<br>`stripe-best-practices` | `.worktrees/feat-us-420-unit-4-omnibus-price-wire-tests` | `feat/us-4.2.0/unit-4-omnibus-price-wire-tests` | 📋 Ready |
-| **U-4.2.0-5** | Unit | `feat(us-4.2.0/unit-5): gate g-borrow zero-clone audit, doctests and reconciliation guide` | `QA Specialist` (`agent-a`) | `stripe-docs` | `Rust Refactoring Specialist`<br>`Technical Writer`<br>`Code Reviewer` | `upgrade-stripe`<br>`stripe-docs`<br>`security-audit` | `.worktrees/feat-us-420-unit-5-borrow-audit-and-reconciliation` | `feat/us-4.2.0/unit-5-borrow-audit-and-reconciliation` | 📋 Ready |
-| **US-4.2.0** | Story | `feat(us-4.2.0): payment links & price transparency (Units 1..5 Promotion)` | `US-4.2.0 Story Lead` (`agent-c`) | `stripe-best-practices` | `API Tester`<br>`microkernel-architect`<br>`Code Reviewer` | `stripe-docs`<br>`stripe-best-practices`<br>`security-audit` | `.worktrees/feat-us-420-payment-links` | `feat/us-4.2.0-payment-links` | 📋 Ready |
+| **M4-SPAWN** | Module | `N/A (Agent Dispatch)` | `Module 4 Lead` (`agent-a`) | `stripe-best-practices` | `Main Supervisor Watchdog` | `antigravity-guide` | `.worktrees/feat-module-4-checkout-and-links` | `feat/module-4-checkout-and-links` | 🔄 In Progress |
+| **U-4.1.0-1** | Unit | `feat(us-4.1.0/unit-1): checkout session and line item domain entities` | `Entity Specialist` (`agent-a`) | `stripe-docs` | `Rust Refactoring Specialist`<br>`Code Reviewer` | `upgrade-stripe`<br>`security-audit` | `.worktrees/feat-us-410-unit-1-session-line-item-entities` | `feat/us-4.1.0/unit-1-session-line-item-entities` | ✅ Merged ([#53](https://github.com/some-of-cs/some-stripe/pull/53)) |
+| **U-4.1.0-2** | Unit | `feat(us-4.1.0/unit-2): create checkout session parameter schemas and bracket notation` | `Schema Specialist` (`agent-a`) | `stripe-docs`<br>`stripe-best-practices` | `microkernel-architect`<br>`Code Reviewer` | `stripe-docs`<br>`stripe-best-practices` | `.worktrees/feat-us-410-unit-2-params-and-bracket-serialization` | `feat/us-4.1.0/unit-2-params-and-bracket-serialization` | 🔄 In Progress |
+| **U-4.1.0-3** | Unit | `feat(us-4.1.0/unit-3): sessions resource crud and session expire endpoint` | `CRUD Implementer` (`agent-a`) | `stripe-docs`<br>`stripe-best-practices` | `API Tester`<br>`Code Reviewer` | `stripe-docs`<br>`stripe-best-practices` | `.worktrees/feat-us-410-unit-3-sessions-resource-crud` | `feat/us-4.1.0/unit-3-sessions-resource-crud` | 🔄 In Progress |
+| **U-4.1.0-4** | Unit | `feat(us-4.1.0/unit-4): async payment fulfillment deferral and open redirect guard` | `AppSec Engineer` (`agent-a`) | `security-audit`<br>`stripe-best-practices` | `Application Security Engineer`<br>`Code Reviewer` | `security-audit`<br>`stripe-best-practices` | `.worktrees/feat-us-410-unit-4-async-fulfillment-wire-tests` | `feat/us-4.1.0/unit-4-async-fulfillment-wire-tests` | 🔄 In Progress |
+| **U-4.1.0-5** | Unit | `feat(us-4.1.0/unit-5): gate g-borrow zero-clone audit, doctests and mock test suite` | `QA Specialist` (`agent-a`) | `stripe-docs` | `Rust Refactoring Specialist`<br>`Technical Writer`<br>`Code Reviewer` | `upgrade-stripe`<br>`stripe-docs`<br>`security-audit` | `.worktrees/feat-us-410-unit-5-borrow-audit-and-doctests` | `feat/us-4.1.0/unit-5-borrow-audit-and-doctests` | 🔄 In Progress |
+| **US-4.1.0** | Story | `feat(us-4.1.0): hosted checkout sessions & line items (Units 1..5 Promotion)` | `US-4.1.0 Story Lead` (`agent-a`) | `stripe-best-practices` | `API Tester`<br>`microkernel-architect`<br>`Code Reviewer` | `stripe-docs`<br>`stripe-best-practices`<br>`security-audit` | `.worktrees/feat-us-410-checkout-sessions` | `feat/us-4.1.0-checkout-sessions` | 🔄 In Progress |
+| **U-4.2.0-1** | Unit | `feat(us-4.2.0/unit-1): payment link domain entities and status state machine` | `Entity Specialist` (`agent-a`) | `stripe-docs` | `Rust Refactoring Specialist`<br>`Code Reviewer` | `upgrade-stripe`<br>`security-audit` | `.worktrees/feat-us-420-unit-1-payment-link-entities` | `feat/us-4.2.0/unit-1-payment-link-entities` | ✅ Merged ([#54](https://github.com/some-of-cs/some-stripe/pull/54)) |
+| **U-4.2.0-2** | Unit | `feat(us-4.2.0/unit-2): create payment link params and multi-currency schemas` | `Schema Specialist` (`agent-a`) | `stripe-docs`<br>`stripe-best-practices` | `microkernel-architect`<br>`Code Reviewer` | `stripe-docs`<br>`stripe-best-practices` | `.worktrees/feat-us-420-unit-2-payment-link-params` | `feat/us-4.2.0/unit-2-payment-link-params` | 🔄 In Progress |
+| **U-4.2.0-3** | Unit | `feat(us-4.2.0/unit-3): payment links resource crud and line item listing` | `CRUD Implementer` (`agent-a`) | `stripe-docs`<br>`stripe-best-practices` | `API Tester`<br>`Code Reviewer` | `stripe-docs`<br>`stripe-best-practices` | `.worktrees/feat-us-420-unit-3-payment-links-resource-crud` | `feat/us-4.2.0/unit-3-payment-links-resource-crud` | 🔄 In Progress |
+| **U-4.2.0-4** | Unit | `feat(us-4.2.0/unit-4): eu omnibus directive 2019/2161 price wire mock suite` | `AppSec Engineer` (`agent-a`) | `security-audit`<br>`stripe-best-practices` | `Application Security Engineer`<br>`Code Reviewer` | `security-audit`<br>`stripe-best-practices` | `.worktrees/feat-us-420-unit-4-omnibus-price-wire-tests` | `feat/us-4.2.0/unit-4-omnibus-price-wire-tests` | 🔄 In Progress |
+| **U-4.2.0-5** | Unit | `feat(us-4.2.0/unit-5): gate g-borrow zero-clone audit, doctests and reconciliation guide` | `QA Specialist` (`agent-a`) | `stripe-docs` | `Rust Refactoring Specialist`<br>`Technical Writer`<br>`Code Reviewer` | `upgrade-stripe`<br>`stripe-docs`<br>`security-audit` | `.worktrees/feat-us-420-unit-5-borrow-audit-and-reconciliation` | `feat/us-4.2.0/unit-5-borrow-audit-and-reconciliation` | 🔄 In Progress |
+| **US-4.2.0** | Story | `feat(us-4.2.0): payment links & price transparency (Units 1..5 Promotion)` | `US-4.2.0 Story Lead` (`agent-a`) | `stripe-best-practices` | `API Tester`<br>`microkernel-architect`<br>`Code Reviewer` | `stripe-docs`<br>`stripe-best-practices`<br>`security-audit` | `.worktrees/feat-us-420-payment-links` | `feat/us-4.2.0-payment-links` | 🔄 In Progress |
 | **M4-MAIN** | Module | `feat(module-4): hosted checkout and links engine (US-4.1.0 & US-4.2.0 Promotion)` | `Module 4 Lead` (`agent-a`) | `stripe-best-practices` | Full Gatekeeper Council (`Code Reviewer`, `AppSec`, `Rust Specialist`, `API Tester`, `Tech Writer`) | `security-audit`<br>`upgrade-stripe`<br>`stripe-docs`<br>`stripe-best-practices` | `.worktrees/feat-module-4-checkout-and-links` | `feat/module-4-checkout-and-links` | 📋 Ready |
