@@ -7,13 +7,19 @@
 //!
 //! - **Constant-Time Verification**: HMAC-SHA256 signature comparison executed strictly in
 //!   constant time via [`safe_constant_time_eq`] to prevent timing side-channel attacks.
+//! - **Streaming Zero-Allocation HMAC**: Signatures computed via [`compute_streaming_hmac_hex`]
+//!   streaming raw payload slices without heap buffers (Gate G-Borrow).
 //! - **Replay Protection**: Enforces timestamp tolerance (default 300 seconds) and rejects
 //!   excessive future drift (> 60 seconds).
+//! - **Zero-Copy Streaming Header Parser**: Parses `Stripe-Signature` headers with zero heap allocation
+//!   for signature strings, supporting secret rollover with multiple `v1` signatures.
 //! - **Resource Limits**: Incoming payloads are strictly capped at 1 MB ([`MAX_WEBHOOK_PAYLOAD_BYTES`])
 //!   to safeguard against memory exhaustion attacks.
 //! - **Zero-Clone Streaming HMAC (Gate G-Borrow)**: Computes HMAC-SHA256 digests by streaming
 //!   timestamp and payload slices directly into the OpenSSL digest without intermediate heap
 //!   allocations ([`streaming_hmac_sha256_hex`]).
+//! - **Secret Pre-Validation**: Blank or whitespace-only webhook secrets are rejected immediately
+//!   with [`StripeWebhookError::BadKey`] before performing HMAC computations or allocations.
 //!
 //! ## Verification Example
 //!
@@ -32,29 +38,26 @@
 //! assert!(wrapper.is_checkout_completed());
 //! ```
 
+pub mod compare;
+pub mod constants;
+pub mod crypto;
+pub mod error;
+pub mod header;
+pub mod validation;
+
+pub use compare::safe_constant_time_eq;
+pub use constants::{
+    DEFAULT_TOLERANCE_SECONDS, MAX_FUTURE_DRIFT_SECONDS, MAX_WEBHOOK_PAYLOAD_BYTES,
+    TIMESTAMP_PREFIX, V1_SIGNATURE_PREFIX,
+};
+pub use crypto::compute_streaming_hmac_hex;
+pub use error::StripeWebhookError;
+pub use header::{StripeSignatureHeader, parse_signature_header};
 use openssl::hash::MessageDigest;
 use openssl::pkey::PKey;
 use openssl::sign::Signer;
-pub use some_stripe_core::error::StripeWebhookError;
 use some_stripe_types::Event;
-use subtle::ConstantTimeEq;
-
-/// Default timestamp tolerance window in seconds (5 minutes), per the Stripe specification.
-pub const DEFAULT_TOLERANCE_SECONDS: u64 = 300;
-
-/// Maximum future drift tolerance in seconds (Gate G2 / replay protection).
-pub const MAX_FUTURE_DRIFT_SECONDS: i64 = 60;
-
-/// Maximum incoming webhook payload size (1 MB / Gate G2 memory exhaustion guard).
-pub const MAX_WEBHOOK_PAYLOAD_BYTES: usize = 1_048_576;
-
-/// Constant-time slice comparison safe against length mismatches (Gate G2 Invariant 1).
-pub fn safe_constant_time_eq(a: &[u8], b: &[u8]) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    a.ct_eq(b).into()
-}
+pub use validation::is_blank_webhook_secret;
 
 /// Computes HMAC-SHA256 over `data` using `key`, returning the lowercase hexadecimal string.
 pub fn hmac_sha256_hex(key: &[u8], data: &[u8]) -> Option<String> {
@@ -109,42 +112,29 @@ pub fn verify_stripe_signature(
     signature_header: &str,
     webhook_secret: &str,
 ) -> bool {
-    if payload.is_empty()
+    if is_blank_webhook_secret(webhook_secret)
+        || payload.is_empty()
         || payload.len() > MAX_WEBHOOK_PAYLOAD_BYTES
         || signature_header.trim().is_empty()
-        || webhook_secret.trim().is_empty()
     {
         return false;
     }
 
-    let mut timestamp: Option<&str> = None;
-    let mut signatures: Vec<&str> = Vec::new();
-
-    for item in signature_header.split(',') {
-        let item = item.trim();
-        if let Some(t_val) = item.strip_prefix("t=") {
-            timestamp = Some(t_val.trim());
-        } else if let Some(sig_val) = item.strip_prefix("v1=") {
-            signatures.push(sig_val.trim());
-        }
-    }
-
-    let timestamp = match timestamp {
-        Some(t) if !t.is_empty() => t,
-        _ => return false,
+    let parsed_header = match parse_signature_header(signature_header) {
+        Ok(h) => h,
+        Err(_) => return false,
     };
 
-    if signatures.is_empty() {
-        return false;
-    }
+    let expected_hex = match compute_streaming_hmac_hex(
+        webhook_secret.as_bytes(),
+        parsed_header.timestamp,
+        payload,
+    ) {
+        Ok(hex) => hex,
+        Err(_) => return false,
+    };
 
-    let expected_hex =
-        match streaming_hmac_sha256_hex(webhook_secret.as_bytes(), timestamp.as_bytes(), payload) {
-            Some(hex) => hex,
-            None => return false,
-        };
-
-    signatures.iter().any(|sig| {
+    parsed_header.signatures.iter().any(|sig| {
         safe_constant_time_eq(expected_hex.as_bytes(), sig.to_ascii_lowercase().as_bytes())
     })
 }
@@ -158,6 +148,8 @@ impl Webhook {
 
     /// Verifies the authenticity and recency of an incoming webhook header.
     ///
+    /// Rejects blank/whitespace webhook secrets immediately with [`StripeWebhookError::BadKey`]
+    /// prior to allocating buffers or computing cryptographic HMAC signatures.
     /// Operates strictly on borrowed slices using zero-clone streaming HMAC (Gate G-Borrow).
     pub fn verify_header(
         payload: &[u8],
@@ -165,6 +157,9 @@ impl Webhook {
         secret: &str,
         tolerance: Option<u64>,
     ) -> Result<bool, StripeWebhookError> {
+        if is_blank_webhook_secret(secret) {
+            return Err(StripeWebhookError::BadKey);
+        }
         if payload.is_empty() {
             return Err(StripeWebhookError::EmptyPayload);
         }
@@ -177,26 +172,9 @@ impl Webhook {
         if header.trim().is_empty() {
             return Err(StripeWebhookError::MissingSignatureHeader);
         }
-        if secret.trim().is_empty() {
-            return Err(StripeWebhookError::MissingSecret);
-        }
 
-        let mut timestamp: Option<i64> = None;
-        let mut signatures: Vec<&str> = Vec::new();
-
-        for item in header.split(',') {
-            let item = item.trim();
-            if let Some(t_val) = item.strip_prefix("t=") {
-                timestamp = t_val.parse::<i64>().ok();
-            } else if let Some(sig_val) = item.strip_prefix("v1=") {
-                signatures.push(sig_val.trim());
-            }
-        }
-
-        let timestamp = timestamp.ok_or(StripeWebhookError::InvalidTimestamp)?;
-        if signatures.is_empty() {
-            return Err(StripeWebhookError::MissingSignature);
-        }
+        let parsed_header = parse_signature_header(header)?;
+        let timestamp = parsed_header.timestamp;
 
         let tolerance_secs = tolerance.unwrap_or(Self::DEFAULT_TOLERANCE);
         if tolerance_secs > 0 {
@@ -213,12 +191,9 @@ impl Webhook {
             }
         }
 
-        let ts_str = timestamp.to_string();
-        let expected_signature =
-            streaming_hmac_sha256_hex(secret.as_bytes(), ts_str.as_bytes(), payload)
-                .ok_or(StripeWebhookError::BadSignature)?;
+        let expected_signature = compute_streaming_hmac_hex(secret.as_bytes(), timestamp, payload)?;
 
-        let matched = signatures.iter().any(|sig| {
+        let matched = parsed_header.signatures.iter().any(|sig| {
             safe_constant_time_eq(
                 expected_signature.as_bytes(),
                 sig.to_ascii_lowercase().as_bytes(),
@@ -252,11 +227,8 @@ impl Webhook {
         timestamp: Option<i64>,
     ) -> String {
         let ts = timestamp.unwrap_or_else(|| chrono::Utc::now().timestamp());
-        let ts_str = ts.to_string();
-
-        let sig = streaming_hmac_sha256_hex(secret.as_bytes(), ts_str.as_bytes(), payload)
-            .unwrap_or_default();
-        format!("t={ts},v1={sig}")
+        let sig = compute_streaming_hmac_hex(secret.as_bytes(), ts, payload).unwrap_or_default();
+        format!("{TIMESTAMP_PREFIX}{ts},{V1_SIGNATURE_PREFIX}{sig}")
     }
 }
 
@@ -397,6 +369,28 @@ mod tests {
     }
 
     #[test]
+    fn test_blank_secret_rejected_with_bad_key() {
+        let payload = b"{\"id\":\"evt_123\"}";
+        let header = "t=1728345600,v1=abc";
+
+        // Empty secret
+        let err = Webhook::verify_header(payload, header, "", None).unwrap_err();
+        assert_eq!(err, StripeWebhookError::BadKey);
+
+        // Whitespace-only secret
+        let err2 = Webhook::verify_header(payload, header, "   \t\n  ", None).unwrap_err();
+        assert_eq!(err2, StripeWebhookError::BadKey);
+
+        // Blank secret in construct_event
+        let err3 = Webhook::construct_event(payload, header, "  ", None).unwrap_err();
+        assert_eq!(err3, StripeWebhookError::BadKey);
+
+        // Blank secret in verify_stripe_signature returns false
+        assert!(!verify_stripe_signature(payload, header, ""));
+        assert!(!verify_stripe_signature(payload, header, "   "));
+    }
+
+    #[test]
     fn test_construct_event_with_valid_tolerance() {
         let now = chrono::Utc::now().timestamp();
         let payload = br#"{"id":"evt_test_construct","object":"event","created":1728345600,"type":"checkout.session.completed","data":{"object":{"id":"cs_test_123","status":"complete","payment_status":"paid","amount_total":5000,"currency":"usd"}}}"#;
@@ -413,5 +407,32 @@ mod tests {
         assert_eq!(wrapper.amount_total(), Some(5000));
         assert_eq!(wrapper.currency().as_deref(), Some("USD"));
         assert!(wrapper.is_checkout_completed());
+    }
+
+    #[test]
+    fn test_rollover_dual_signatures_matches_secondary() {
+        let payload = b"{\"id\":\"evt_123\",\"type\":\"payment_intent.succeeded\"}";
+        let secret_old = "whsec_old_test_secret_key_11111";
+        let secret_new = "whsec_new_test_secret_key_22222";
+        let timestamp = 1728345600;
+
+        let sig_old = Webhook::generate_test_header_string(payload, secret_old, Some(timestamp));
+        let sig_new = Webhook::generate_test_header_string(payload, secret_new, Some(timestamp));
+
+        let sig_old_val = sig_old.split("v1=").nth(1).unwrap();
+        let sig_new_val = sig_new.split("v1=").nth(1).unwrap();
+
+        let combined_header = format!("t={timestamp},v1={sig_old_val},v1={sig_new_val}");
+
+        assert!(verify_stripe_signature(
+            payload,
+            &combined_header,
+            secret_new
+        ));
+        assert!(verify_stripe_signature(
+            payload,
+            &combined_header,
+            secret_old
+        ));
     }
 }
