@@ -11,8 +11,12 @@ Strongly Typed Domain Models, Events & Request DTOs for [`some-stripe`](https://
 ## Architectural Highlights
 
 - **Strongly Typed Domain Entities**:
-  - Full serde JSON serialization and deserialization for core Stripe resources: `PaymentIntent`, `CheckoutSession`, `Account`, `Invoice`, `Dispute`, `Refund`, `Event`, and `EventData`.
+  - Full serde JSON serialization and deserialization for core Stripe resources: `PaymentIntent`, `CheckoutSession`, `Account`, `Invoice`, `Dispute`, `Refund`, `Balance`, `BalanceTransaction`, `Event`, and `EventData`.
   - Type-safe identifiers: `AccountId` (`acct_...`), `IdempotencyKey`, `DisputeId` (`dp_...`).
+- **Immutable Balance Ledger & Reconciliation (Gate G2, Gate G-Law)**:
+  - `BalanceTransaction` and `Balance` entities with zero-clone stream pagination integration (`balance_transaction_id`).
+  - Mathematical double-entry ledger reconciliation invariant: `verify_accounting_invariant(&self) -> bool` enforcing $\text{net} = \text{amount} - \text{fee}$.
+  - Batch validation helper: `validate_ledger_reconciliation(txns: &[BalanceTransaction]) -> Result<(), String>`.
 - **Disputes Management & Evidence Submission Locking**:
   - Complete 8-status dispute lifecycle state machine (`DisputeStatus`).
   - Exhaustive 20-field evidence container (`DisputeEvidence`) for fulfillment proofs, customer communications, duplicate charge explanations, and policy disclosures.
@@ -61,6 +65,13 @@ match data.deserialize_object().unwrap() {
     }
     _ => panic!("Expected Invoice"),
 }
+
+// Balance Transaction Immutable Accounting Invariant (net == amount - fee)
+use some_stripe_types::{BalanceTransaction, validate_ledger_reconciliation};
+
+let txn = BalanceTransaction::new("txn_001", 1000, 30, "usd", "charge", "available");
+assert!(txn.verify_accounting_invariant());
+assert!(validate_ledger_reconciliation(&[txn]).is_ok());
 
 // Refund and Statutory 14-Day Consumer Withdrawal (EU Directive 2011/83/EU)
 use some_stripe_types::{Refund, is_statutory_withdrawal_compliant};

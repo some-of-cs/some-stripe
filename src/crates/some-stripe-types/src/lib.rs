@@ -5,7 +5,7 @@
 //!
 //! ## Overview
 //!
-//! - **Domain Entities**: [`PaymentIntent`], [`CheckoutSession`], [`Account`], [`Invoice`], [`Dispute`], [`Refund`].
+//! - **Domain Entities**: [`PaymentIntent`], [`CheckoutSession`], [`Account`], [`Invoice`], [`Dispute`], [`Refund`], [`Balance`], [`BalanceTransaction`].
 //! - **Event Pipeline**: [`Event`], [`EventData`], [`EventObject`].
 //! - **Statutory Legal Compliance**: [`is_statutory_withdrawal_compliant`] enforces EU Directive 2011/83/EU Article 13.
 //! - **Strongly Typed Identifiers**: [`AccountId`], [`IdempotencyKey`], [`DisputeId`].
@@ -67,6 +67,8 @@
 
 use serde::{Deserialize, Serialize};
 
+pub mod balance;
+pub use balance::*;
 pub mod dispute;
 pub use dispute::*;
 pub mod refund;
