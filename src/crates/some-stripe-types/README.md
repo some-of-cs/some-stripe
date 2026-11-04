@@ -11,7 +11,8 @@ Strongly Typed Domain Models, Events & Request DTOs for [`some-stripe`](https://
 ## Architectural Highlights
 
 - **Strongly Typed Domain Entities**:
-  - Full serde JSON serialization and deserialization for core Stripe resources: `PaymentIntent`, `CheckoutSession`, `Account`, `Invoice`, `Event`, and `EventData`.
+  - Full serde JSON serialization and deserialization for core Stripe resources: `PaymentIntent`, `PaymentIntentStatus`, `CaptureMethod`, `PaymentMethodOptions`, `CheckoutSession`, `Account`, `Invoice`, `Event`, and `EventData`.
+  - Strongly typed status and lifecycle enums: `PaymentIntentStatus` (`requires_payment_method`, `requires_confirmation`, `requires_action`, `processing`, `requires_capture`, `canceled`, `succeeded`) and `CaptureMethod` (`automatic`, `manual`).
   - Type-safe identifiers: `AccountId` (`acct_...`), `IdempotencyKey`.
 - **Discriminated Event Union & Upcoming Invoice Guard**:
   - `EventObject` tagged union (`payment_intent`, `checkout.session`, `invoice`, with `#[serde(other)] Unknown` fallback).

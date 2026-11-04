@@ -5,7 +5,7 @@
 //!
 //! ## Overview
 //!
-//! - **Domain Entities**: [`PaymentIntent`], [`CheckoutSession`], [`Account`], [`Invoice`].
+//! - **Domain Entities**: [`PaymentIntent`], [`PaymentIntentStatus`], [`CaptureMethod`], [`PaymentMethodOptions`], [`CheckoutSession`], [`Account`], [`Invoice`].
 //! - **Event Pipeline**: [`Event`], [`EventData`], [`EventObject`].
 //! - **Strongly Typed Identifiers**: [`AccountId`], [`IdempotencyKey`].
 //! - **Invoice Upcoming Guard**: [`Invoice`] specifies `pub id: Option<String>` to safely accommodate
@@ -186,10 +186,326 @@ fn default_quantity() -> u32 {
     1
 }
 
+/// Status of a [`PaymentIntent`].
+///
+/// Corresponds to the Stripe API `status` property.
+///
+/// # Example
+/// ```
+/// use some_stripe_types::PaymentIntentStatus;
+/// use std::str::FromStr;
+///
+/// let status = PaymentIntentStatus::from_str("requires_payment_method").unwrap();
+/// assert_eq!(status, PaymentIntentStatus::RequiresPaymentMethod);
+/// assert_eq!(status.as_str(), "requires_payment_method");
+/// assert_eq!(status.to_string(), "requires_payment_method");
+/// assert_eq!(status, "requires_payment_method");
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PaymentIntentStatus {
+    /// Next customer action is required to attach or select a payment method.
+    RequiresPaymentMethod,
+    /// The PaymentIntent is ready to be confirmed.
+    RequiresConfirmation,
+    /// Next customer action is required (e.g. 3D Secure authentication).
+    RequiresAction,
+    /// The payment is being processed by the payment network.
+    Processing,
+    /// The authorization succeeded and requires capture (for manual capture).
+    RequiresCapture,
+    /// The PaymentIntent was canceled.
+    Canceled,
+    /// The payment was successfully captured or authorized.
+    Succeeded,
+}
+
+impl PaymentIntentStatus {
+    /// Returns the Stripe API string representation of the status.
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::RequiresPaymentMethod => "requires_payment_method",
+            Self::RequiresConfirmation => "requires_confirmation",
+            Self::RequiresAction => "requires_action",
+            Self::Processing => "processing",
+            Self::RequiresCapture => "requires_capture",
+            Self::Canceled => "canceled",
+            Self::Succeeded => "succeeded",
+        }
+    }
+}
+
+impl std::fmt::Display for PaymentIntentStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+/// Error returned when parsing an unrecognized [`PaymentIntentStatus`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParsePaymentIntentStatusError(pub String);
+
+impl std::fmt::Display for ParsePaymentIntentStatusError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Unknown PaymentIntentStatus: '{}'", self.0)
+    }
+}
+
+impl std::error::Error for ParsePaymentIntentStatusError {}
+
+impl std::str::FromStr for PaymentIntentStatus {
+    type Err = ParsePaymentIntentStatusError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "requires_payment_method" => Ok(Self::RequiresPaymentMethod),
+            "requires_confirmation" => Ok(Self::RequiresConfirmation),
+            "requires_action" => Ok(Self::RequiresAction),
+            "processing" => Ok(Self::Processing),
+            "requires_capture" => Ok(Self::RequiresCapture),
+            "canceled" => Ok(Self::Canceled),
+            "succeeded" => Ok(Self::Succeeded),
+            _ => Err(ParsePaymentIntentStatusError(s.to_string())),
+        }
+    }
+}
+
+impl AsRef<str> for PaymentIntentStatus {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl PartialEq<str> for PaymentIntentStatus {
+    fn eq(&self, other: &str) -> bool {
+        self.as_str() == other
+    }
+}
+
+impl PartialEq<&str> for PaymentIntentStatus {
+    fn eq(&self, other: &&str) -> bool {
+        self.as_str() == *other
+    }
+}
+
+impl PartialEq<PaymentIntentStatus> for str {
+    fn eq(&self, other: &PaymentIntentStatus) -> bool {
+        self == other.as_str()
+    }
+}
+
+impl PartialEq<PaymentIntentStatus> for &str {
+    fn eq(&self, other: &PaymentIntentStatus) -> bool {
+        *self == other.as_str()
+    }
+}
+
+impl PartialEq<String> for PaymentIntentStatus {
+    fn eq(&self, other: &String) -> bool {
+        self.as_str() == other.as_str()
+    }
+}
+
+impl PartialEq<PaymentIntentStatus> for String {
+    fn eq(&self, other: &PaymentIntentStatus) -> bool {
+        self.as_str() == other.as_str()
+    }
+}
+
+/// Capture method specifying when funds will be captured from customer's account.
+///
+/// # Example
+/// ```
+/// use some_stripe_types::CaptureMethod;
+/// use std::str::FromStr;
+///
+/// let method = CaptureMethod::from_str("automatic").unwrap();
+/// assert_eq!(method, CaptureMethod::Automatic);
+/// assert_eq!(method.as_str(), "automatic");
+/// assert_eq!(method.to_string(), "automatic");
+/// assert_eq!(method, "automatic");
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CaptureMethod {
+    /// Stripe automatically captures the funds when authorized.
+    Automatic,
+    /// Funds are authorized on the cardholder's account and must be captured explicitly.
+    Manual,
+}
+
+impl CaptureMethod {
+    /// Returns the Stripe API string representation of the capture method.
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Automatic => "automatic",
+            Self::Manual => "manual",
+        }
+    }
+}
+
+impl std::fmt::Display for CaptureMethod {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+/// Error returned when parsing an unrecognized [`CaptureMethod`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParseCaptureMethodError(pub String);
+
+impl std::fmt::Display for ParseCaptureMethodError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Unknown CaptureMethod: '{}'", self.0)
+    }
+}
+
+impl std::error::Error for ParseCaptureMethodError {}
+
+impl std::str::FromStr for CaptureMethod {
+    type Err = ParseCaptureMethodError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "automatic" => Ok(Self::Automatic),
+            "manual" => Ok(Self::Manual),
+            _ => Err(ParseCaptureMethodError(s.to_string())),
+        }
+    }
+}
+
+impl AsRef<str> for CaptureMethod {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl PartialEq<str> for CaptureMethod {
+    fn eq(&self, other: &str) -> bool {
+        self.as_str() == other
+    }
+}
+
+impl PartialEq<&str> for CaptureMethod {
+    fn eq(&self, other: &&str) -> bool {
+        self.as_str() == *other
+    }
+}
+
+impl PartialEq<CaptureMethod> for str {
+    fn eq(&self, other: &CaptureMethod) -> bool {
+        self == other.as_str()
+    }
+}
+
+impl PartialEq<CaptureMethod> for &str {
+    fn eq(&self, other: &CaptureMethod) -> bool {
+        *self == other.as_str()
+    }
+}
+
+impl PartialEq<String> for CaptureMethod {
+    fn eq(&self, other: &String) -> bool {
+        self.as_str() == other.as_str()
+    }
+}
+
+impl PartialEq<CaptureMethod> for String {
+    fn eq(&self, other: &CaptureMethod) -> bool {
+        self.as_str() == other.as_str()
+    }
+}
+
+/// Payment method options configured on a [`PaymentIntent`].
+///
+/// # Example
+/// ```
+/// use some_stripe_types::{CardPaymentMethodOptions, CaptureMethod, PaymentMethodOptions};
+///
+/// let opts = PaymentMethodOptions::new().with_card(
+///     CardPaymentMethodOptions::new()
+///         .with_request_three_d_secure("any")
+///         .with_capture_method(CaptureMethod::Manual),
+/// );
+/// assert!(opts.card.is_some());
+/// ```
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PaymentMethodOptions {
+    /// Card-specific payment method configuration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub card: Option<CardPaymentMethodOptions>,
+}
+
+impl PaymentMethodOptions {
+    /// Creates a new, empty `PaymentMethodOptions`.
+    pub const fn new() -> Self {
+        Self { card: None }
+    }
+
+    /// Sets the card options.
+    pub fn with_card(mut self, card: CardPaymentMethodOptions) -> Self {
+        self.card = Some(card);
+        self
+    }
+}
+
+/// Options specific to card payments on a [`PaymentIntent`].
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CardPaymentMethodOptions {
+    /// Controls 3D Secure authentication behavior (`automatic`, `any`, `challenge`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub request_three_d_secure: Option<String>,
+
+    /// Controls capture method override specifically for card payments.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub capture_method: Option<CaptureMethod>,
+}
+
+impl CardPaymentMethodOptions {
+    /// Creates a new, empty `CardPaymentMethodOptions`.
+    pub const fn new() -> Self {
+        Self {
+            request_three_d_secure: None,
+            capture_method: None,
+        }
+    }
+
+    /// Sets the 3D Secure request policy (e.g., `"any"` or `"automatic"`).
+    pub fn with_request_three_d_secure(mut self, policy: impl Into<String>) -> Self {
+        self.request_three_d_secure = Some(policy.into());
+        self
+    }
+
+    /// Sets the capture method for cards.
+    pub fn with_capture_method(mut self, method: CaptureMethod) -> Self {
+        self.capture_method = Some(method);
+        self
+    }
+}
+
 /// Represents a Stripe PaymentIntent object.
 ///
 /// Implements custom `Debug` to mask `client_secret` to `[REDACTED]` (PCI-DSS 4.0 / Gate G2).
-#[derive(Clone, Serialize, Deserialize)]
+///
+/// # Example
+/// ```
+/// use some_stripe_types::{CaptureMethod, PaymentIntent, PaymentIntentStatus};
+///
+/// let json = r#"{
+///     "id": "pi_3Mtw",
+///     "object": "payment_intent",
+///     "amount": 2000,
+///     "currency": "usd",
+///     "status": "requires_payment_method",
+///     "capture_method": "automatic"
+/// }"#;
+/// let pi: PaymentIntent = serde_json::from_str(json).unwrap();
+/// assert_eq!(pi.id, "pi_3Mtw");
+/// assert_eq!(pi.amount, 2000);
+/// assert_eq!(pi.status, PaymentIntentStatus::RequiresPaymentMethod);
+/// assert_eq!(pi.capture_method, Some(CaptureMethod::Automatic));
+/// ```
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct PaymentIntent {
     /// Unique identifier for the payment intent (`pi_...`).
     pub id: String,
@@ -202,6 +518,7 @@ pub struct PaymentIntent {
     pub amount: i64,
 
     /// Amount that was captured in minor units.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub amount_received: Option<i64>,
 
     /// Three-letter ISO currency code in lowercase.
@@ -209,22 +526,61 @@ pub struct PaymentIntent {
 
     /// Status of this PaymentIntent: `requires_payment_method`, `requires_confirmation`,
     /// `requires_action`, `processing`, `requires_capture`, `canceled`, or `succeeded`.
-    pub status: String,
+    pub status: PaymentIntentStatus,
 
     /// Controls when the funds will be captured from the customer's account: `automatic` or `manual`.
-    pub capture_method: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub capture_method: Option<CaptureMethod>,
 
     /// The client secret of this PaymentIntent used for client-side confirmation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub client_secret: Option<String>,
 
     /// Challenge action payload for PSD2 SCA 3DS 2.0 redirects (Gate G-Law).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub next_action: Option<serde_json::Value>,
 
     /// Time at which the object was created (UNIX epoch seconds).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub created: Option<i64>,
 
     /// Reason for cancellation, if canceled.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cancellation_reason: Option<String>,
+
+    /// An arbitrary string attached to the object.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+
+    /// Payment-method-specific configuration for this PaymentIntent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub payment_method_options: Option<PaymentMethodOptions>,
+}
+
+impl PaymentIntent {
+    /// Constructs a new minimal `PaymentIntent`.
+    pub fn new(
+        id: impl Into<String>,
+        amount: i64,
+        currency: impl Into<String>,
+        status: PaymentIntentStatus,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            object: default_payment_intent_object(),
+            amount,
+            amount_received: None,
+            currency: currency.into(),
+            status,
+            capture_method: None,
+            client_secret: None,
+            next_action: None,
+            created: None,
+            cancellation_reason: None,
+            description: None,
+            payment_method_options: None,
+        }
+    }
 }
 
 impl std::fmt::Debug for PaymentIntent {
@@ -244,6 +600,8 @@ impl std::fmt::Debug for PaymentIntent {
             .field("next_action", &self.next_action)
             .field("created", &self.created)
             .field("cancellation_reason", &self.cancellation_reason)
+            .field("description", &self.description)
+            .field("payment_method_options", &self.payment_method_options)
             .finish()
     }
 }
@@ -548,17 +906,177 @@ mod tests {
             amount: 5000,
             amount_received: Some(5000),
             currency: "usd".into(),
-            status: "succeeded".into(),
-            capture_method: Some("automatic".into()),
+            status: PaymentIntentStatus::Succeeded,
+            capture_method: Some(CaptureMethod::Automatic),
             client_secret: Some("pi_123_secret_xyzSuperSecretToken".into()),
             next_action: None,
             created: Some(1728345600),
             cancellation_reason: None,
+            description: Some("Test payment".into()),
+            payment_method_options: None,
         };
 
         let debug_str = format!("{pi:?}");
         assert!(debug_str.contains("[REDACTED]"));
         assert!(!debug_str.contains("xyzSuperSecretToken"));
+
+        // Redaction verification when client_secret is None
+        let pi_no_secret = PaymentIntent {
+            id: "pi_123_no_secret".into(),
+            object: "payment_intent".into(),
+            amount: 1000,
+            amount_received: None,
+            currency: "usd".into(),
+            status: PaymentIntentStatus::RequiresPaymentMethod,
+            capture_method: None,
+            client_secret: None,
+            next_action: None,
+            created: None,
+            cancellation_reason: None,
+            description: None,
+            payment_method_options: None,
+        };
+        let debug_str_none = format!("{pi_no_secret:?}");
+        assert!(debug_str_none.contains("client_secret: None"));
+        assert!(!debug_str_none.contains("[REDACTED]"));
+    }
+
+    #[test]
+    fn test_payment_intent_status_variants_and_parsing() {
+        use std::str::FromStr;
+
+        let pairs = [
+            (
+                PaymentIntentStatus::RequiresPaymentMethod,
+                "requires_payment_method",
+            ),
+            (
+                PaymentIntentStatus::RequiresConfirmation,
+                "requires_confirmation",
+            ),
+            (PaymentIntentStatus::RequiresAction, "requires_action"),
+            (PaymentIntentStatus::Processing, "processing"),
+            (PaymentIntentStatus::RequiresCapture, "requires_capture"),
+            (PaymentIntentStatus::Canceled, "canceled"),
+            (PaymentIntentStatus::Succeeded, "succeeded"),
+        ];
+
+        for (status, expected_str) in pairs {
+            // as_str, Display, AsRef
+            assert_eq!(status.as_str(), expected_str);
+            assert_eq!(status.to_string(), expected_str);
+            assert_eq!(status.as_ref(), expected_str);
+
+            // FromStr
+            let parsed = PaymentIntentStatus::from_str(expected_str).unwrap();
+            assert_eq!(parsed, status);
+
+            // PartialEq with &str, str, and String
+            assert_eq!(status, expected_str);
+            assert_eq!(expected_str, status);
+            let s = expected_str.to_string();
+            assert_eq!(status, s);
+            assert_eq!(s, status);
+
+            // Serde roundtrip
+            let json = serde_json::to_string(&status).unwrap();
+            assert_eq!(json, format!("\"{expected_str}\""));
+            let deserialized: PaymentIntentStatus = serde_json::from_str(&json).unwrap();
+            assert_eq!(deserialized, status);
+        }
+
+        // Invalid status parsing
+        let invalid_err = PaymentIntentStatus::from_str("unknown_status").unwrap_err();
+        assert_eq!(
+            invalid_err,
+            ParsePaymentIntentStatusError("unknown_status".to_string())
+        );
+        assert!(invalid_err.to_string().contains("unknown_status"));
+    }
+
+    #[test]
+    fn test_capture_method_variants_and_parsing() {
+        use std::str::FromStr;
+
+        let pairs = [
+            (CaptureMethod::Automatic, "automatic"),
+            (CaptureMethod::Manual, "manual"),
+        ];
+
+        for (method, expected_str) in pairs {
+            assert_eq!(method.as_str(), expected_str);
+            assert_eq!(method.to_string(), expected_str);
+            assert_eq!(method.as_ref(), expected_str);
+
+            let parsed = CaptureMethod::from_str(expected_str).unwrap();
+            assert_eq!(parsed, method);
+
+            assert_eq!(method, expected_str);
+            assert_eq!(expected_str, method);
+            let s = expected_str.to_string();
+            assert_eq!(method, s);
+            assert_eq!(s, method);
+
+            let json = serde_json::to_string(&method).unwrap();
+            assert_eq!(json, format!("\"{expected_str}\""));
+            let deserialized: CaptureMethod = serde_json::from_str(&json).unwrap();
+            assert_eq!(deserialized, method);
+        }
+
+        let invalid_err = CaptureMethod::from_str("instant").unwrap_err();
+        assert_eq!(invalid_err, ParseCaptureMethodError("instant".to_string()));
+        assert!(invalid_err.to_string().contains("instant"));
+    }
+
+    #[test]
+    fn test_payment_method_options_serialization() {
+        let opts = PaymentMethodOptions::new().with_card(
+            CardPaymentMethodOptions::new()
+                .with_request_three_d_secure("any")
+                .with_capture_method(CaptureMethod::Manual),
+        );
+
+        let json = serde_json::to_string(&opts).unwrap();
+        assert!(json.contains("\"request_three_d_secure\":\"any\""));
+        assert!(json.contains("\"capture_method\":\"manual\""));
+
+        let deserialized: PaymentMethodOptions = serde_json::from_str(&json).unwrap();
+        assert_eq!(deserialized, opts);
+
+        // Empty options omit card
+        let empty_opts = PaymentMethodOptions::new();
+        let empty_json = serde_json::to_string(&empty_opts).unwrap();
+        assert_eq!(empty_json, "{}");
+    }
+
+    #[test]
+    fn test_payment_intent_full_lifecycle_model() {
+        let mut pi = PaymentIntent::new(
+            "pi_full_test_123",
+            10000,
+            "usd",
+            PaymentIntentStatus::RequiresPaymentMethod,
+        );
+        assert_eq!(pi.id, "pi_full_test_123");
+        assert_eq!(pi.object, "payment_intent");
+        assert_eq!(pi.amount, 10000);
+        assert_eq!(pi.currency, "usd");
+        assert_eq!(pi.status, PaymentIntentStatus::RequiresPaymentMethod);
+        assert!(pi.amount_received.is_none());
+
+        // Transition status and populate options
+        pi.status = PaymentIntentStatus::RequiresCapture;
+        pi.capture_method = Some(CaptureMethod::Manual);
+        pi.payment_method_options =
+            Some(PaymentMethodOptions::new().with_card(
+                CardPaymentMethodOptions::new().with_capture_method(CaptureMethod::Manual),
+            ));
+
+        let json = serde_json::to_string(&pi).unwrap();
+        let roundtrip: PaymentIntent = serde_json::from_str(&json).unwrap();
+        assert_eq!(roundtrip.status, PaymentIntentStatus::RequiresCapture);
+        assert_eq!(roundtrip.capture_method, Some(CaptureMethod::Manual));
+        assert_eq!(roundtrip.amount, 10000);
     }
 
     #[test]
