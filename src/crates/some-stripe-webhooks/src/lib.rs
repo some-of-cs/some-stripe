@@ -7,6 +7,8 @@
 //!
 //! - **Constant-Time Verification**: HMAC-SHA256 signature comparison executed strictly in
 //!   constant time via [`safe_constant_time_eq`] to prevent timing side-channel attacks.
+//! - **Streaming Zero-Allocation HMAC**: Signatures computed via [`compute_streaming_hmac_hex`]
+//!   streaming raw payload slices without heap buffers (Gate G-Borrow).
 //! - **Replay Protection**: Enforces timestamp tolerance (default 300 seconds) and rejects
 //!   excessive future drift (> 60 seconds).
 //! - **Resource Limits**: Incoming payloads are strictly capped at 1 MB ([`MAX_WEBHOOK_PAYLOAD_BYTES`])
@@ -29,12 +31,16 @@
 //! assert!(wrapper.is_checkout_completed());
 //! ```
 
+pub mod compare;
+pub mod crypto;
+
+pub use compare::safe_constant_time_eq;
+pub use crypto::compute_streaming_hmac_hex;
 use openssl::hash::MessageDigest;
 use openssl::pkey::PKey;
 use openssl::sign::Signer;
 pub use some_stripe_core::error::StripeWebhookError;
 use some_stripe_types::Event;
-use subtle::ConstantTimeEq;
 
 /// Default timestamp tolerance window in seconds (5 minutes), per the Stripe specification.
 pub const DEFAULT_TOLERANCE_SECONDS: u64 = 300;
@@ -44,14 +50,6 @@ pub const MAX_FUTURE_DRIFT_SECONDS: i64 = 60;
 
 /// Maximum incoming webhook payload size (1 MB / Gate G2 memory exhaustion guard).
 pub const MAX_WEBHOOK_PAYLOAD_BYTES: usize = 1_048_576;
-
-/// Constant-time slice comparison safe against length mismatches (Gate G2 Invariant 1).
-pub fn safe_constant_time_eq(a: &[u8], b: &[u8]) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    a.ct_eq(b).into()
-}
 
 /// Computes HMAC-SHA256 over `data` using `key`, returning the lowercase hexadecimal string.
 pub fn hmac_sha256_hex(key: &[u8], data: &[u8]) -> Option<String> {
@@ -93,23 +91,24 @@ pub fn verify_stripe_signature(
         }
     }
 
-    let timestamp = match timestamp {
+    let timestamp_str = match timestamp {
         Some(t) if !t.is_empty() => t,
         _ => return false,
+    };
+
+    let ts_i64 = match timestamp_str.parse::<i64>() {
+        Ok(t) => t,
+        Err(_) => return false,
     };
 
     if signatures.is_empty() {
         return false;
     }
 
-    let mut signed_payload = Vec::with_capacity(timestamp.len() + 1 + payload.len());
-    signed_payload.extend_from_slice(timestamp.as_bytes());
-    signed_payload.push(b'.');
-    signed_payload.extend_from_slice(payload);
-
-    let expected_hex = match hmac_sha256_hex(webhook_secret.as_bytes(), &signed_payload) {
-        Some(hex) => hex,
-        None => return false,
+    let expected_hex = match compute_streaming_hmac_hex(webhook_secret.as_bytes(), ts_i64, payload)
+    {
+        Ok(hex) => hex,
+        Err(_) => return false,
     };
 
     signatures.iter().any(|sig| {
@@ -179,14 +178,7 @@ impl Webhook {
             }
         }
 
-        let ts_str = timestamp.to_string();
-        let mut signed_payload = Vec::with_capacity(ts_str.len() + 1 + payload.len());
-        signed_payload.extend_from_slice(ts_str.as_bytes());
-        signed_payload.push(b'.');
-        signed_payload.extend_from_slice(payload);
-
-        let expected_signature = hmac_sha256_hex(secret.as_bytes(), &signed_payload)
-            .ok_or(StripeWebhookError::BadSignature)?;
+        let expected_signature = compute_streaming_hmac_hex(secret.as_bytes(), timestamp, payload)?;
 
         let matched = signatures.iter().any(|sig| {
             safe_constant_time_eq(
@@ -222,14 +214,7 @@ impl Webhook {
         timestamp: Option<i64>,
     ) -> String {
         let ts = timestamp.unwrap_or_else(|| chrono::Utc::now().timestamp());
-        let ts_str = ts.to_string();
-
-        let mut signed_payload = Vec::with_capacity(ts_str.len() + 1 + payload.len());
-        signed_payload.extend_from_slice(ts_str.as_bytes());
-        signed_payload.push(b'.');
-        signed_payload.extend_from_slice(payload);
-
-        let sig = hmac_sha256_hex(secret.as_bytes(), &signed_payload).unwrap_or_default();
+        let sig = compute_streaming_hmac_hex(secret.as_bytes(), ts, payload).unwrap_or_default();
         format!("t={ts},v1={sig}")
     }
 }
