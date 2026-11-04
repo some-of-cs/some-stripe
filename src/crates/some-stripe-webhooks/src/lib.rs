@@ -3,7 +3,7 @@
 //! Cryptographic webhook signature verification and payload wrappers for Stripe,
 //! modeled after `stripe-node`.
 //!
-//! ## Security & Architectural Invariants (Gate G2)
+//! ## Security & Architectural Invariants (Gate G2, Gate G-Borrow, Gate G-Law)
 //!
 //! - **Constant-Time Verification**: HMAC-SHA256 signature comparison executed strictly in
 //!   constant time via [`safe_constant_time_eq`] to prevent timing side-channel attacks.
@@ -15,6 +15,9 @@
 //!   for signature strings, supporting secret rollover with multiple `v1` signatures.
 //! - **Resource Limits**: Incoming payloads are strictly capped at 1 MB ([`MAX_WEBHOOK_PAYLOAD_BYTES`])
 //!   to safeguard against memory exhaustion attacks.
+//! - **Zero-Clone Streaming HMAC (Gate G-Borrow)**: Computes HMAC-SHA256 digests by streaming
+//!   timestamp and payload slices directly into the OpenSSL digest without intermediate heap
+//!   allocations ([`streaming_hmac_sha256_hex`]).
 //! - **Secret Pre-Validation**: Blank or whitespace-only webhook secrets are rejected immediately
 //!   with [`StripeWebhookError::BadKey`] before performing HMAC computations or allocations.
 //!
@@ -70,7 +73,40 @@ pub fn hmac_sha256_hex(key: &[u8], data: &[u8]) -> Option<String> {
     Some(hex)
 }
 
+/// Computes HMAC-SHA256 by streaming timestamp and payload byte slices directly into the
+/// cryptographic digest without intermediate heap buffer allocations (Gate G-Borrow / Zero-Clone Discipline).
+///
+/// # Example
+///
+/// ```
+/// use some_stripe_webhooks::streaming_hmac_sha256_hex;
+///
+/// let key = b"whsec_test_secret";
+/// let timestamp = b"1728345600";
+/// let payload = br#"{"id":"evt_123"}"#;
+///
+/// let hex = streaming_hmac_sha256_hex(key, timestamp, payload).unwrap();
+/// assert_eq!(hex.len(), 64);
+/// ```
+pub fn streaming_hmac_sha256_hex(key: &[u8], timestamp: &[u8], payload: &[u8]) -> Option<String> {
+    let pkey = PKey::hmac(key).ok()?;
+    let mut signer = Signer::new(MessageDigest::sha256(), &pkey).ok()?;
+    signer.update(timestamp).ok()?;
+    signer.update(b".").ok()?;
+    signer.update(payload).ok()?;
+    let signature = signer.sign_to_vec().ok()?;
+    let mut hex = String::with_capacity(signature.len() * 2);
+    for b in signature {
+        use std::fmt::Write;
+        let _ = write!(hex, "{:02x}", b);
+    }
+    Some(hex)
+}
+
 /// Verifies a Stripe webhook signature per the official Stripe signature specification.
+///
+/// Operates strictly on borrowed `&[u8]` and `&str` slices without copying or cloning
+/// the raw payload (Gate G-Borrow).
 pub fn verify_stripe_signature(
     payload: &[u8],
     signature_header: &str,
@@ -114,6 +150,7 @@ impl Webhook {
     ///
     /// Rejects blank/whitespace webhook secrets immediately with [`StripeWebhookError::BadKey`]
     /// prior to allocating buffers or computing cryptographic HMAC signatures.
+    /// Operates strictly on borrowed slices using zero-clone streaming HMAC (Gate G-Borrow).
     pub fn verify_header(
         payload: &[u8],
         header: &str,
