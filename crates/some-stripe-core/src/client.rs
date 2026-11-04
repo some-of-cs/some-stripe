@@ -1,7 +1,7 @@
 //! Stripe API client configuration and execution engine.
 
 use crate::error::StripeError;
-use crate::workflow::{DefaultErrorWorkflow, ErrorAction, ErrorWorkflowHandler};
+use crate::workflow::{DefaultErrorWorkflow, ErrorWorkflowHandler};
 use subtle::ConstantTimeEq;
 use std::ops::Deref;
 use std::sync::Arc;
