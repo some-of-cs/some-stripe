@@ -70,7 +70,10 @@ pub use some_stripe_core::workflow::{
 pub use some_stripe_types::*;
 pub use some_stripe_webhooks::{
     DEFAULT_TOLERANCE_SECONDS, MAX_FUTURE_DRIFT_SECONDS, MAX_WEBHOOK_PAYLOAD_BYTES,
-    StripeWebhookWrapper, Webhook, safe_constant_time_eq, verify_stripe_signature,
+    StripeSignatureHeader, StripeWebhookWrapper, ToleranceConfig, V2RelatedObject, V2ThinEvent,
+    Webhook, WebhookAuditRecord, WebhookEscalationBridge, determine_severity,
+    escalate_webhook_error, is_blank_webhook_secret, is_security_incident, is_thin_event,
+    parse_signature_header, safe_constant_time_eq, verify_stripe_signature,
 };
 
 pub mod resources;
