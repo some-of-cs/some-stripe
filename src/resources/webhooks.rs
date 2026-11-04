@@ -42,6 +42,38 @@ impl WebhooksResource {
     }
 
     /// Generates a valid `Stripe-Signature` header string for unit and integration testing.
+    /// Verifies the authenticity and recency of an incoming webhook header using a custom [`ToleranceConfig`].
+    pub fn verify_header_with_config(
+        &self,
+        payload: &[u8],
+        header: &str,
+        secret: &str,
+        config: &some_stripe_webhooks::ToleranceConfig,
+    ) -> Result<bool, StripeWebhookError> {
+        Webhook::verify_header_with_config(payload, header, secret, config)
+    }
+
+    /// Constructs an [`Event`] from an incoming webhook payload using a custom [`ToleranceConfig`].
+    pub fn construct_event_with_config(
+        &self,
+        payload: &[u8],
+        header: &str,
+        secret: &str,
+        config: &some_stripe_webhooks::ToleranceConfig,
+    ) -> Result<Event, StripeWebhookError> {
+        Webhook::construct_event_with_config(payload, header, secret, config)
+    }
+
+    /// Constructs a strongly-typed [`V2ThinEvent`] from an incoming Stripe v2 webhook payload.
+    pub fn construct_v2_thin_event(
+        &self,
+        payload: &[u8],
+        header: &str,
+        secret: &str,
+        tolerance: Option<u64>,
+    ) -> Result<some_stripe_webhooks::V2ThinEvent, StripeWebhookError> {
+        Webhook::construct_v2_thin_event(payload, header, secret, tolerance)
+    }
     pub fn generate_test_header_string(
         &self,
         payload: &[u8],
