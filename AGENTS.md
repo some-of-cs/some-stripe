@@ -40,9 +40,10 @@ Welcome to the **`some-stripe`** workspace. All AI agents, contributors, and aut
    - **Strict Bottom-Up PR Creation Order**: Level 3 micro-units (Unit 1 -> 5) MUST be implemented, verified, committed, pushed, and have their GitHub PR opened (`gh pr create`) BEFORE the Level 2 User Story PR is opened. Never open a parent story/module PR before child unit PRs exist.
    - **Multi-Tier Merge & Validation Workflow (Strictly via `gh pr merge`)**:
      - **All tier merges MUST happen over GitHub using GitHub CLI (`gh pr merge`)**. Local `git merge` commands across promotion tiers are strictly prohibited.
-     1. Run tests over all 5 Level 3 units in a user story -> merge units into the story branch via `gh pr merge <PR> --merge`.
-     2. Pull updated story branch, run story integration and contract wire tests -> merge user story PRs into the module branch via `gh pr merge <PR> --merge`.
-     3. Pull updated module branch, run workspace-wide test suite (`cargo test --workspace`) and quality gates -> merge the module PR into `main` via `gh pr merge <PR> --merge`.
+     - **Mandatory Pre-Merge Review Sign-Off (Gates G-Review, G2, G-Borrow)**: Before calling `gh pr merge` on ANY pull request (unit, story, or module), an explicit code review and security validation must be executed and approved via `gh pr review <PR> --approve -b '...'`. Merging without documented quality gate review is strictly prohibited.
+     1. Run tests over all 5 Level 3 units in a user story -> review & approve -> merge units into the story branch via `gh pr merge <PR> --merge`.
+     2. Pull updated story branch, run story integration and contract wire tests -> review & approve -> merge user story PRs into the module branch via `gh pr merge <PR> --merge`.
+     3. Pull updated module branch, run workspace-wide test suite (`cargo test --workspace`) and quality gates -> review & approve -> merge the module PR into `main` via `gh pr merge <PR> --merge`.
    - **Multi-Profile Round-Robin**: Tasks MUST be actively distributed across all 3 profiles (`agent-a`, `agent-b`, `agent-c`) to split the API quota and prevent single-account billing concentration.
    - **Automatic Quota Failover**: In case any profile exhausts quota (429 / `RESOURCE_EXHAUSTED`), agents and launchers must automatically switch and retry using the next available account profile.
 
