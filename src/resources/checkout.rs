@@ -1,5 +1,6 @@
 //! Stripe Checkout resource implementations.
 
+use crate::resources::payment_links::PaymentLinksResource;
 use some_stripe_core::{StripeClient, StripeError};
 use some_stripe_types::{CheckoutSession, CreateCheckoutSessionParams};
 
@@ -8,18 +9,26 @@ use some_stripe_types::{CheckoutSession, CreateCheckoutSessionParams};
 pub struct CheckoutResource<'a> {
     /// Checkout Sessions resource (`stripe.checkout.sessions`).
     pub sessions: SessionsResource<'a>,
+    /// Payment Links resource (`stripe.checkout.payment_links`).
+    pub payment_links: PaymentLinksResource<'a>,
 }
 
 impl<'a> CheckoutResource<'a> {
     pub(crate) fn new(client: &'a StripeClient) -> Self {
         Self {
             sessions: SessionsResource::new(client),
+            payment_links: PaymentLinksResource::new(client),
         }
     }
 
     /// Access the Sessions resource.
     pub fn sessions(&self) -> &SessionsResource<'a> {
         &self.sessions
+    }
+
+    /// Access the PaymentLinks resource.
+    pub fn payment_links(&self) -> &PaymentLinksResource<'a> {
+        &self.payment_links
     }
 }
 
