@@ -42,25 +42,29 @@ Profiles are **universal agent generators** tied to separate Google AI Pro billi
 ### 3. Multi-Tier Sequential Merge & Promotion Protocol (Strictly via `gh pr merge`)
 All branch integrations and tier promotions MUST happen **over GitHub via GitHub CLI (`gh pr merge`)**. Local `git merge` commands across promotion tiers are strictly prohibited. The GitHub Pull Request audit trail is the single source of truth.
 
-**Mandatory Pre-Merge Review Sign-Off (Gates G-Review, G2, G-Borrow)**:
-Before calling `gh pr merge` on ANY pull request (unit, story, or module), an explicit code review, security check, and quality gate audit MUST be performed and approved via `gh pr review <PR> --approve -b '...'`.
+**Mandatory Pre-Merge Gatekeeper Council Sign-Off (Gates G0–G4, G-Borrow, G2, G-Law, G-Docs, G-Review)**:
+Before calling `gh pr merge` on ANY pull request (unit, story, or module), an explicit code review and security validation MUST be performed by independent specialized subagents from `.agents/agents/` armed with dedicated skills from `.agents/skills/`. **Self-approval is strictly rejected.**
 
 1. **Tier 1 (Units to Story via `gh pr merge`)**:
-   - Run tests across all 5 Level 3 micro-unit branches.
-   - Execute code review and G-Borrow / G2 security checks on the unit diff.
-   - Post approved review: `gh pr review <PR_NUMBER> --approve -b '...'`.
+   - Authoring implementer opens Unit PR: `feat(us-x.y.0/unit-N): <summary>`.
+   - `Rust Refactoring Specialist` (Skill: `upgrade-stripe`) audits **Gate G0** (clippy/fmt) and **Gate G-Borrow** (zero-clone discipline).
+   - `Application Security Engineer` (Skills: `security-audit`, `stripe-best-practices`) audits **Gate G2** (cryptography/redaction) and **Gate G-Law** (PCI-DSS 4.0, ISO 4217 minor currency, statutory EU compliance).
+   - `API Tester` (Skills: `stripe-docs`, `stripe-best-practices`) audits **Gate G1** (acceptance test coverage).
+   - Independent `Code Reviewer` (Skills: `security-audit`, `stripe-best-practices`) audits PR diff, synthesizes gate results, and posts formal Gate G-Review approval: `gh pr comment <PR_NUMBER> --body '### 🛡️ Gate G-Review Approval...'`.
    - Merge the unit PRs over GitHub into the story branch using `gh pr merge <PR_NUMBER> --merge`.
 2. **Tier 2 (Stories to Module via `gh pr merge`)**:
    - Pull the merged story branch into its worktree (`git pull origin <story-branch>`).
    - Run story-level integration and wire mock test suites on the User Story branch.
-   - Execute story-level architectural and security review.
-   - Post approved review: `gh pr review <PR_NUMBER> --approve -b '...'`.
+   - `API Tester` (Skills: `stripe-docs`, `stripe-best-practices`) verifies **Gate G1** & **Gate G4** (wire mock contracts and E2E suites).
+   - `microkernel-architect` (Skills: `stripe-docs`, `stripe-best-practices`) verifies **Gate G3** (microkernel architecture & progressive Cargo features).
+   - `Technical Writer` (Skill: `stripe-docs`) verifies **Gate G-Docs** (`cargo test --doc` and crate README).
+   - `Code Reviewer` (Skills: `security-audit`, `stripe-best-practices`) posts formal Gate G-Review approval comment.
    - Merge the User Story PR over GitHub into the module branch using `gh pr merge <PR_NUMBER> --merge`.
 3. **Tier 3 (Module to Main via `gh pr merge`)**:
    - Pull the merged module branch into its worktree (`git pull origin <module-branch>`).
    - Run full workspace test suite (`cargo test --workspace`), clippy (`cargo clippy --workspace --all-targets -- -D warnings`), and fmt verification on the Module branch.
-   - Execute module-wide Federated Gatekeeper Council sign-off.
-   - Post approved review: `gh pr review <PR_NUMBER> --approve -b '...'`.
+   - Full Federated Gatekeeper Council sign-off (`Rust Refactoring Specialist`, `Application Security Engineer`, `API Tester`, `Technical Writer`, `microkernel-architect`).
+   - Independent `Code Reviewer` posts formal Module Release Gate G-Review approval comment.
    - Merge the Level 1 Module PR over GitHub into `main` using `gh pr merge <PR_NUMBER> --merge`.
 
 ### 4. Quota Exhaustion Failover Across Profiles

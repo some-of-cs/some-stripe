@@ -4,6 +4,8 @@ This executive Kanban board tracks high-level milestone promotions for **Module 
 
 > [!IMPORTANT]
 > **Supervisor Invariant**: If the Module Leader remains in `spawning[🤖 Subagent Creating]` for >3 minutes without creating the 2 User Story Leaders, the Active Supervisor Watchdog intervenes and spawns them directly.
+>
+> **Gatekeeper Subagents & Skills Invariant**: Module promotions require full sign-off by the Federated Gatekeeper Council, each executing with their designated specialized skills from `.agents/skills/`.
 
 ---
 
@@ -31,13 +33,13 @@ kanban
 
 ---
 
-## 2. Milestone Promotion Matrix
+## 2. Milestone Promotion Matrix with Subagents & Skills
 
-| Milestone ID | Milestone Scope | Lead Assignee | Profile | Target Branch | Status | PR / SHA |
-| :--- | :--- | :--- | :--- | :--- | :---: | :---: |
-| **M4-SETUP** | Provision 13 worktrees and origin branches | `Module Lead / Supervisor` | `agent-a` (`account1`) | `main` | ✅ Done | Commit `0d8eccb` |
-| **M4-SPAWN** | Spawn US-4.1.0 and US-4.2.0 Story Leaders | `Module 4 Lead Architect` | `agent-a` (`account1`) | `feat/module-4-checkout-and-links` | 🤖 Spawning | Ready |
-| **M4-S41** | US-4.1.0 Promotion (Checkout Sessions) | `US-4.1.0 Story Leader` | `agent-b` (`account2`) | `feat/module-4-checkout-and-links` | 📋 Ready | Pending |
-| **M4-S42** | US-4.2.0 Promotion (Payment Links) | `US-4.2.0 Story Leader` | `agent-c` (`account3`) | `feat/module-4-checkout-and-links` | 📋 Ready | Pending |
-| **M4-GATES** | Full Workspace Quality Gate Sign-Off | `Module 4 Lead Architect` | `agent-a` (`account1`) | `feat/module-4-checkout-and-links` | 📋 Ready | Pending |
-| **M4-MAIN** | Module 4 Final Merge into `main` | `Module 4 Lead Architect` | `agent-a` (`account1`) | `main` | 📋 Ready | Pending |
+| Milestone ID | Milestone Scope | Lead Assignee & Profile | Mandatory Lead Skill | Assigned Gatekeeper Council Subagents | Mandatory Gatekeeper Skills | Status | PR / SHA |
+| :--- | :--- | :--- | :--- | :--- | :--- | :---: | :---: |
+| **M4-SETUP** | Provision 13 worktrees & origin branches | `Module Lead` (`agent-a`) | `agy-customizations` | `Main Supervisor Watchdog` | `antigravity-guide` | ✅ Done | Commit `0d8eccb` |
+| **M4-SPAWN** | Spawn US-4.1.0 & US-4.2.0 Story Leaders | `Module 4 Lead Architect` (`agent-a`) | `stripe-best-practices` | `Main Supervisor Watchdog` | `antigravity-guide` | 🤖 Spawning | Ready |
+| **M4-S41** | US-4.1.0 Promotion (Checkout Sessions) | `US-4.1.0 Story Leader` (`agent-b`) | `stripe-best-practices` | `API Tester`<br>`microkernel-architect`<br>`Code Reviewer` | `stripe-docs`<br>`stripe-best-practices`<br>`security-audit` | 📋 Ready | Pending |
+| **M4-S42** | US-4.2.0 Promotion (Payment Links) | `US-4.2.0 Story Leader` (`agent-c`) | `stripe-best-practices` | `API Tester`<br>`microkernel-architect`<br>`Code Reviewer` | `stripe-docs`<br>`stripe-best-practices`<br>`security-audit` | 📋 Ready | Pending |
+| **M4-GATES** | Full Workspace Quality Gate Sign-Off | `Module 4 Lead Architect` (`agent-a`) | `stripe-best-practices` | Full Council (`Code Reviewer`, `AppSec`, `Rust Refactoring`, `API Tester`, `Tech Writer`) | `security-audit`<br>`upgrade-stripe`<br>`stripe-docs`<br>`stripe-best-practices` | 📋 Ready | Pending |
+| **M4-MAIN** | Module 4 Final Merge into `main` | `Module 4 Lead Architect` (`agent-a`) | `stripe-best-practices` | `Code Reviewer`<br>`Git Workflow Master` | `security-audit`<br>`stripe-best-practices` | 📋 Ready | Pending |

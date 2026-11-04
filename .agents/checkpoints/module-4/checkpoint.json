@@ -1,0 +1,199 @@
+{
+  "module_id": "module-4",
+  "module_title": "Hosted Checkout & Links Engine",
+  "module_branch": "feat/module-4-checkout-and-links",
+  "status": "INITIALIZED",
+  "main_pr": null,
+  "updated_at": "2026-11-04T13:03:00Z",
+  "last_event": "Federated Gatekeeper Council subagents and mandatory skills codified; 13 worktrees pre-provisioned",
+  "next_action": "Awaiting user explicit go-ahead to start Module 4 implementation",
+  "gatekeeper_council": {
+    "gate_g0": {
+      "name": "Syntax, Fmt & Clippy Hygiene",
+      "subagent": "Rust Refactoring Specialist",
+      "spec": ".agents/agents/engineering-rust-refactoring-specialist.md",
+      "skill": "upgrade-stripe"
+    },
+    "gate_g_borrow": {
+      "name": "Zero-Clone Discipline",
+      "subagent": "Rust Refactoring Specialist",
+      "spec": ".agents/agents/engineering-rust-refactoring-specialist.md",
+      "skill": "upgrade-stripe"
+    },
+    "gate_g2": {
+      "name": "Security & Cryptography",
+      "subagent": "Application Security Engineer",
+      "spec": ".agents/agents/security-appsec-engineer.md",
+      "skills": ["security-audit", "stripe-best-practices"]
+    },
+    "gate_g_law": {
+      "name": "Statutory Compliance & PCI",
+      "subagent": "Application Security Engineer",
+      "spec": ".agents/agents/security-appsec-engineer.md",
+      "skills": ["security-audit", "stripe-best-practices"]
+    },
+    "gate_g1": {
+      "name": "Acceptance Test Coverage",
+      "subagent": "API Tester",
+      "spec": ".agents/agents/testing-api-tester.md",
+      "skills": ["stripe-docs", "stripe-best-practices"]
+    },
+    "gate_g3": {
+      "name": "Microkernel Architecture",
+      "subagent": "microkernel-architect",
+      "spec": ".agents/agents/microkernel-architect.md",
+      "skills": ["stripe-docs", "stripe-best-practices"]
+    },
+    "gate_g4": {
+      "name": "Wire Contract & Integrated E2E",
+      "subagent": "API Tester",
+      "spec": ".agents/agents/testing-api-tester.md",
+      "skills": ["stripe-docs", "stripe-best-practices"]
+    },
+    "gate_g_docs": {
+      "name": "Microkernel Documentation",
+      "subagent": "Technical Writer",
+      "spec": ".agents/agents/engineering-technical-writer.md",
+      "skill": "stripe-docs"
+    },
+    "gate_g_review": {
+      "name": "Senior Code Review & Sign-Off",
+      "subagent": "Code Reviewer",
+      "spec": ".agents/agents/engineering-code-reviewer.md",
+      "skills": ["security-audit", "stripe-best-practices"]
+    }
+  },
+  "worktrees_preprovisioned": [
+    ".worktrees/feat-module-4-checkout-and-links",
+    ".worktrees/feat-us-410-checkout-sessions",
+    ".worktrees/feat-us-410-unit-1-session-line-item-entities",
+    ".worktrees/feat-us-410-unit-2-params-and-bracket-serialization",
+    ".worktrees/feat-us-410-unit-3-sessions-resource-crud",
+    ".worktrees/feat-us-410-unit-4-async-fulfillment-wire-tests",
+    ".worktrees/feat-us-410-unit-5-borrow-audit-and-doctests",
+    ".worktrees/feat-us-420-payment-links",
+    ".worktrees/feat-us-420-unit-1-payment-link-entities",
+    ".worktrees/feat-us-420-unit-2-payment-link-params",
+    ".worktrees/feat-us-420-unit-3-payment-links-resource-crud",
+    ".worktrees/feat-us-420-unit-4-omnibus-price-wire-tests",
+    ".worktrees/feat-us-420-unit-5-borrow-audit-and-reconciliation"
+  ],
+  "user_stories": {
+    "us-4.1.0": {
+      "title": "Hosted Checkout Sessions & Line Items",
+      "status": "BACKLOG",
+      "branch": "feat/us-4.1.0-checkout-sessions",
+      "story_pr": null,
+      "units": {
+        "unit-1": {
+          "name": "CheckoutSession & LineItem Entities",
+          "branch": "feat/us-4.1.0/unit-1-session-line-item-entities",
+          "pr": null,
+          "status": "BACKLOG",
+          "profile": "agent-a",
+          "implementer_skill": "stripe-docs",
+          "gatekeepers": ["Rust Refactoring Specialist", "Code Reviewer"],
+          "gatekeeper_skills": ["upgrade-stripe", "security-audit"]
+        },
+        "unit-2": {
+          "name": "CreateCheckoutSessionParams & Bracket Serde",
+          "branch": "feat/us-4.1.0/unit-2-params-and-bracket-serialization",
+          "pr": null,
+          "status": "BACKLOG",
+          "profile": "agent-b",
+          "implementer_skill": "stripe-docs",
+          "gatekeepers": ["microkernel-architect", "Code Reviewer"],
+          "gatekeeper_skills": ["stripe-docs", "stripe-best-practices", "security-audit"]
+        },
+        "unit-3": {
+          "name": "SessionsResource CRUD & Expire",
+          "branch": "feat/us-4.1.0/unit-3-sessions-resource-crud",
+          "pr": null,
+          "status": "BACKLOG",
+          "profile": "agent-c",
+          "implementer_skill": "stripe-docs",
+          "gatekeepers": ["API Tester", "Code Reviewer"],
+          "gatekeeper_skills": ["stripe-docs", "stripe-best-practices", "security-audit"]
+        },
+        "unit-4": {
+          "name": "Async Fulfillment & Open Redirect Protection",
+          "branch": "feat/us-4.1.0/unit-4-async-fulfillment-wire-tests",
+          "pr": null,
+          "status": "BACKLOG",
+          "profile": "agent-a",
+          "implementer_skill": "security-audit",
+          "gatekeepers": ["Application Security Engineer", "Code Reviewer"],
+          "gatekeeper_skills": ["security-audit", "stripe-best-practices"]
+        },
+        "unit-5": {
+          "name": "Borrow Audit, Doctests & Wire Mocks",
+          "branch": "feat/us-4.1.0/unit-5-borrow-audit-and-doctests",
+          "pr": null,
+          "status": "BACKLOG",
+          "profile": "agent-b",
+          "implementer_skill": "stripe-docs",
+          "gatekeepers": ["Rust Refactoring Specialist", "Technical Writer", "Code Reviewer"],
+          "gatekeeper_skills": ["upgrade-stripe", "stripe-docs", "security-audit"]
+        }
+      }
+    },
+    "us-4.2.0": {
+      "title": "Payment Links & Price Transparency",
+      "status": "BACKLOG",
+      "branch": "feat/us-4.2.0-payment-links",
+      "story_pr": null,
+      "units": {
+        "unit-1": {
+          "name": "PaymentLink Domain Entity & State Machine",
+          "branch": "feat/us-4.2.0/unit-1-payment-link-entities",
+          "pr": null,
+          "status": "BACKLOG",
+          "profile": "agent-c",
+          "implementer_skill": "stripe-docs",
+          "gatekeepers": ["Rust Refactoring Specialist", "Code Reviewer"],
+          "gatekeeper_skills": ["upgrade-stripe", "security-audit"]
+        },
+        "unit-2": {
+          "name": "PaymentLinkParams & Multi-Currency Schemas",
+          "branch": "feat/us-4.2.0/unit-2-payment-link-params",
+          "pr": null,
+          "status": "BACKLOG",
+          "profile": "agent-a",
+          "implementer_skill": "stripe-docs",
+          "gatekeepers": ["microkernel-architect", "Code Reviewer"],
+          "gatekeeper_skills": ["stripe-docs", "stripe-best-practices", "security-audit"]
+        },
+        "unit-3": {
+          "name": "PaymentLinksResource CRUD & Line Items",
+          "branch": "feat/us-4.2.0/unit-3-payment-links-resource-crud",
+          "pr": null,
+          "status": "BACKLOG",
+          "profile": "agent-b",
+          "implementer_skill": "stripe-docs",
+          "gatekeepers": ["API Tester", "Code Reviewer"],
+          "gatekeeper_skills": ["stripe-docs", "stripe-best-practices", "security-audit"]
+        },
+        "unit-4": {
+          "name": "EU Omnibus 2019/2161 Price Wire Mock Suite",
+          "branch": "feat/us-4.2.0/unit-4-omnibus-price-wire-tests",
+          "pr": null,
+          "status": "BACKLOG",
+          "profile": "agent-c",
+          "implementer_skill": "security-audit",
+          "gatekeepers": ["Application Security Engineer", "Code Reviewer"],
+          "gatekeeper_skills": ["security-audit", "stripe-best-practices"]
+        },
+        "unit-5": {
+          "name": "Borrow Audit, Doctests & Reconciliation Guide",
+          "branch": "feat/us-4.2.0/unit-5-borrow-audit-and-reconciliation",
+          "pr": null,
+          "status": "BACKLOG",
+          "profile": "agent-a",
+          "implementer_skill": "stripe-docs",
+          "gatekeepers": ["Rust Refactoring Specialist", "Technical Writer", "Code Reviewer"],
+          "gatekeeper_skills": ["upgrade-stripe", "stripe-docs", "security-audit"]
+        }
+      }
+    }
+  }
+}

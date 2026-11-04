@@ -25,11 +25,18 @@ Welcome to the **`some-stripe`** workspace. All AI agents, contributors, and aut
    - 3-state `Nullable<T>` (`Value`, `Null` -> `""`, `Omit`).
    - API v2: Strict `application/json` payloads with operation-scoped request DTOs and URL-driven pagination.
 
-5. **[Quality Gates & Code Review Standard (G0–G4 + G-Review)](.agents/rules/quality-gates-and-code-review.md)**:
-   - Code must compile with 0 warnings on Rust 2024 edition (`cargo clippy --all-targets -- -D warnings` and `cargo fmt --check`).
+5. **[Quality Gates & Code Review Standard (Federated Gatekeeper Council)](.agents/rules/quality-gates-and-code-review.md)**:
+   - Zero-warning Rust 2024 compilation (`cargo clippy --all-targets -- -D warnings` and `cargo fmt --check`).
    - Mandatory test coverage: >=90% line and >=85% branch coverage in affected modules.
    - Microkernel architecture: keep the core runtime lean with zero monolithic codegen.
-   - **Mandatory Independent Code Reviewer Subagent (Gate G-Review)**: No self-approval. Every PR requires an independent review and sign-off posted by a dedicated `Code Reviewer` subagent before merging.
+   - **Federated Gatekeeper Subagents & Skills (Zero Self-Approval)**: All quality gates MUST be evaluated by independent specialized subagents from `.agents/agents/` armed with dedicated skills from `.agents/skills/`:
+     - **Gate G0 & Gate G-Borrow**: `Rust Refactoring Specialist` (Skill: `upgrade-stripe`)
+     - **Gate G2 & Gate G-Law**: `Application Security Engineer` (Skills: `security-audit`, `stripe-best-practices`)
+     - **Gate G1 & Gate G4**: `API Tester` (Skills: `stripe-docs`, `stripe-best-practices`)
+     - **Gate G3**: `microkernel-architect` (Skills: `stripe-docs`, `stripe-best-practices`)
+     - **Gate G-Docs**: `Technical Writer` (Skill: `stripe-docs`)
+     - **Gate G-Review**: `Code Reviewer` (Skills: `security-audit`, `stripe-best-practices`) — Council President, formal GitHub sign-off.
+   - Merging via `gh pr merge` is strictly blocked until the independent `Code Reviewer` posts the structured sign-off comment. Self-approval is rejected.
 
 6. **[Global Financial & Statutory Legal Compliance (Gate G-Law)](.agents/rules/legal-compliance.md)**:
    - PCI-DSS 4.0 data security and zero raw PAN handling in application memory.
@@ -116,8 +123,16 @@ Profiles are **universal agent generators** tied to independent billing accounts
 - **Dedicated Worktree Location Invariant**:
   - All agent execution, code changes, and test executions MUST take place inside `.worktrees/` in this repository directory (`/workspaces/some-stripe/.worktrees/`).
   - No subagent or process may write outside its designated `.worktrees/<worktree-name>` path.
-- **Specialized Agents (Role & Task Specific)**:
-  - Agents are instantiated dynamically with specific tasks and roles (e.g. `microkernel-architect`, `security-webhook-engineer`, `domain-codegen-specialist`, `code-reviewer`, `api-tester`, `rust-refactoring-specialist`, or task-level unit implementers).
-  - Tasks must be dispatched across the 3 profile generators in a round-robin / quota-balanced manner to evenly split the quota bill.
+- **Specialized Agents & Mandatory Skills Matrix**:
+  - Agents are instantiated dynamically with specific tasks, roles, and mandatory skills:
+    - **`Rust Refactoring Specialist`** (Skill: `upgrade-stripe`): Audits Gate G0 (0-warning clippy/fmt) and Gate G-Borrow (zero-clone borrowing discipline).
+    - **`Application Security Engineer`** (Skills: `security-audit`, `stripe-best-practices`): Audits Gate G2 (constant-time crypto, zeroization) and Gate G-Law (PCI-DSS 4.0 zero PAN, ISO 4217, EU statutory consumer rights).
+    - **`API Tester`** (Skills: `stripe-docs`, `stripe-best-practices`): Audits Gate G1 (acceptance tests & coverage) and Gate G4 (wire contract validation against `stripe-mock`).
+    - **`microkernel-architect`** (Skills: `stripe-docs`, `stripe-best-practices`): Audits Gate G3 (lean microkernel architecture, progressive Cargo features, dual-protocol serializers).
+    - **`Technical Writer`** (Skill: `stripe-docs`): Audits Gate G-Docs (`cargo test --doc`, crate README.md).
+    - **`Code Reviewer`** (Skills: `security-audit`, `stripe-best-practices`): Council President for Gate G-Review sign-off.
+    - **`Git Workflow Master`**: Worktree orchestration, branching discipline, cascading merge resolution.
+    - **`DevOps Automator`**: Cargo target cache (`CARGO_TARGET_DIR`), CI/CD pipeline management.
+  - Tasks and gatekeeper reviews must be dispatched across the 3 profile generators in a round-robin / quota-balanced manner to evenly split the quota bill.
 - **Hierarchical Validation & Merge Pipeline**:
   - `Units (1..5) Tested` -> `Merge to Story Branch` -> `Story Integration Validated` -> `Merge to Module Branch` -> `Full Workspace Validated` -> `Merge to Main`.
