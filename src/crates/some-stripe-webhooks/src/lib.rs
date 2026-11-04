@@ -9,6 +9,8 @@
 //!   constant time via [`safe_constant_time_eq`] to prevent timing side-channel attacks.
 //! - **Replay Protection**: Enforces timestamp tolerance (default 300 seconds) and rejects
 //!   excessive future drift (> 60 seconds).
+//! - **Zero-Copy Streaming Header Parser**: Parses `Stripe-Signature` headers with zero heap allocation
+//!   for signature strings, supporting secret rollover with multiple `v1` signatures.
 //! - **Resource Limits**: Incoming payloads are strictly capped at 1 MB ([`MAX_WEBHOOK_PAYLOAD_BYTES`])
 //!   to safeguard against memory exhaustion attacks.
 //!
@@ -28,6 +30,9 @@
 //! let wrapper = StripeWebhookWrapper::from_raw(payload, &header, secret, None).unwrap();
 //! assert!(wrapper.is_checkout_completed());
 //! ```
+
+pub mod header;
+pub use header::{StripeSignatureHeader, parse_signature_header};
 
 use openssl::hash::MessageDigest;
 use openssl::pkey::PKey;
@@ -81,29 +86,14 @@ pub fn verify_stripe_signature(
         return false;
     }
 
-    let mut timestamp: Option<&str> = None;
-    let mut signatures: Vec<&str> = Vec::new();
-
-    for item in signature_header.split(',') {
-        let item = item.trim();
-        if let Some(t_val) = item.strip_prefix("t=") {
-            timestamp = Some(t_val.trim());
-        } else if let Some(sig_val) = item.strip_prefix("v1=") {
-            signatures.push(sig_val.trim());
-        }
-    }
-
-    let timestamp = match timestamp {
-        Some(t) if !t.is_empty() => t,
-        _ => return false,
+    let parsed_header = match parse_signature_header(signature_header) {
+        Ok(h) => h,
+        Err(_) => return false,
     };
 
-    if signatures.is_empty() {
-        return false;
-    }
-
-    let mut signed_payload = Vec::with_capacity(timestamp.len() + 1 + payload.len());
-    signed_payload.extend_from_slice(timestamp.as_bytes());
+    let ts_str = parsed_header.timestamp.to_string();
+    let mut signed_payload = Vec::with_capacity(ts_str.len() + 1 + payload.len());
+    signed_payload.extend_from_slice(ts_str.as_bytes());
     signed_payload.push(b'.');
     signed_payload.extend_from_slice(payload);
 
@@ -112,7 +102,7 @@ pub fn verify_stripe_signature(
         None => return false,
     };
 
-    signatures.iter().any(|sig| {
+    parsed_header.signatures.iter().any(|sig| {
         safe_constant_time_eq(expected_hex.as_bytes(), sig.to_ascii_lowercase().as_bytes())
     })
 }
@@ -147,22 +137,8 @@ impl Webhook {
             return Err(StripeWebhookError::MissingSecret);
         }
 
-        let mut timestamp: Option<i64> = None;
-        let mut signatures: Vec<&str> = Vec::new();
-
-        for item in header.split(',') {
-            let item = item.trim();
-            if let Some(t_val) = item.strip_prefix("t=") {
-                timestamp = t_val.parse::<i64>().ok();
-            } else if let Some(sig_val) = item.strip_prefix("v1=") {
-                signatures.push(sig_val.trim());
-            }
-        }
-
-        let timestamp = timestamp.ok_or(StripeWebhookError::InvalidTimestamp)?;
-        if signatures.is_empty() {
-            return Err(StripeWebhookError::MissingSignature);
-        }
+        let parsed_header = parse_signature_header(header)?;
+        let timestamp = parsed_header.timestamp;
 
         let tolerance_secs = tolerance.unwrap_or(Self::DEFAULT_TOLERANCE);
         if tolerance_secs > 0 {
@@ -188,7 +164,7 @@ impl Webhook {
         let expected_signature = hmac_sha256_hex(secret.as_bytes(), &signed_payload)
             .ok_or(StripeWebhookError::BadSignature)?;
 
-        let matched = signatures.iter().any(|sig| {
+        let matched = parsed_header.signatures.iter().any(|sig| {
             safe_constant_time_eq(
                 expected_signature.as_bytes(),
                 sig.to_ascii_lowercase().as_bytes(),
@@ -387,5 +363,32 @@ mod tests {
         assert_eq!(wrapper.amount_total(), Some(5000));
         assert_eq!(wrapper.currency().as_deref(), Some("USD"));
         assert!(wrapper.is_checkout_completed());
+    }
+
+    #[test]
+    fn test_rollover_dual_signatures_matches_secondary() {
+        let payload = b"{\"id\":\"evt_123\",\"type\":\"payment_intent.succeeded\"}";
+        let secret_old = "whsec_old_test_secret_key_11111";
+        let secret_new = "whsec_new_test_secret_key_22222";
+        let timestamp = 1728345600;
+
+        let sig_old = Webhook::generate_test_header_string(payload, secret_old, Some(timestamp));
+        let sig_new = Webhook::generate_test_header_string(payload, secret_new, Some(timestamp));
+
+        let sig_old_val = sig_old.split("v1=").nth(1).unwrap();
+        let sig_new_val = sig_new.split("v1=").nth(1).unwrap();
+
+        let combined_header = format!("t={timestamp},v1={sig_old_val},v1={sig_new_val}");
+
+        assert!(verify_stripe_signature(
+            payload,
+            &combined_header,
+            secret_new
+        ));
+        assert!(verify_stripe_signature(
+            payload,
+            &combined_header,
+            secret_old
+        ));
     }
 }
