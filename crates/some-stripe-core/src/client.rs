@@ -1,7 +1,7 @@
 //! Stripe API client configuration and execution engine.
 
 use crate::error::StripeError;
-use crate::workflow::{DefaultErrorWorkflow, ErrorAction, ErrorWorkflowHandler};
+use crate::workflow::{DefaultErrorWorkflow, ErrorWorkflowHandler};
 use subtle::ConstantTimeEq;
 use std::ops::Deref;
 use std::sync::Arc;
@@ -355,6 +355,7 @@ impl StripeClient {
 }
 
 // Compile-time static assertions ensuring StripeClient and its dependencies implement Send + Sync
+#[allow(dead_code)]
 const _: () = {
     fn assert_send_sync<T: Send + Sync>() {}
     fn verify() {
