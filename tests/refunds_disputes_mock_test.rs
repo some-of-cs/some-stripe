@@ -286,6 +286,68 @@ async fn test_disputes_update_with_submit_true_and_evidence_e2e() {
 }
 
 #[tokio::test]
+async fn test_disputes_update_transmits_all_evidence_fields_without_dropping() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let mut req_buf = vec![0; 8192];
+        let n = socket.read(&mut req_buf).await.unwrap();
+        let wire = String::from_utf8(req_buf[..n].to_vec()).unwrap();
+
+        assert!(wire.starts_with("POST /v1/disputes/dp_exhaustive_evidence HTTP/1.1"));
+        // Verify automatic idempotency key injection
+        assert!(wire.to_ascii_lowercase().contains("idempotency-key: "));
+        // Verify evidence fields that were previously dropped
+        assert!(wire.contains("evidence%5Bcustomer_communication%5D=Email+thread+attached"));
+        assert!(wire.contains("evidence%5Bshipping_tracking_number%5D=TRACK-123456789"));
+        assert!(wire.contains("evidence%5Bservice_date%5D=2026-10-15"));
+        assert!(wire.contains("evidence%5Bduplicate_charge_explanation%5D=Distinct+orders"));
+        assert!(wire.contains("evidence%5Bcancellation_policy%5D=file_cancel_policy_pdf"));
+        assert!(wire.contains("evidence%5Breceipt%5D=file_receipt_img"));
+
+        let body = r#"{
+            "id": "dp_exhaustive_evidence",
+            "object": "dispute",
+            "amount": 5000,
+            "currency": "usd",
+            "status": "under_review",
+            "reason": "fraudulent"
+        }"#;
+        write_json_response(&mut socket, body).await;
+    });
+
+    let config = StripeConfig::new("sk_test_exhaustive").with_api_base(format!("http://{address}"));
+    let client = StripeClient::with_config(config);
+
+    let dispute: Dispute = client
+        .disputes()
+        .update(
+            "dp_exhaustive_evidence",
+            &UpdateDisputeParams {
+                evidence: Some(DisputeEvidenceParams {
+                    customer_communication: Some("Email thread attached".into()),
+                    shipping_tracking_number: Some("TRACK-123456789".into()),
+                    service_date: Some("2026-10-15".into()),
+                    duplicate_charge_explanation: Some("Distinct orders".into()),
+                    cancellation_policy: Some("file_cancel_policy_pdf".into()),
+                    receipt: Some("file_receipt_img".into()),
+                    ..Default::default()
+                }),
+                metadata: None,
+                submit: Some(false),
+                idempotency_key: None, // Auto-injected UUID v4 key tested
+            },
+        )
+        .await
+        .unwrap();
+
+    server.await.unwrap();
+    assert_eq!(dispute.id, "dp_exhaustive_evidence");
+}
+
+#[tokio::test]
 async fn test_disputes_retrieve_and_close_lifecycle() {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
