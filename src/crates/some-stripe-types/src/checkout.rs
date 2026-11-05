@@ -261,6 +261,12 @@ pub struct CheckoutSession {
     pub line_items: Option<LineItemList>,
 }
 
+impl Default for CheckoutSession {
+    fn default() -> Self {
+        Self::new("")
+    }
+}
+
 impl CheckoutSession {
     /// Creates a new minimal `CheckoutSession`.
     pub fn new(id: impl Into<String>) -> Self {

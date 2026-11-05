@@ -81,8 +81,8 @@ pub use some_stripe_webhooks::{
 pub mod resources;
 pub use resources::{
     AccountsResource, BalanceResource, BalanceTransactionsResource, CheckoutResource,
-    DisputesResource, PaymentIntentsResource, RedirectError, RefundsResource, SessionsResource,
-    WebhooksResource, generate_uuid_v4, is_fulfillment_ready, is_valid_uuid_v4,
+    CheckoutSessionExt, DisputesResource, PaymentIntentsResource, RedirectError, RefundsResource,
+    SessionsResource, WebhooksResource, generate_uuid_v4, is_fulfillment_ready, is_valid_uuid_v4,
     validate_redirect_url,
 };
 
