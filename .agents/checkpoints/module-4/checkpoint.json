@@ -1,20 +1,12 @@
 {
   "module": "module-4-checkout-and-links",
   "status": "in_progress",
-  "current_state": "in_progress[🔄 Unit 4 Cascading Progression]",
+  "current_state": "in_progress[🔄 Stories In Progress]",
   "active_stories": [
     "US-4.1.0",
     "US-4.2.0"
   ],
-  "merged_prs": [
-    { "id": 53, "unit": "US-4.1.0 Unit 1", "sha": "3ede3f0" },
-    { "id": 54, "unit": "US-4.2.0 Unit 1", "sha": "4f3bcda" },
-    { "id": 55, "unit": "US-4.1.0 Unit 2", "sha": "464b7bc" },
-    { "id": 56, "unit": "US-4.2.0 Unit 2", "sha": "e865b0e" },
-    { "id": 57, "unit": "US-4.1.0 Unit 3", "sha": "5e3dc63" },
-    { "id": 58, "unit": "US-4.2.0 Unit 3", "sha": "b50debd" }
-  ],
   "profile": "agent-a",
-  "timestamp": "2026-11-04T23:47:00Z",
-  "details": "Unit 3 for both US-4.1.0 (PR #57) and US-4.2.0 (PR #58) successfully merged into story branches. Advancing to Unit 4 cascading review and promotion."
+  "timestamp": "2026-11-05T00:09:40Z",
+  "details": "US-4.1.0 Units 1..5 merged into feat/us-4.1.0-checkout-sessions (#53, #55, #57, #60, #63). US-4.2.0 Units 1..5 merged into feat/us-4.2.0-payment-links (#54, #56, #58, #59, #62). Both stories verified and ready for Promotion PRs into feat/module-4-checkout-and-links."
 }
