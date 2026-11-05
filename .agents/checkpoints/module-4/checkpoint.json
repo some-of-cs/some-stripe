@@ -3,10 +3,12 @@
   "status": "in_progress",
   "current_state": "in_progress[🔄 Stories In Progress]",
   "active_stories": [
-    "US-4.1.0",
     "US-4.2.0"
   ],
+  "merged_stories": [
+    "US-4.1.0"
+  ],
   "profile": "agent-a",
-  "timestamp": "2026-11-05T00:09:40Z",
-  "details": "US-4.1.0 Units 1..5 merged into feat/us-4.1.0-checkout-sessions (#53, #55, #57, #60, #63). US-4.2.0 Units 1..5 merged into feat/us-4.2.0-payment-links (#54, #56, #58, #59, #62). Both stories verified and ready for Promotion PRs into feat/module-4-checkout-and-links."
+  "timestamp": "2026-11-05T00:10:45Z",
+  "details": "US-4.1.0 Promotion PR #64 merged into feat/module-4-checkout-and-links. All 5 micro-units complete and verified: PR #53 (Unit 1), PR #55 (Unit 2), PR #57 (Unit 3), PR #60 (Unit 4), PR #63 (Unit 5). US-4.1.0 fully completed."
 }
