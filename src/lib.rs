@@ -81,9 +81,9 @@ pub use some_stripe_webhooks::{
 pub mod resources;
 pub use resources::{
     AccountsResource, BalanceResource, BalanceTransactionsResource, CheckoutResource,
-    CheckoutSessionExt, DisputesResource, PaymentIntentsResource, RedirectError, RefundsResource,
-    SessionsResource, WebhooksResource, generate_uuid_v4, is_fulfillment_ready, is_valid_uuid_v4,
-    validate_redirect_url,
+    CheckoutSessionExt, DisputesResource, PaymentIntentsResource, PaymentLinksResource,
+    RedirectError, RefundsResource, SessionsResource, WebhooksResource, generate_uuid_v4,
+    is_fulfillment_ready, is_valid_uuid_v4, validate_redirect_url,
 };
 
 /// The main Stripe client used to interact with the Stripe API, modeled after `stripe-node`.
@@ -151,6 +151,41 @@ impl StripeClient {
     pub fn balance_transactions(&self) -> BalanceTransactionsResource<'_> {
         BalanceTransactionsResource::new(&self.0)
     }
+
+    /// Access the PaymentLinks resource namespace (`stripe.payment_links`).
+    pub fn payment_links(&self) -> PaymentLinksResource<'_> {
+        PaymentLinksResource::new(&self.0)
+    }
+}
+
+/// Validates compliance with EU Omnibus Directive 2019/2161 Article 6a regarding price reductions.
+///
+/// Any announcement of a price reduction must indicate the prior price applied for at least 30 days.
+///
+/// # Errors
+/// Returns [`StripeError::InvalidRequest`] if any of the statutory conditions are violated.
+pub fn validate_omnibus_price_transparency(
+    regular_price: i64,
+    announced_discounted_price: i64,
+    prior_30d_lowest_price: Option<i64>,
+) -> Result<(), StripeError> {
+    some_stripe_types::validate_omnibus_price_transparency(
+        regular_price,
+        announced_discounted_price,
+        prior_30d_lowest_price,
+    )
+    .map_err(|e| StripeError::InvalidRequest(e.to_string()))
+}
+
+/// Validates transparent tax behavior disclosure under EU consumer protection regulations.
+///
+/// In B2C / EU Omnibus context, tax behavior cannot be `unspecified`.
+///
+/// # Errors
+/// Returns [`StripeError::InvalidRequest`] if `tax_behavior` is `TaxBehavior::Unspecified`.
+pub fn validate_tax_behavior_transparency(tax_behavior: TaxBehavior) -> Result<(), StripeError> {
+    some_stripe_types::validate_tax_behavior_transparency(tax_behavior)
+        .map_err(|e| StripeError::InvalidRequest(e.to_string()))
 }
 
 impl From<some_stripe_core::StripeClient> for StripeClient {
@@ -184,6 +219,9 @@ pub trait StripeClientExt {
 
     /// Access the BalanceTransactions resource namespace (`stripe.balance_transactions`).
     fn balance_transactions(&self) -> BalanceTransactionsResource<'_>;
+
+    /// Access the PaymentLinks resource namespace (`stripe.payment_links`).
+    fn payment_links(&self) -> PaymentLinksResource<'_>;
 }
 
 impl StripeClientExt for some_stripe_core::StripeClient {
@@ -217,6 +255,10 @@ impl StripeClientExt for some_stripe_core::StripeClient {
 
     fn balance_transactions(&self) -> BalanceTransactionsResource<'_> {
         BalanceTransactionsResource::new(self)
+    }
+
+    fn payment_links(&self) -> PaymentLinksResource<'_> {
+        PaymentLinksResource::new(self)
     }
 }
 

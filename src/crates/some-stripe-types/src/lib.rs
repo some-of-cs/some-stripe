@@ -5,18 +5,18 @@
 //!
 //! ## Overview
 //!
-//! - **Domain Entities**: [`PaymentIntent`], [`PaymentIntentStatus`], [`CaptureMethod`], [`PaymentMethodOptions`], [`CheckoutSession`], [`LineItem`], [`LineItemList`], [`Account`], [`Invoice`], [`Dispute`], [`Refund`], [`Balance`], [`BalanceTransaction`].
+//! - **Domain Entities**: [`PaymentIntent`], [`PaymentIntentStatus`], [`CaptureMethod`], [`PaymentMethodOptions`], [`CheckoutSession`], [`LineItem`], [`LineItemList`], [`Account`], [`Invoice`], [`Dispute`], [`Refund`], [`Balance`], [`BalanceTransaction`], [`PaymentLink`], [`PaymentLinkStatus`].
 //! - **ISO 4217 Integer Arithmetic (Gate G-Law)**: [`currency`] module provides zero-float exact integer arithmetic across non-decimal, 2-decimal, and 3-decimal currencies.
 //! - **Event Pipeline**: [`Event`], [`EventData`], [`EventObject`].
 //! - **Statutory Legal Compliance**: [`is_statutory_withdrawal_compliant`] enforces EU Directive 2011/83/EU Article 13.
 //! - **Immutable Ledger Reconciliation**: [`validate_ledger_reconciliation`] verifies $\text{net} = \text{amount} - \text{fee}$ across batches and streams.
-//! - **Strongly Typed Identifiers**: [`AccountId`], [`IdempotencyKey`], [`DisputeId`].
+//! - **Strongly Typed Identifiers**: [`AccountId`], [`IdempotencyKey`], [`DisputeId`], [`PaymentLinkId`].
 //! - **Dispute & Evidence Management**: [`Dispute`], [`DisputeEvidence`], [`DisputeEvidenceDetails`],
 //!   [`DisputeStatus`], and [`UpdateDisputeParams`] with submission locking invariants.
 //! - **Invoice Upcoming Guard**: [`Invoice`] specifies `pub id: Option<String>` to safely accommodate
 //!   `invoice.upcoming` preview events where `id` is null on Stripe wire payloads.
 //! - **Discriminated Event Union**: [`EventObject`] provides seamless enum dispatch across
-//!   `payment_intent`, `checkout.session`, `invoice`, `dispute`, `refund`, and unknown types via `#[serde(other)]`.
+//!   `payment_intent`, `checkout.session`, `invoice`, `dispute`, `refund`, `payment_link`, and unknown types via `#[serde(other)]`.
 //! - **Request Parameter Schemas & ISO 4217 Validation**: [`CreatePaymentIntentParams`],
 //!   [`CapturePaymentIntentParams`], [`CancelPaymentIntentParams`], [`ConfirmPaymentIntentParams`].
 //! - **PCI-DSS Compliance (Gate G-Law & G2)**: Sensitive credentials like `client_secret` in
@@ -84,6 +84,10 @@ pub mod refund;
 pub use refund::*;
 pub mod checkout;
 pub use checkout::*;
+pub mod payment_link;
+pub use payment_link::*;
+pub mod omnibus;
+pub use omnibus::*;
 
 /// Strongly typed Stripe Connect Account ID (`acct_...`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -798,6 +802,10 @@ pub enum EventObject {
     /// Stripe Refund payload (`object = "refund"`).
     Refund(Refund),
 
+    /// Stripe PaymentLink payload (`object = "payment_link"`).
+    #[serde(rename = "payment_link")]
+    PaymentLink(PaymentLink),
+
     /// Unrecognized, custom, or unsupported event object types.
     #[serde(other)]
     Unknown,
@@ -1371,5 +1379,34 @@ mod tests {
             confirm_params.setup_future_usage.as_deref(),
             Some("off_session")
         );
+    }
+
+    #[test]
+    fn test_event_object_payment_link() {
+        let json = serde_json::json!({
+            "id": "plink_evt_test_101",
+            "object": "payment_link",
+            "active": true,
+            "url": "https://buy.stripe.com/test_evt_101",
+            "currency": "usd",
+            "livemode": false
+        });
+
+        let data = EventData { object: json };
+        let obj = data
+            .deserialize_object()
+            .expect("Failed to deserialize payment_link event");
+
+        match obj {
+            EventObject::PaymentLink(link) => {
+                assert_eq!(link.id, "plink_evt_test_101");
+                assert_eq!(link.object, "payment_link");
+                assert!(link.is_active());
+                assert_eq!(link.url, "https://buy.stripe.com/test_evt_101");
+                assert_eq!(link.currency.as_deref(), Some("usd"));
+                assert_eq!(link.livemode, Some(false));
+            }
+            other => panic!("Expected PaymentLink variant, got {other:?}"),
+        }
     }
 }

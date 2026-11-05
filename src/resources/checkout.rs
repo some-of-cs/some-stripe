@@ -8,6 +8,7 @@
 //! - **G-Borrow**: Zero-clone borrowing discipline across session creation, retrieval, and pagination.
 //! - **G2**: Automatic RFC 4122 UUID v4 `Idempotency-Key` header injection on session creation and expiration.
 
+use crate::resources::payment_links::PaymentLinksResource;
 pub use some_stripe_core::RedirectError;
 use some_stripe_core::patterns::pagination::Paginator;
 use some_stripe_core::{StripeClient, StripeError};
@@ -20,18 +21,26 @@ use some_stripe_types::{
 pub struct CheckoutResource<'a> {
     /// Checkout Sessions resource (`stripe.checkout.sessions`).
     pub sessions: SessionsResource<'a>,
+    /// Payment Links resource (`stripe.checkout.payment_links`).
+    pub payment_links: PaymentLinksResource<'a>,
 }
 
 impl<'a> CheckoutResource<'a> {
     pub(crate) fn new(client: &'a StripeClient) -> Self {
         Self {
             sessions: SessionsResource::new(client),
+            payment_links: PaymentLinksResource::new(client),
         }
     }
 
     /// Access the Sessions resource.
     pub fn sessions(&self) -> &SessionsResource<'a> {
         &self.sessions
+    }
+
+    /// Access the PaymentLinks resource.
+    pub fn payment_links(&self) -> &PaymentLinksResource<'a> {
+        &self.payment_links
     }
 }
 
