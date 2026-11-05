@@ -472,6 +472,33 @@ impl PaymentLink {
         self.livemode = Some(livemode);
         self
     }
+
+    /// Returns the payment link ID as a borrowed string slice (`&str`).
+    #[must_use]
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+
+    /// Returns the public checkout URL as a borrowed string slice (`&str`).
+    #[must_use]
+    pub fn url(&self) -> &str {
+        &self.url
+    }
+
+    /// Returns the currency as an optional borrowed string slice (`Option<&str>`).
+    #[must_use]
+    pub fn currency(&self) -> Option<&str> {
+        self.currency.as_deref()
+    }
+
+    /// Queries the metadata map and returns a borrowed string slice without map cloning.
+    #[must_use]
+    pub fn metadata_get(&self, key: &str) -> Option<&str> {
+        self.metadata
+            .as_ref()
+            .and_then(|m| m.get(key))
+            .map(|s| s.as_str())
+    }
 }
 
 // ============================================================================
