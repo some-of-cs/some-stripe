@@ -754,6 +754,576 @@ impl std::fmt::Debug for ConfirmPaymentIntentParams {
     }
 }
 
+/// Default payment mode for checkout sessions (`payment`).
+fn default_payment_mode() -> String {
+    "payment".into()
+}
+
+/// Parameters for the product associated with a line item's price data.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct LineItemProductDataParams {
+    /// The product's name, meant to be displayable to the customer.
+    pub name: String,
+
+    /// The product's description, meant to be displayable to the customer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+
+    /// A list of up to 8 URLs of images for this product.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub images: Option<Vec<String>>,
+}
+
+impl LineItemProductDataParams {
+    /// Creates a new `LineItemProductDataParams` with the specified product name.
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            description: None,
+            images: None,
+        }
+    }
+
+    /// Sets the product description.
+    pub fn description(mut self, description: impl Into<String>) -> Self {
+        self.description = Some(description.into());
+        self
+    }
+
+    /// Sets the product image URLs.
+    pub fn images(mut self, images: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.images = Some(images.into_iter().map(Into::into).collect());
+        self
+    }
+
+    /// Appends an image URL to the product.
+    pub fn add_image(mut self, image_url: impl Into<String>) -> Self {
+        self.images
+            .get_or_insert_with(Vec::new)
+            .push(image_url.into());
+        self
+    }
+}
+
+/// Data used to generate a new Price object inline for a line item.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LineItemPriceDataParams {
+    /// Three-letter ISO currency code, in lowercase. Must be a valid ISO 4217 code.
+    pub currency: String,
+
+    /// A non-negative integer in cents (or minor currency units) representing how much to charge.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unit_amount: Option<i64>,
+
+    /// Data used to generate a new product object inline.
+    pub product_data: LineItemProductDataParams,
+}
+
+impl LineItemPriceDataParams {
+    /// Creates a new `LineItemPriceDataParams` with currency and product data.
+    pub fn new(currency: impl Into<String>, product_data: LineItemProductDataParams) -> Self {
+        Self {
+            currency: currency.into().to_ascii_lowercase(),
+            unit_amount: None,
+            product_data,
+        }
+    }
+
+    /// Creates a new `LineItemPriceDataParams` with currency, unit amount, and product data.
+    pub fn with_amount(
+        currency: impl Into<String>,
+        unit_amount: i64,
+        product_data: LineItemProductDataParams,
+    ) -> Self {
+        Self {
+            currency: currency.into().to_ascii_lowercase(),
+            unit_amount: Some(unit_amount),
+            product_data,
+        }
+    }
+
+    /// Sets the unit amount in minor currency units.
+    pub fn unit_amount(mut self, amount: i64) -> Self {
+        self.unit_amount = Some(amount);
+        self
+    }
+
+    /// Sets the currency code.
+    pub fn currency(mut self, currency: impl Into<String>) -> Self {
+        self.currency = currency.into().to_ascii_lowercase();
+        self
+    }
+
+    /// Sets the inline product data.
+    pub fn product_data(mut self, product_data: LineItemProductDataParams) -> Self {
+        self.product_data = product_data;
+        self
+    }
+}
+
+/// A line item being purchased in a checkout session.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct LineItemParams {
+    /// The ID of the Price or Plan object.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub price: Option<String>,
+
+    /// The quantity of the line item being purchased.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quantity: Option<u32>,
+
+    /// Data used to generate a new Price object inline.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub price_data: Option<LineItemPriceDataParams>,
+}
+
+/// Type alias for [`LineItemParams`] matching Stripe parameter naming conventions.
+pub type CreateLineItemParams = LineItemParams;
+
+impl LineItemParams {
+    /// Creates an empty `LineItemParams`.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Creates a `LineItemParams` referencing an existing price ID with a specified quantity.
+    pub fn from_price(price: impl Into<String>, quantity: u32) -> Self {
+        Self {
+            price: Some(price.into()),
+            quantity: Some(quantity),
+            price_data: None,
+        }
+    }
+
+    /// Creates a `LineItemParams` with inline price data and a specified quantity.
+    pub fn from_price_data(price_data: LineItemPriceDataParams, quantity: u32) -> Self {
+        Self {
+            price: None,
+            quantity: Some(quantity),
+            price_data: Some(price_data),
+        }
+    }
+
+    /// Sets the price ID.
+    pub fn price(mut self, price: impl Into<String>) -> Self {
+        self.price = Some(price.into());
+        self
+    }
+
+    /// Sets the quantity.
+    pub fn quantity(mut self, qty: u32) -> Self {
+        self.quantity = Some(qty);
+        self
+    }
+
+    /// Sets the price data.
+    pub fn price_data(mut self, price_data: LineItemPriceDataParams) -> Self {
+        self.price_data = Some(price_data);
+        self
+    }
+}
+
+/// Parameters for creating a Stripe Checkout Session (`POST /v1/checkout/sessions`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CreateCheckoutSessionParams {
+    /// The URL the customer will be directed to upon successful payment.
+    pub success_url: String,
+
+    /// The URL the customer will be directed to if they decide to cancel.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cancel_url: Option<String>,
+
+    /// The mode of the checkout session (`payment`, `setup`, or `subscription`). Default: `payment`.
+    #[serde(default = "default_payment_mode")]
+    pub mode: String,
+
+    /// Unique string to reference the Checkout Session on your system.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub client_reference_id: Option<String>,
+
+    /// The ID of an existing customer for this session (`cus_...`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub customer: Option<String>,
+
+    /// If provided, this value will be used when the Customer object is created.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub customer_email: Option<String>,
+
+    /// Epoch timestamp at which the session expires (must be between 30 minutes and 24 hours).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<i64>,
+
+    /// Set of key-value pairs that you can attach to an object.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<std::collections::HashMap<String, String>>,
+
+    /// Idempotency key for safe retries. Not serialized into request body.
+    #[serde(skip)]
+    pub idempotency_key: Option<String>,
+
+    /// A list of items the customer is purchasing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub line_items: Option<Vec<LineItemParams>>,
+
+    /// Currency code (for single-item sessions; preserved for backward compatibility).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub currency: Option<String>,
+
+    /// The amount to be collected per unit in minor currency units (for single-item sessions; preserved for backward compatibility).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unit_amount: Option<i64>,
+
+    /// Name of the product or service displayed at checkout (for single-item sessions; preserved for backward compatibility).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub product_name: Option<String>,
+
+    /// Quantity of the item being purchased (for single-item sessions; preserved for backward compatibility).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quantity: Option<u32>,
+}
+
+impl Default for CreateCheckoutSessionParams {
+    fn default() -> Self {
+        Self {
+            success_url: String::new(),
+            cancel_url: None,
+            mode: default_payment_mode(),
+            client_reference_id: None,
+            customer: None,
+            customer_email: None,
+            expires_at: None,
+            metadata: None,
+            idempotency_key: None,
+            line_items: None,
+            currency: None,
+            unit_amount: None,
+            product_name: None,
+            quantity: None,
+        }
+    }
+}
+
+impl CreateCheckoutSessionParams {
+    /// Creates a new `CreateCheckoutSessionParams` with the specified success URL.
+    /// Mode defaults to `"payment"`.
+    pub fn new(success_url: impl Into<String>) -> Self {
+        Self {
+            success_url: success_url.into(),
+            ..Default::default()
+        }
+    }
+
+    /// Backward-compatible constructor for creating a single-item Checkout Session.
+    pub fn single_item(
+        success_url: impl Into<String>,
+        currency: impl Into<String>,
+        unit_amount: i64,
+        product_name: impl Into<String>,
+        quantity: u32,
+    ) -> Self {
+        let curr = currency.into().to_ascii_lowercase();
+        let prod = product_name.into();
+        Self {
+            success_url: success_url.into(),
+            currency: Some(curr.clone()),
+            unit_amount: Some(unit_amount),
+            product_name: Some(prod.clone()),
+            quantity: Some(quantity),
+            line_items: Some(vec![LineItemParams {
+                price: None,
+                quantity: Some(quantity),
+                price_data: Some(LineItemPriceDataParams {
+                    currency: curr,
+                    unit_amount: Some(unit_amount),
+                    product_data: LineItemProductDataParams {
+                        name: prod,
+                        description: None,
+                        images: None,
+                    },
+                }),
+            }]),
+            ..Default::default()
+        }
+    }
+
+    /// Sets the cancel URL.
+    pub fn cancel_url(mut self, url: impl Into<String>) -> Self {
+        self.cancel_url = Some(url.into());
+        self
+    }
+
+    /// Sets the session mode (`payment`, `setup`, or `subscription`).
+    pub fn mode(mut self, mode: impl Into<String>) -> Self {
+        self.mode = mode.into();
+        self
+    }
+
+    /// Sets the client reference ID.
+    pub fn client_reference_id(mut self, id: impl Into<String>) -> Self {
+        self.client_reference_id = Some(id.into());
+        self
+    }
+
+    /// Sets the customer ID.
+    pub fn customer(mut self, customer: impl Into<String>) -> Self {
+        self.customer = Some(customer.into());
+        self
+    }
+
+    /// Sets the customer email.
+    pub fn customer_email(mut self, email: impl Into<String>) -> Self {
+        self.customer_email = Some(email.into());
+        self
+    }
+
+    /// Sets the expiration timestamp (Unix epoch seconds).
+    pub fn expires_at(mut self, expires_at: i64) -> Self {
+        self.expires_at = Some(expires_at);
+        self
+    }
+
+    /// Sets the metadata dictionary.
+    pub fn metadata(
+        mut self,
+        metadata: impl IntoIterator<Item = (impl Into<String>, impl Into<String>)>,
+    ) -> Self {
+        self.metadata = Some(
+            metadata
+                .into_iter()
+                .map(|(k, v)| (k.into(), v.into()))
+                .collect(),
+        );
+        self
+    }
+
+    /// Adds a single key-value metadata entry.
+    pub fn add_metadata(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.metadata
+            .get_or_insert_with(std::collections::HashMap::new)
+            .insert(key.into(), value.into());
+        self
+    }
+
+    /// Sets the idempotency key for safe retries.
+    pub fn idempotency_key(mut self, key: impl Into<String>) -> Self {
+        self.idempotency_key = Some(key.into());
+        self
+    }
+
+    /// Sets the list of line items.
+    pub fn line_items(mut self, items: Vec<LineItemParams>) -> Self {
+        self.line_items = Some(items);
+        self
+    }
+
+    /// Appends a line item to the checkout session.
+    pub fn add_line_item(mut self, item: LineItemParams) -> Self {
+        self.line_items.get_or_insert_with(Vec::new).push(item);
+        self
+    }
+
+    /// Backward-compatibility setter for currency.
+    pub fn currency(mut self, currency: impl Into<String>) -> Self {
+        self.currency = Some(currency.into().to_ascii_lowercase());
+        self
+    }
+
+    /// Backward-compatibility setter for unit_amount.
+    pub fn unit_amount(mut self, amount: i64) -> Self {
+        self.unit_amount = Some(amount);
+        self
+    }
+
+    /// Backward-compatibility setter for product_name.
+    pub fn product_name(mut self, name: impl Into<String>) -> Self {
+        self.product_name = Some(name.into());
+        self
+    }
+
+    /// Backward-compatibility setter for quantity.
+    pub fn quantity(mut self, quantity: u32) -> Self {
+        self.quantity = Some(quantity);
+        self
+    }
+
+    /// Alias for [`cancel_url`].
+    pub fn with_cancel_url(self, cancel_url: impl Into<String>) -> Self {
+        self.cancel_url(cancel_url)
+    }
+
+    /// Alias for [`mode`].
+    pub fn with_mode(self, mode: impl Into<String>) -> Self {
+        self.mode(mode)
+    }
+
+    /// Alias for [`client_reference_id`].
+    pub fn with_client_reference_id(self, id: impl Into<String>) -> Self {
+        self.client_reference_id(id)
+    }
+
+    /// Alias for [`customer`].
+    pub fn with_customer(self, customer: impl Into<String>) -> Self {
+        self.customer(customer)
+    }
+
+    /// Alias for [`customer_email`].
+    pub fn with_customer_email(self, email: impl Into<String>) -> Self {
+        self.customer_email(email)
+    }
+
+    /// Alias for [`quantity`].
+    pub fn with_quantity(self, quantity: u32) -> Self {
+        self.quantity(quantity)
+    }
+
+    /// Alias for [`expires_at`].
+    pub fn with_expires_at(self, expires_at: i64) -> Self {
+        self.expires_at(expires_at)
+    }
+
+    /// Alias for [`idempotency_key`].
+    pub fn with_idempotency_key(self, key: impl Into<String>) -> Self {
+        self.idempotency_key(key)
+    }
+
+    /// Alias for [`line_items`].
+    pub fn with_line_items(self, items: Vec<LineItemParams>) -> Self {
+        self.line_items(items)
+    }
+
+    /// Alias for [`metadata`].
+    pub fn with_metadata(
+        self,
+        metadata: impl IntoIterator<Item = (impl Into<String>, impl Into<String>)>,
+    ) -> Self {
+        self.metadata(metadata)
+    }
+
+    /// Validates the checkout session parameters according to Stripe requirements and Gate G-Law ISO 4217 rules.
+    pub fn validate(&self) -> Result<(), PaymentIntentValidationError> {
+        if self.success_url.trim().is_empty() {
+            return Err(PaymentIntentValidationError::InvalidParameter {
+                field: "success_url",
+                reason: "success_url cannot be empty".to_string(),
+            });
+        }
+
+        if let Some(ref items) = self.line_items {
+            for item in items {
+                if item.quantity == Some(0) {
+                    return Err(PaymentIntentValidationError::InvalidParameter {
+                        field: "line_items.quantity",
+                        reason: "line item quantity must be greater than 0".to_string(),
+                    });
+                }
+                if let Some(ref price_data) = item.price_data {
+                    validate_currency(&price_data.currency)?;
+                    if let Some(amt) = price_data.unit_amount {
+                        validate_amount(amt)?;
+                    }
+                    if price_data.product_data.name.trim().is_empty() {
+                        return Err(PaymentIntentValidationError::InvalidParameter {
+                            field: "product_data.name",
+                            reason: "product name cannot be empty".to_string(),
+                        });
+                    }
+                }
+            }
+        }
+
+        if let Some(ref curr) = self.currency {
+            validate_currency(curr)?;
+        }
+        if let Some(amt) = self.unit_amount {
+            validate_amount(amt)?;
+        }
+        if self.quantity == Some(0) {
+            return Err(PaymentIntentValidationError::InvalidParameter {
+                field: "quantity",
+                reason: "quantity must be greater than 0".to_string(),
+            });
+        }
+
+        Ok(())
+    }
+}
+
+/// Query parameters for listing line items of a Checkout Session (`GET /v1/checkout/sessions/{id}/line_items`).
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ListLineItemsParams {
+    /// Limit on the number of objects returned (between 1 and 100). Default is 10.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u32>,
+
+    /// A cursor for use in pagination: an object ID defining your place in the list.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub starting_after: Option<String>,
+
+    /// A cursor for use in backward pagination: an object ID defining your place in the list.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ending_before: Option<String>,
+}
+
+impl ListLineItemsParams {
+    /// Creates default empty parameters.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets the limit on the number of objects to be returned.
+    pub fn limit(mut self, limit: u32) -> Self {
+        self.limit = Some(limit);
+        self
+    }
+
+    /// Sets the `starting_after` cursor.
+    pub fn starting_after(mut self, cursor: impl Into<String>) -> Self {
+        self.starting_after = Some(cursor.into());
+        self
+    }
+
+    /// Sets the `ending_before` cursor.
+    pub fn ending_before(mut self, cursor: impl Into<String>) -> Self {
+        self.ending_before = Some(cursor.into());
+        self
+    }
+
+    /// Builder alias with_limit.
+    pub fn with_limit(self, limit: u32) -> Self {
+        self.limit(limit)
+    }
+
+    /// Builder alias with_starting_after.
+    pub fn with_starting_after(self, cursor: impl Into<String>) -> Self {
+        self.starting_after(cursor)
+    }
+
+    /// Builder alias with_ending_before.
+    pub fn with_ending_before(self, cursor: impl Into<String>) -> Self {
+        self.ending_before(cursor)
+    }
+}
+
+impl From<Option<u32>> for ListLineItemsParams {
+    fn from(limit: Option<u32>) -> Self {
+        Self {
+            limit,
+            starting_after: None,
+            ending_before: None,
+        }
+    }
+}
+
+impl From<u32> for ListLineItemsParams {
+    fn from(limit: u32) -> Self {
+        Self {
+            limit: Some(limit),
+            starting_after: None,
+            ending_before: None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

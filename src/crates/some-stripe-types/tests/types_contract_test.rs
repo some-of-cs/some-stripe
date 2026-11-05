@@ -6,9 +6,9 @@
 use some_stripe_types::{
     AccountId, CancelRefundParams, CaptureMethod, CardPaymentMethodOptions, CheckoutSession,
     CreateRefundParams, Dispute, DisputeEvidence, DisputeEvidenceDetails, DisputeId, DisputeStatus,
-    Event, EventData, EventObject, IdempotencyKey, Invoice, PaymentIntent, PaymentIntentStatus,
-    PaymentMethodOptions, Refund, RefundReason, UpdateDisputeParams, UpdateRefundParams,
-    is_statutory_withdrawal_compliant,
+    Event, EventData, EventObject, IdempotencyKey, Invoice, LineItem, LineItemList, PaymentIntent,
+    PaymentIntentStatus, PaymentMethodOptions, Refund, RefundReason, UpdateDisputeParams,
+    UpdateRefundParams, is_statutory_withdrawal_compliant,
 };
 
 #[test]
@@ -574,4 +574,25 @@ fn test_payment_method_options_contract() {
     let card = deserialized.card.unwrap();
     assert_eq!(card.request_three_d_secure.as_deref(), Some("challenge"));
     assert_eq!(card.capture_method, Some(CaptureMethod::Manual));
+}
+
+#[test]
+fn test_line_item_and_list_contract() {
+    let item = LineItem::new("li_contract_1", 2000, 2000, "usd")
+        .with_description("Contract Plan")
+        .with_quantity(1);
+
+    let list = LineItemList::new(
+        vec![item],
+        false,
+        "/v1/checkout/sessions/cs_contract/line_items",
+    );
+    assert_eq!(list.len(), 1);
+    assert_eq!(list[0].id, "li_contract_1");
+    assert_eq!(list[0].object, "item");
+    assert_eq!(list[0].amount_total, 2000);
+    assert_eq!(list[0].currency, "usd");
+    assert_eq!(list[0].description.as_deref(), Some("Contract Plan"));
+    assert_eq!(list.url, "/v1/checkout/sessions/cs_contract/line_items");
+    assert_eq!(list.object, "list");
 }
