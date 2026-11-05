@@ -498,6 +498,61 @@ impl CheckoutSession {
     }
 }
 
+/// Returns the default object type string for LineItemPrice (`"price"`).
+#[must_use]
+pub fn default_price_object() -> String {
+    "price".into()
+}
+
+/// Price object associated with a [`LineItem`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LineItemPrice {
+    /// Unique identifier for the price (`price_...`).
+    pub id: String,
+
+    /// Object type, always `price`.
+    #[serde(default = "default_price_object")]
+    pub object: String,
+
+    /// Whether the price is currently active.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active: Option<bool>,
+
+    /// Three-letter ISO currency code in lowercase.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub currency: Option<String>,
+
+    /// The unit amount in minor currency units (e.g., cents).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unit_amount: Option<i64>,
+
+    /// The ID of the product this price belongs to.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub product: Option<String>,
+}
+
+impl LineItemPrice {
+    /// Creates a minimal [`LineItemPrice`].
+    pub fn new(id: impl Into<String>) -> Self {
+        Self {
+            id: id.into(),
+            object: default_price_object(),
+            active: None,
+            currency: None,
+            unit_amount: None,
+            product: None,
+        }
+    }
+
+    /// Fluent builder method to attach `unit_amount` and `currency`.
+    #[must_use]
+    pub fn with_amount(mut self, unit_amount: i64, currency: impl Into<String>) -> Self {
+        self.unit_amount = Some(unit_amount);
+        self.currency = Some(currency.into());
+        self
+    }
+}
+
 /// Represents a Stripe LineItem object (`item`).
 ///
 /// A LineItem represents an item being purchased in a Checkout Session.
@@ -546,6 +601,10 @@ pub struct LineItem {
     /// The quantity of the item purchased.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub quantity: Option<u32>,
+
+    /// The price used for this line item, if available.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub price: Option<LineItemPrice>,
 }
 
 impl LineItem {
@@ -566,6 +625,7 @@ impl LineItem {
             amount_discount: None,
             currency: currency.into(),
             quantity: None,
+            price: None,
         }
     }
 
@@ -590,6 +650,13 @@ impl LineItem {
     /// Sets the optional discount amount in minor units.
     pub fn with_discount(mut self, amount_discount: i64) -> Self {
         self.amount_discount = Some(amount_discount);
+        self
+    }
+
+    /// Sets the optional price.
+    #[must_use]
+    pub fn with_price(mut self, price: LineItemPrice) -> Self {
+        self.price = Some(price);
         self
     }
 }

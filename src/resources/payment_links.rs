@@ -173,8 +173,7 @@ impl<'a> PaymentLinksResource<'a> {
     /// let client = StripeClient::new("sk_test_123");
     /// let params = ListLineItemsParams::new().limit(20);
     /// let mut paginator = client.payment_links().list_line_items("plink_123", &params);
-    /// while let Some(item_res) = paginator.next_item().await {
-    ///     let item = item_res?;
+    /// while let Some(item) = paginator.next_item().await? {
     ///     println!("Item: {} Amount: {}", item.id, item.amount_total);
     /// }
     /// # Ok(())
