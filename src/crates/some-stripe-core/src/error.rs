@@ -52,6 +52,10 @@ pub enum StripeError {
     /// A webhook verification or payload extraction error.
     #[error("Webhook error: {0}")]
     Webhook(#[from] StripeWebhookError),
+
+    /// A redirect URL validation error.
+    #[error("Redirect error: {0}")]
+    Redirect(#[from] RedirectError),
 }
 
 /// Errors occurring during webhook signature verification and event parsing.
@@ -110,4 +114,53 @@ pub enum StripeWebhookError {
     /// The JSON body could not be parsed into a Stripe `Event`.
     #[error("Failed to parse Stripe webhook JSON: {0}")]
     MalformedPayload(String),
+}
+
+/// Errors occurring during redirect URL validation (open redirect protection).
+#[derive(Debug, Error, PartialEq, Eq, Clone)]
+pub enum RedirectError {
+    /// URL fails syntax parsing.
+    #[error("Invalid redirect URL '{url}': {reason}")]
+    InvalidUrl {
+        /// The invalid URL string.
+        url: String,
+        /// Description of why URL parsing failed.
+        reason: String,
+    },
+
+    /// URL is missing an authority/host component.
+    #[error("Invalid redirect URL '{url}': missing or empty host")]
+    MissingHost {
+        /// The URL missing host.
+        url: String,
+    },
+
+    /// URL contains embedded userinfo (credentials like `user:pass@host`).
+    #[error("Invalid redirect URL '{url}': embedded userinfo credentials are not allowed")]
+    EmbeddedCredentials {
+        /// The URL containing credentials.
+        url: String,
+    },
+
+    /// Prohibited URL scheme (e.g., `javascript:`, `data:`, `file:`, `http:` for non-localhost).
+    #[error(
+        "Invalid redirect URL '{url}': prohibited scheme '{scheme}'. HTTPS is required (HTTP permitted only for localhost testing)"
+    )]
+    ProhibitedScheme {
+        /// The URL containing prohibited scheme.
+        url: String,
+        /// The prohibited scheme.
+        scheme: String,
+    },
+
+    /// Host is not in the whitelist of allowed domains.
+    #[error(
+        "Redirect URL host '{host}' is not in the list of allowed domains: {allowed_domains:?}"
+    )]
+    DisallowedDomain {
+        /// The disallowed host.
+        host: String,
+        /// The configured list of allowed domains.
+        allowed_domains: Vec<String>,
+    },
 }
