@@ -5,18 +5,18 @@
 //!
 //! ## Overview
 //!
-//! - **Domain Entities**: [`PaymentIntent`], [`PaymentIntentStatus`], [`CaptureMethod`], [`PaymentMethodOptions`], [`CheckoutSession`], [`Account`], [`Invoice`], [`Dispute`], [`Refund`], [`Balance`], [`BalanceTransaction`].
+//! - **Domain Entities**: [`PaymentIntent`], [`PaymentIntentStatus`], [`CaptureMethod`], [`PaymentMethodOptions`], [`CheckoutSession`], [`LineItem`], [`LineItemList`], [`Account`], [`Invoice`], [`Dispute`], [`Refund`], [`Balance`], [`BalanceTransaction`], [`PaymentLink`], [`PaymentLinkStatus`].
 //! - **ISO 4217 Integer Arithmetic (Gate G-Law)**: [`currency`] module provides zero-float exact integer arithmetic across non-decimal, 2-decimal, and 3-decimal currencies.
 //! - **Event Pipeline**: [`Event`], [`EventData`], [`EventObject`].
 //! - **Statutory Legal Compliance**: [`is_statutory_withdrawal_compliant`] enforces EU Directive 2011/83/EU Article 13.
 //! - **Immutable Ledger Reconciliation**: [`validate_ledger_reconciliation`] verifies $\text{net} = \text{amount} - \text{fee}$ across batches and streams.
-//! - **Strongly Typed Identifiers**: [`AccountId`], [`IdempotencyKey`], [`DisputeId`].
+//! - **Strongly Typed Identifiers**: [`AccountId`], [`IdempotencyKey`], [`DisputeId`], [`PaymentLinkId`].
 //! - **Dispute & Evidence Management**: [`Dispute`], [`DisputeEvidence`], [`DisputeEvidenceDetails`],
 //!   [`DisputeStatus`], and [`UpdateDisputeParams`] with submission locking invariants.
 //! - **Invoice Upcoming Guard**: [`Invoice`] specifies `pub id: Option<String>` to safely accommodate
 //!   `invoice.upcoming` preview events where `id` is null on Stripe wire payloads.
 //! - **Discriminated Event Union**: [`EventObject`] provides seamless enum dispatch across
-//!   `payment_intent`, `checkout.session`, `invoice`, `dispute`, `refund`, and unknown types via `#[serde(other)]`.
+//!   `payment_intent`, `checkout.session`, `invoice`, `dispute`, `refund`, `payment_link`, and unknown types via `#[serde(other)]`.
 //! - **Request Parameter Schemas & ISO 4217 Validation**: [`CreatePaymentIntentParams`],
 //!   [`CapturePaymentIntentParams`], [`CancelPaymentIntentParams`], [`ConfirmPaymentIntentParams`].
 //! - **PCI-DSS Compliance (Gate G-Law & G2)**: Sensitive credentials like `client_secret` in
@@ -82,6 +82,12 @@ pub mod dispute;
 pub use dispute::*;
 pub mod refund;
 pub use refund::*;
+pub mod checkout;
+pub use checkout::*;
+pub mod payment_link;
+pub use payment_link::*;
+pub mod omnibus;
+pub use omnibus::*;
 
 /// Strongly typed Stripe Connect Account ID (`acct_...`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -113,96 +119,6 @@ impl<T: Into<String>> From<T> for IdempotencyKey {
     fn from(s: T) -> Self {
         Self(s.into())
     }
-}
-
-/// Represents a Stripe Checkout Session object.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CheckoutSession {
-    /// Unique identifier for the checkout session (`cs_...`).
-    pub id: String,
-
-    /// Object type, always `checkout.session`.
-    #[serde(default = "default_checkout_session_object")]
-    pub object: String,
-
-    /// The URL to the hosted checkout page, if available.
-    pub url: Option<String>,
-
-    /// The status of the checkout session: `open`, `complete`, or `expired`.
-    pub status: Option<String>,
-
-    /// The payment status: `paid`, `unpaid`, or `no_payment_required`.
-    pub payment_status: Option<String>,
-
-    /// The ID of the PaymentIntent created, if applicable.
-    pub payment_intent: Option<String>,
-
-    /// Total amount of items in minor units (e.g., cents).
-    pub amount_total: Option<i64>,
-
-    /// Three-letter ISO currency code in lowercase.
-    pub currency: Option<String>,
-
-    /// A unique string to reference the Checkout Session on your service.
-    pub client_reference_id: Option<String>,
-
-    /// The ID of the customer for this session.
-    pub customer: Option<String>,
-
-    /// The timestamp at which the checkout session expires.
-    pub expires_at: Option<i64>,
-
-    /// Time at which the object was created (UNIX epoch seconds).
-    pub created: Option<i64>,
-}
-
-fn default_checkout_session_object() -> String {
-    "checkout.session".into()
-}
-
-/// Parameters for creating a Stripe Checkout Session.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CreateCheckoutSessionParams {
-    /// The URL the customer will be directed to upon successful payment.
-    pub success_url: String,
-
-    /// The URL the customer will be directed to if they decide to cancel.
-    pub cancel_url: Option<String>,
-
-    /// The mode of the checkout session (`payment`, `setup`, or `subscription`). Default: `payment`.
-    #[serde(default = "default_payment_mode")]
-    pub mode: String,
-
-    /// Unique string to reference the Checkout Session on your system.
-    pub client_reference_id: Option<String>,
-
-    /// Currency code (e.g. `usd`, `eur`, `egp`).
-    pub currency: String,
-
-    /// The amount to be collected per unit in minor currency units (e.g., cents).
-    pub unit_amount: i64,
-
-    /// Name of the product or service displayed at checkout.
-    pub product_name: String,
-
-    /// Quantity of the item being purchased. Default: 1.
-    #[serde(default = "default_quantity")]
-    pub quantity: u32,
-
-    /// Epoch timestamp at which the session expires (must be between 30 minutes and 24 hours).
-    pub expires_at: Option<i64>,
-
-    /// Idempotency key for safe retries.
-    #[serde(skip)]
-    pub idempotency_key: Option<String>,
-}
-
-fn default_payment_mode() -> String {
-    "payment".into()
-}
-
-fn default_quantity() -> u32 {
-    1
 }
 
 /// Status of a [`PaymentIntent`].
@@ -886,6 +802,10 @@ pub enum EventObject {
     /// Stripe Refund payload (`object = "refund"`).
     Refund(Refund),
 
+    /// Stripe PaymentLink payload (`object = "payment_link"`).
+    #[serde(rename = "payment_link")]
+    PaymentLink(PaymentLink),
+
     /// Unrecognized, custom, or unsupported event object types.
     #[serde(other)]
     Unknown,
@@ -1459,5 +1379,34 @@ mod tests {
             confirm_params.setup_future_usage.as_deref(),
             Some("off_session")
         );
+    }
+
+    #[test]
+    fn test_event_object_payment_link() {
+        let json = serde_json::json!({
+            "id": "plink_evt_test_101",
+            "object": "payment_link",
+            "active": true,
+            "url": "https://buy.stripe.com/test_evt_101",
+            "currency": "usd",
+            "livemode": false
+        });
+
+        let data = EventData { object: json };
+        let obj = data
+            .deserialize_object()
+            .expect("Failed to deserialize payment_link event");
+
+        match obj {
+            EventObject::PaymentLink(link) => {
+                assert_eq!(link.id, "plink_evt_test_101");
+                assert_eq!(link.object, "payment_link");
+                assert!(link.is_active());
+                assert_eq!(link.url, "https://buy.stripe.com/test_evt_101");
+                assert_eq!(link.currency.as_deref(), Some("usd"));
+                assert_eq!(link.livemode, Some(false));
+            }
+            other => panic!("Expected PaymentLink variant, got {other:?}"),
+        }
     }
 }
