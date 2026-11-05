@@ -2,25 +2,27 @@
 //!
 //! Enforces Gate G-Borrow Invariant: eliminates intermediate heap allocations
 //! for payload concatenation by streaming timestamp bytes, separator, and
-//! webhook payload directly into OpenSSL's HMAC signer.
+//! webhook payload directly into the pure-Rust HMAC-SHA256 digest engine.
 
-use openssl::hash::MessageDigest;
-use openssl::pkey::PKey;
-use openssl::sign::Signer;
+use hmac::digest::KeyInit;
+use hmac::{Hmac, Mac};
+use sha2::Sha256;
 use some_stripe_core::error::StripeWebhookError;
+
+type HmacSha256 = Hmac<Sha256>;
 
 /// Computes an HMAC-SHA256 signature in a zero-allocation streaming manner (Gate G-Borrow & G2).
 ///
 /// Rather than allocating an intermediate heap buffer for `${timestamp}.${payload}`
 /// (which for large webhooks would clone up to 1 MB of memory), this function feeds
 /// `timestamp.to_string().as_bytes()`, `b"."`, and raw `payload` bytes sequentially
-/// into the OpenSSL HMAC [`Signer`].
+/// into the pure-Rust HMAC-SHA256 [`Mac`].
 ///
 /// Returns the lowercase 64-character hexadecimal signature string.
 ///
 /// # Errors
 ///
-/// Returns [`StripeWebhookError::BadSignature`] if key initialization or HMAC signing fails.
+/// Returns [`StripeWebhookError::BadKey`] if key initialization or HMAC creation fails.
 ///
 /// # Examples
 ///
@@ -39,24 +41,14 @@ pub fn compute_streaming_hmac_hex(
     timestamp: i64,
     payload: &[u8],
 ) -> Result<String, StripeWebhookError> {
-    let pkey = PKey::hmac(key).map_err(|_| StripeWebhookError::BadSignature)?;
-    let mut signer = Signer::new(MessageDigest::sha256(), &pkey)
-        .map_err(|_| StripeWebhookError::BadSignature)?;
+    let mut mac = HmacSha256::new_from_slice(key).map_err(|_| StripeWebhookError::BadKey)?;
 
     let ts_str = timestamp.to_string();
-    signer
-        .update(ts_str.as_bytes())
-        .map_err(|_| StripeWebhookError::BadSignature)?;
-    signer
-        .update(b".")
-        .map_err(|_| StripeWebhookError::BadSignature)?;
-    signer
-        .update(payload)
-        .map_err(|_| StripeWebhookError::BadSignature)?;
+    mac.update(ts_str.as_bytes());
+    mac.update(b".");
+    mac.update(payload);
 
-    let signature = signer
-        .sign_to_vec()
-        .map_err(|_| StripeWebhookError::BadSignature)?;
+    let signature = mac.finalize().into_bytes();
 
     let mut hex = String::with_capacity(signature.len() * 2);
     for b in signature {

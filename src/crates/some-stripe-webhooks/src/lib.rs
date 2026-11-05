@@ -16,7 +16,7 @@
 //! - **Resource Limits**: Incoming payloads are strictly capped at 1 MB ([`MAX_WEBHOOK_PAYLOAD_BYTES`])
 //!   to safeguard against memory exhaustion attacks.
 //! - **Zero-Clone Streaming HMAC (Gate G-Borrow)**: Computes HMAC-SHA256 digests by streaming
-//!   timestamp and payload slices directly into the OpenSSL digest without intermediate heap
+//!   timestamp and payload slices directly into the pure-Rust HMAC-SHA256 digest without intermediate heap
 //!   allocations ([`streaming_hmac_sha256_hex`]).
 //! - **Secret Pre-Validation**: Blank or whitespace-only webhook secrets are rejected immediately
 //!   with [`StripeWebhookError::BadKey`] before performing HMAC computations or allocations.
@@ -36,6 +36,7 @@
 //!
 //! let wrapper = StripeWebhookWrapper::from_raw(payload, &header, secret, None).unwrap();
 //! assert!(wrapper.is_checkout_completed());
+//! assert!(wrapper.is_checkout_fulfillment_ready());
 //! ```
 
 pub mod compare;
@@ -63,18 +64,19 @@ pub use crypto::compute_streaming_hmac_hex;
 pub use error::StripeWebhookError;
 pub use header::{StripeSignatureHeader, parse_signature_header};
 
-use openssl::hash::MessageDigest;
-use openssl::pkey::PKey;
-use openssl::sign::Signer;
+use hmac::digest::KeyInit;
+use hmac::{Hmac, Mac};
+use sha2::Sha256;
 use some_stripe_types::Event;
 pub use validation::is_blank_webhook_secret;
 
+type HmacSha256 = Hmac<Sha256>;
+
 /// Computes HMAC-SHA256 over `data` using `key`, returning the lowercase hexadecimal string.
 pub fn hmac_sha256_hex(key: &[u8], data: &[u8]) -> Option<String> {
-    let pkey = PKey::hmac(key).ok()?;
-    let mut signer = Signer::new(MessageDigest::sha256(), &pkey).ok()?;
-    signer.update(data).ok()?;
-    let signature = signer.sign_to_vec().ok()?;
+    let mut mac = HmacSha256::new_from_slice(key).ok()?;
+    mac.update(data);
+    let signature = mac.finalize().into_bytes();
     let mut hex = String::with_capacity(signature.len() * 2);
     for b in signature {
         use std::fmt::Write;
@@ -99,18 +101,9 @@ pub fn hmac_sha256_hex(key: &[u8], data: &[u8]) -> Option<String> {
 /// assert_eq!(hex.len(), 64);
 /// ```
 pub fn streaming_hmac_sha256_hex(key: &[u8], timestamp: &[u8], payload: &[u8]) -> Option<String> {
-    let pkey = PKey::hmac(key).ok()?;
-    let mut signer = Signer::new(MessageDigest::sha256(), &pkey).ok()?;
-    signer.update(timestamp).ok()?;
-    signer.update(b".").ok()?;
-    signer.update(payload).ok()?;
-    let signature = signer.sign_to_vec().ok()?;
-    let mut hex = String::with_capacity(signature.len() * 2);
-    for b in signature {
-        use std::fmt::Write;
-        let _ = write!(hex, "{:02x}", b);
-    }
-    Some(hex)
+    let ts_str = std::str::from_utf8(timestamp).ok()?;
+    let ts = ts_str.parse::<i64>().ok()?;
+    compute_streaming_hmac_hex(key, ts, payload).ok()
 }
 
 /// Verifies a Stripe webhook signature per the official Stripe signature specification.
@@ -213,7 +206,6 @@ impl Webhook {
         }
     }
 
-    /// Verifies an incoming webhook payload and parses it into a strongly-typed [`Event`].
     /// Verifies an incoming webhook payload and parses it into a strongly-typed [`V2ThinEvent`].
     pub fn construct_v2_thin_event(
         payload: &[u8],
@@ -226,6 +218,8 @@ impl Webhook {
         serde_json::from_slice::<V2ThinEvent>(payload)
             .map_err(|e| StripeWebhookError::MalformedPayload(e.to_string()))
     }
+
+    /// Verifies an incoming webhook payload and parses it into a strongly-typed [`Event`].
     pub fn construct_event(
         payload: &[u8],
         sig_header: &str,
@@ -263,7 +257,6 @@ impl Webhook {
     }
 }
 
-/// Ergonomic wrapper providing typed accessors over raw webhook [`Event`] instances.
 /// Immutable, timestamped audit record produced upon webhook verification,
 /// satisfying ISO/IEC 27001:2022 Control A.8.15 (Logging and Monitoring).
 ///
@@ -294,6 +287,7 @@ impl<'a> From<&'a StripeWebhookWrapper> for WebhookAuditRecord<'a> {
     }
 }
 
+/// Ergonomic wrapper providing typed accessors over raw webhook [`Event`] instances.
 #[derive(Debug, Clone)]
 pub struct StripeWebhookWrapper {
     /// Parsed event object.
@@ -395,7 +389,34 @@ impl StripeWebhookWrapper {
                     .object
                     .pointer("/payment_status")
                     .and_then(|v| v.as_str()),
-                Some("paid" | "unpaid")
+                Some("paid" | "unpaid" | "no_payment_required")
+            )
+    }
+
+    /// Checks whether the checkout session is ready for order fulfillment.
+    ///
+    /// Per Stripe fulfillment guidance, fulfillment should only occur once payment
+    /// is guaranteed. This requires:
+    /// - `event_type` is either `"checkout.session.completed"` or `"checkout.session.async_payment_succeeded"`
+    /// - `/status` is `"complete"`
+    /// - `/payment_status` is `"paid"` or `"no_payment_required"` (unpaid async sessions must wait for `async_payment_succeeded`).
+    pub fn is_checkout_fulfillment_ready(&self) -> bool {
+        (self.event.event_type == "checkout.session.completed"
+            || self.event.event_type == "checkout.session.async_payment_succeeded")
+            && self
+                .event
+                .data
+                .object
+                .pointer("/status")
+                .and_then(|v| v.as_str())
+                == Some("complete")
+            && matches!(
+                self.event
+                    .data
+                    .object
+                    .pointer("/payment_status")
+                    .and_then(|v| v.as_str()),
+                Some("paid" | "no_payment_required")
             )
     }
 
@@ -519,5 +540,59 @@ mod tests {
             &combined_header,
             secret_old
         ));
+    }
+
+    #[test]
+    fn test_is_checkout_completed_and_fulfillment_ready_variants() {
+        let make_session = |event_type: &str, status: &str, payment_status: &str| {
+            let json = serde_json::json!({
+                "id": "evt_test",
+                "object": "event",
+                "type": event_type,
+                "created": 1728345600,
+                "data": {
+                    "object": {
+                        "id": "cs_test",
+                        "status": status,
+                        "payment_status": payment_status
+                    }
+                }
+            });
+            let event: Event = serde_json::from_value(json).unwrap();
+            StripeWebhookWrapper::new(event, Some(1728345600))
+        };
+
+        // 1. Paid completed session: both completed and fulfillment ready
+        let w_paid = make_session("checkout.session.completed", "complete", "paid");
+        assert!(w_paid.is_checkout_completed());
+        assert!(w_paid.is_checkout_fulfillment_ready());
+
+        // 2. No payment required completed session: both completed and fulfillment ready
+        let w_no_pay = make_session(
+            "checkout.session.completed",
+            "complete",
+            "no_payment_required",
+        );
+        assert!(w_no_pay.is_checkout_completed());
+        assert!(w_no_pay.is_checkout_fulfillment_ready());
+
+        // 3. Unpaid completed session (e.g. async payment pending): completed, but NOT fulfillment ready
+        let w_unpaid = make_session("checkout.session.completed", "complete", "unpaid");
+        assert!(w_unpaid.is_checkout_completed());
+        assert!(!w_unpaid.is_checkout_fulfillment_ready());
+
+        // 4. Async payment succeeded: not completed session event, but IS fulfillment ready
+        let w_async = make_session(
+            "checkout.session.async_payment_succeeded",
+            "complete",
+            "paid",
+        );
+        assert!(!w_async.is_checkout_completed());
+        assert!(w_async.is_checkout_fulfillment_ready());
+
+        // 5. Incomplete/open session: neither
+        let w_open = make_session("checkout.session.completed", "open", "paid");
+        assert!(!w_open.is_checkout_completed());
+        assert!(!w_open.is_checkout_fulfillment_ready());
     }
 }
