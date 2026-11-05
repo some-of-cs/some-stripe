@@ -286,3 +286,67 @@ fn is_localhost_host(host: &str) -> bool {
     }
     false
 }
+
+/// Extension trait providing zero-copy borrowed slice accessors and status inspectors for [`CheckoutSession`].
+///
+/// Ensures Gate G-Borrow zero-clone borrowing discipline by returning borrowed `&str` slices
+/// from session string fields instead of allocating heap strings.
+pub trait CheckoutSessionExt {
+    /// Returns a borrowed string slice to the hosted checkout URL, if available.
+    fn url_slice(&self) -> Option<&str>;
+
+    /// Returns a borrowed string slice to the checkout session status, if available.
+    fn status_slice(&self) -> Option<&str>;
+
+    /// Returns a borrowed string slice to the payment status, if available.
+    fn payment_status_slice(&self) -> Option<&str>;
+
+    /// Returns `true` if the session status is `"open"`.
+    fn is_open(&self) -> bool;
+
+    /// Returns `true` if the session status is `"complete"`.
+    fn is_complete(&self) -> bool;
+
+    /// Returns `true` if the session status is `"expired"`.
+    fn is_expired(&self) -> bool;
+
+    /// Returns `true` if the session payment status is `"paid"`.
+    fn is_paid(&self) -> bool;
+
+    /// Returns `true` if the session payment status is `"unpaid"`.
+    fn is_unpaid(&self) -> bool;
+}
+
+impl CheckoutSessionExt for CheckoutSession {
+    fn url_slice(&self) -> Option<&str> {
+        self.url.as_deref()
+    }
+
+    fn status_slice(&self) -> Option<&str> {
+        self.status.as_deref()
+    }
+
+    fn payment_status_slice(&self) -> Option<&str> {
+        self.payment_status.as_deref()
+    }
+
+    fn is_open(&self) -> bool {
+        self.status.as_deref() == Some("open")
+    }
+
+    fn is_complete(&self) -> bool {
+        self.status.as_deref() == Some("complete")
+    }
+
+    fn is_expired(&self) -> bool {
+        self.status.as_deref() == Some("expired")
+    }
+
+    fn is_paid(&self) -> bool {
+        self.payment_status.as_deref() == Some("paid")
+    }
+
+    fn is_unpaid(&self) -> bool {
+        self.payment_status.as_deref() == Some("unpaid")
+    }
+}
