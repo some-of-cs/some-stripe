@@ -1,7 +1,7 @@
 # Agent Execution Report: Unit 4.2.0-5 — Borrow Audit, Doctests & Reconciliation Guide
 
 - **Agent Role**: Level 3 Micro-Unit 5 Implementer (`Borrow Audit, Doctests & Reconciliation Specialist`)
-- **Generated Via Profile**: `account2` (`agent-b`)
+- **Generated Via Profile**: `account1` (`agent-a`)
 - **Worktree Path**: `/workspaces/some-stripe/.worktrees/feat-us-420-unit-5-borrow-audit-and-reconciliation`
 - **Branch**: `feat/us-4.2.0/unit-5-borrow-audit-and-reconciliation`
 - **Base Branch**: `feat/us-4.2.0-payment-links`
@@ -65,6 +65,7 @@
   - `.agents/reports/module-4/us-4.2.0/unit-5-borrow-audit-and-reconciliation.md`
 - **Modified**:
   - `src/crates/some-stripe-types/src/payment_link.rs` (zero-copy accessors `id()`, `url()`, `currency()`, `metadata_get()`)
+  - `src/resources/payment_links.rs` (comprehensive rustdoc and verified runnable doc-tests for `create`, `retrieve`, `update`, `list_line_items`)
 
 ---
 
