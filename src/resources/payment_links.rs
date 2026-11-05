@@ -29,6 +29,25 @@ impl<'a> PaymentLinksResource<'a> {
     ///
     /// Supports multi-line item form serialization, custom completion behavior,
     /// and automatic injection of an RFC 4122 UUID v4 `Idempotency-Key` when omitted.
+    ///
+    /// # Example
+    /// ```no_run
+    /// use some_stripe::StripeClient;
+    /// use some_stripe_types::{CreatePaymentLinkParams, PaymentLinkLineItemParams};
+    ///
+    /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = StripeClient::new("sk_test_123");
+    /// let item = PaymentLinkLineItemParams::new("price_123", 1);
+    /// let params = CreatePaymentLinkParams::new(vec![item])
+    ///     .active(true)
+    ///     .idempotency_key("plink_create_idem_001");
+    ///
+    /// let link = client.payment_links().create(&params).await?;
+    /// assert!(link.is_active());
+    /// println!("Shareable link: {}", link.url());
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn create(
         &self,
         params: &CreatePaymentLinkParams,
@@ -65,6 +84,18 @@ impl<'a> PaymentLinksResource<'a> {
     ///
     /// Accepts the identifier as a string reference (`&str`), ensuring zero allocations.
     /// This is an idempotent read operation and does not inject an idempotency key.
+    ///
+    /// # Example
+    /// ```no_run
+    /// use some_stripe::StripeClient;
+    ///
+    /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = StripeClient::new("sk_test_123");
+    /// let link = client.payment_links().retrieve("plink_123").await?;
+    /// assert_eq!(link.id(), "plink_123");
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn retrieve(&self, link_id: &str) -> Result<PaymentLink, StripeError> {
         let url = format!(
             "{}/v1/payment_links/{}",
@@ -80,6 +111,20 @@ impl<'a> PaymentLinksResource<'a> {
     ///
     /// Allows updating fields such as toggling active status (`active: false` to deactivate).
     /// Automatically injects an RFC 4122 UUID v4 `Idempotency-Key` header if omitted.
+    ///
+    /// # Example
+    /// ```no_run
+    /// use some_stripe::StripeClient;
+    /// use some_stripe_types::UpdatePaymentLinkParams;
+    ///
+    /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = StripeClient::new("sk_test_123");
+    /// let params = UpdatePaymentLinkParams::new().active(false);
+    /// let link = client.payment_links().update("plink_123", &params).await?;
+    /// assert!(!link.is_active());
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn update(
         &self,
         link_id: &str,
@@ -118,6 +163,23 @@ impl<'a> PaymentLinksResource<'a> {
 
     /// Returns a zero-clone stream paginator for line items associated with this payment link
     /// (`GET /v1/payment_links/{id}/line_items`).
+    ///
+    /// # Example
+    /// ```no_run
+    /// use some_stripe::StripeClient;
+    /// use some_stripe_types::ListLineItemsParams;
+    ///
+    /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = StripeClient::new("sk_test_123");
+    /// let params = ListLineItemsParams::new().limit(20);
+    /// let mut paginator = client.payment_links().list_line_items("plink_123", &params);
+    /// while let Some(item_res) = paginator.next_item().await {
+    ///     let item = item_res?;
+    ///     println!("Item: {} Amount: {}", item.id, item.amount_total);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn list_line_items(
         &self,
         link_id: &str,
