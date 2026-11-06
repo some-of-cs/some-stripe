@@ -1,6 +1,7 @@
 //! Stripe API client configuration and execution engine.
 
 use crate::error::StripeError;
+use crate::patterns::transport::{ReqwestTransport, compute_backoff_delay};
 use crate::workflow::{DefaultErrorWorkflow, ErrorAction, ErrorWorkflowHandler};
 use std::ops::Deref;
 use std::sync::Arc;
@@ -228,6 +229,35 @@ impl std::fmt::Debug for ClientInner {
 ///
 /// Backed by an `Arc<ClientInner>` to guarantee lock-free, zero-contention concurrency across
 /// thousands of asynchronous tasks while enforcing Rust zero-clone borrowing discipline.
+///
+/// # Retry and Idempotency Invariants
+/// The client executes requests with intelligent, automated retry handling:
+/// - **Safe Idempotent Methods**: HTTP `GET`, `HEAD`, `DELETE`, `OPTIONS`, and `PUT` are safely retried
+///   on network failures or transient 503/500/429 responses up to `config.max_retries`.
+/// - **Idempotency-Key Protected Mutations**: HTTP `POST` requests are **only** retried across network drops
+///   if an `Idempotency-Key` header is present (either in request headers or via [`RequestOptions::idempotency_key`]).
+///   Without an idempotency key, mutating POST requests fail immediately on network disconnection to prevent
+///   duplicate financial transactions on Stripe.
+/// - **Exponential Backoff with Jitter**: Retries use [`compute_backoff_delay`] to prevent API stampedes.
+/// - **Custom Workflow Delegation**: Retry decisions delegate to [`ErrorWorkflowHandler`]
+///   ([`DefaultErrorWorkflow`]), enabling customizable retry policies and rate-limit backoff.
+///
+/// # Examples
+/// ```rust
+/// use some_stripe_core::{StripeClient, StripeConfig, SecretKey, RequestOptions};
+/// use std::time::Duration;
+///
+/// let config = StripeConfig::new(SecretKey::new("sk_test_mock_123"))
+///     .with_timeout(Duration::from_secs(15))
+///     .with_max_retries(3);
+///
+/// let client = StripeClient::with_config(config);
+/// assert_eq!(client.config.max_retries, 3);
+///
+/// // Per-request idempotency key ensures safe retries on network drops:
+/// let opts = RequestOptions::new().idempotency_key("order_create_tx_9876");
+/// assert_eq!(opts.idempotency_key.as_deref(), Some("order_create_tx_9876"));
+/// ```
 #[derive(Clone, Debug)]
 pub struct StripeClient {
     pub(crate) inner: Arc<ClientInner>,
@@ -243,17 +273,36 @@ impl Deref for StripeClient {
 
 impl StripeClient {
     /// Creates a new `StripeClient` configured with default settings and the provided secret key.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use some_stripe_core::StripeClient;
+    ///
+    /// let client = StripeClient::new("sk_test_123");
+    /// assert_eq!(client.config.api_base, "https://api.stripe.com");
+    /// ```
     pub fn new(secret_key: impl Into<SecretKey>) -> Self {
         Self::with_config(StripeConfig::new(secret_key))
     }
 
     /// Creates a new `StripeClient` with custom [`StripeConfig`].
+    ///
+    /// The client initializes a production [`ReqwestTransport`] connection pool configured with
+    /// the specified network timeout, 90-second idle connection pooling, and redirect policy `none`.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use some_stripe_core::{StripeClient, StripeConfig, SecretKey};
+    /// use std::time::Duration;
+    ///
+    /// let config = StripeConfig::new(SecretKey::new("sk_test_123"))
+    ///     .with_timeout(Duration::from_secs(10))
+    ///     .with_max_retries(2);
+    /// let client = StripeClient::with_config(config);
+    /// assert_eq!(client.config.max_retries, 2);
+    /// ```
     pub fn with_config(config: StripeConfig) -> Self {
-        let http = reqwest::Client::builder()
-            .timeout(config.timeout)
-            .redirect(reqwest::redirect::Policy::none())
-            .build()
-            .unwrap_or_default();
+        let http = ReqwestTransport::new(config.timeout).inner().clone();
 
         Self {
             inner: Arc::new(ClientInner { config, http }),
@@ -279,6 +328,12 @@ impl StripeClient {
     }
 
     /// Sends requests to the Stripe API with optional [`RequestOptions`].
+    ///
+    /// # Retry and Idempotency Invariants
+    /// Network-level connection drops and timeouts are retried up to `config.max_retries` times
+    /// **only if** the request is idempotent (GET, HEAD, DELETE, OPTIONS, PUT) or carries an
+    /// `Idempotency-Key` header. State-mutating POST requests without an idempotency key are
+    /// never retried automatically across network drops to prevent duplicate actions.
     pub async fn execute_with_options(
         &self,
         mut request: reqwest::RequestBuilder,
@@ -299,28 +354,38 @@ impl StripeClient {
             }
         }
 
-        let max_retries = self.config.max_retries;
-        let mut attempt = 0u32;
-
         request = request.basic_auth(self.config.secret_key.expose_secret(), None::<&str>);
 
-        loop {
-            attempt += 1;
+        let mut req = request.build().map_err(StripeError::Http)?;
+        let is_idempotent = matches!(
+            *req.method(),
+            reqwest::Method::GET
+                | reqwest::Method::HEAD
+                | reqwest::Method::DELETE
+                | reqwest::Method::OPTIONS
+                | reqwest::Method::PUT
+        );
+        let has_idempotency_key = req.headers().contains_key("idempotency-key");
+        let can_retry_network = is_idempotent || has_idempotency_key;
 
+        let max_retries = self.config.max_retries;
+        let mut retries_taken = 0u32;
+
+        loop {
             // Clone request for potential retry if supported and more attempts remain
-            let next_request = if attempt < max_retries {
-                request.try_clone()
+            let next_req = if retries_taken < max_retries {
+                req.try_clone()
             } else {
                 None
             };
 
-            let response_result = request.send().await;
+            let response_result = self.http.execute(req).await;
 
             let response = match response_result {
                 Ok(resp) => resp,
                 Err(err) => {
                     // Check if error workflow authorizes retry on network failure
-                    if let Some(next_req) = next_request {
+                    if can_retry_network && let Some(next) = next_req {
                         let action = self
                             .config
                             .error_workflow
@@ -328,14 +393,15 @@ impl StripeClient {
                                 503,
                                 "network_error",
                                 &err.to_string(),
-                                attempt,
+                                retries_taken,
                                 max_retries,
                             )
                             .await;
                         if action == ErrorAction::Retry {
-                            let backoff_ms = 50u64.saturating_mul(1u64 << (attempt - 1).min(6));
-                            tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
-                            request = next_req;
+                            let delay = compute_backoff_delay(retries_taken, 50, 5000);
+                            tokio::time::sleep(delay).await;
+                            retries_taken += 1;
+                            req = next;
                             continue;
                         }
                     }
@@ -376,15 +442,16 @@ impl StripeClient {
                 let action = self
                     .config
                     .error_workflow
-                    .on_api_error(status_code, &code, &message, attempt, max_retries)
+                    .on_api_error(status_code, &code, &message, retries_taken, max_retries)
                     .await;
 
                 if action == ErrorAction::Retry
-                    && let Some(next_req) = next_request
+                    && let Some(next) = next_req
                 {
-                    let backoff_ms = 50u64.saturating_mul(1u64 << (attempt - 1).min(6));
-                    tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
-                    request = next_req;
+                    let delay = compute_backoff_delay(retries_taken, 50, 5000);
+                    tokio::time::sleep(delay).await;
+                    retries_taken += 1;
+                    req = next;
                     continue;
                 }
 
@@ -456,5 +523,91 @@ mod tests {
         let req = client.http.get("http://127.0.0.1:9/v1/test");
         let result = client.execute(req).await;
         assert!(result.is_err(), "must fail after retrying");
+    }
+
+    #[derive(Debug, Default)]
+    struct CallRecordingWorkflow {
+        calls: std::sync::atomic::AtomicU32,
+    }
+
+    #[async_trait::async_trait]
+    impl ErrorWorkflowHandler for CallRecordingWorkflow {
+        async fn on_api_error(
+            &self,
+            _status: u16,
+            _code: &str,
+            _message: &str,
+            _retries_taken: u32,
+            _max_retries: u32,
+        ) -> ErrorAction {
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            ErrorAction::Retry
+        }
+
+        async fn on_webhook_error(&self, _severity: crate::workflow::ErrorSeverity, _reason: &str) {
+        }
+    }
+
+    #[tokio::test]
+    async fn test_non_idempotent_post_without_idempotency_key_does_not_retry_network_error() {
+        let workflow = Arc::new(CallRecordingWorkflow::default());
+        let config = StripeConfig::new("sk_test_123")
+            .with_api_base("http://127.0.0.1:9")
+            .with_max_retries(3)
+            .with_error_workflow(workflow.clone());
+        let client = StripeClient::with_config(config);
+
+        // POST without Idempotency-Key
+        let req = client.http.post("http://127.0.0.1:9/v1/charges");
+        let result = client.execute(req).await;
+        assert!(result.is_err());
+        assert_eq!(
+            workflow.calls.load(std::sync::atomic::Ordering::SeqCst),
+            0,
+            "POST without Idempotency-Key must not retry network errors"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_non_idempotent_post_with_idempotency_key_retries_network_error() {
+        let workflow = Arc::new(CallRecordingWorkflow::default());
+        let config = StripeConfig::new("sk_test_123")
+            .with_api_base("http://127.0.0.1:9")
+            .with_max_retries(1)
+            .with_error_workflow(workflow.clone());
+        let client = StripeClient::with_config(config);
+
+        // POST with Idempotency-Key
+        let req = client
+            .http
+            .post("http://127.0.0.1:9/v1/charges")
+            .header("Idempotency-Key", "test_idemp_key_123");
+        let result = client.execute(req).await;
+        assert!(result.is_err());
+        assert_eq!(
+            workflow.calls.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "POST with Idempotency-Key should retry up to max_retries"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_max_retries_one_gives_up_to_one_retry() {
+        let workflow = Arc::new(CallRecordingWorkflow::default());
+        let config = StripeConfig::new("sk_test_123")
+            .with_api_base("http://127.0.0.1:9")
+            .with_max_retries(1)
+            .with_error_workflow(workflow.clone());
+        let client = StripeClient::with_config(config);
+
+        // GET request is idempotent
+        let req = client.http.get("http://127.0.0.1:9/v1/customers");
+        let result = client.execute(req).await;
+        assert!(result.is_err());
+        assert_eq!(
+            workflow.calls.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "max_retries(1) must yield exactly 1 retry after initial attempt"
+        );
     }
 }

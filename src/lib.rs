@@ -64,6 +64,7 @@ pub use some_stripe_core::client::{
 };
 pub use some_stripe_core::error::{StripeError, StripeWebhookError};
 pub use some_stripe_core::patterns;
+pub use some_stripe_core::validate_and_encode_id;
 pub use some_stripe_core::workflow;
 pub use some_stripe_core::workflow::{
     DefaultErrorWorkflow, ErrorAction, ErrorSeverity, ErrorWorkflowHandler,
@@ -83,7 +84,7 @@ pub use resources::{
     AccountsResource, BalanceResource, BalanceTransactionsResource, CheckoutResource,
     CheckoutSessionExt, DisputesResource, PaymentIntentsResource, PaymentLinksResource,
     RedirectError, RefundsResource, SessionsResource, WebhooksResource, generate_uuid_v4,
-    is_fulfillment_ready, is_valid_uuid_v4, validate_and_encode_id, validate_redirect_url,
+    is_fulfillment_ready, is_valid_uuid_v4, validate_redirect_url,
 };
 
 /// The main Stripe client used to interact with the Stripe API, modeled after `stripe-node`.
