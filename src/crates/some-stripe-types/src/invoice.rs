@@ -142,6 +142,45 @@ pub struct InvoiceStatusTransitions {
     pub voided_at: Option<i64>,
 }
 
+/// Period covering the usage or subscription period for an invoice line item.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InvoiceLineItemPeriod {
+    /// Start of the period (Unix epoch seconds).
+    pub start: i64,
+    /// End of the period (Unix epoch seconds).
+    pub end: i64,
+}
+
+/// Simplified price information embedded in an [`InvoiceLineItem`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InvoiceLineItemPrice {
+    /// Unique identifier for the price (`price_...`).
+    pub id: String,
+
+    /// Object type, always `price`.
+    #[serde(default = "default_price_object")]
+    pub object: String,
+
+    /// Whether the price is currently active.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active: Option<bool>,
+
+    /// Three-letter ISO currency code in lowercase.
+    pub currency: String,
+
+    /// The unit amount in minor currency integer units (e.g. cents).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unit_amount: Option<i64>,
+
+    /// The product ID this price is associated with (`prod_...`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub product: Option<String>,
+}
+
+fn default_price_object() -> String {
+    "price".into()
+}
+
 /// Represents an individual line item on an invoice.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct InvoiceLineItem {
@@ -150,9 +189,30 @@ pub struct InvoiceLineItem {
     pub object: String,
     pub amount: i64,
     pub currency: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub quantity: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub proration: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub discountable: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub invoice_item: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub livemode: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<HashMap<String, String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub period: Option<InvoiceLineItemPeriod>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub price: Option<InvoiceLineItemPrice>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subscription: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subscription_item: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unit_amount_excluding_tax: Option<i64>,
 }
 
 impl InvoiceLineItem {
@@ -174,6 +234,12 @@ impl InvoiceLineItem {
     pub fn is_proration(&self) -> bool {
         self.proration.unwrap_or(false)
     }
+}
+
+/// Helper function extracting the identifier slice from an [`InvoiceLineItem`] for pagination.
+#[inline]
+pub fn invoice_line_item_id(item: &InvoiceLineItem) -> &str {
+    &item.id
 }
 
 fn default_line_item_object() -> String {
