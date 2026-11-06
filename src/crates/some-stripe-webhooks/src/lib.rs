@@ -60,7 +60,7 @@ pub use constants::{
     DEFAULT_TOLERANCE_SECONDS, MAX_FUTURE_DRIFT_SECONDS, MAX_WEBHOOK_PAYLOAD_BYTES,
     TIMESTAMP_PREFIX, V1_SIGNATURE_PREFIX,
 };
-pub use crypto::compute_streaming_hmac_hex;
+pub use crypto::{compute_streaming_hmac_bytes, compute_streaming_hmac_hex};
 pub use error::StripeWebhookError;
 pub use header::{StripeSignatureHeader, parse_signature_header};
 
@@ -85,7 +85,7 @@ pub fn hmac_sha256_hex(key: &[u8], data: &[u8]) -> Option<String> {
     Some(hex)
 }
 
-/// Computes HMAC-SHA256 by streaming timestamp and payload byte slices directly into the
+/// Computes HMAC-SHA256 by streaming verbatim timestamp and payload byte slices directly into the
 /// cryptographic digest without intermediate heap buffer allocations (Gate G-Borrow / Zero-Clone Discipline).
 ///
 /// # Example
@@ -101,9 +101,7 @@ pub fn hmac_sha256_hex(key: &[u8], data: &[u8]) -> Option<String> {
 /// assert_eq!(hex.len(), 64);
 /// ```
 pub fn streaming_hmac_sha256_hex(key: &[u8], timestamp: &[u8], payload: &[u8]) -> Option<String> {
-    let ts_str = std::str::from_utf8(timestamp).ok()?;
-    let ts = ts_str.parse::<i64>().ok()?;
-    compute_streaming_hmac_hex(key, ts, payload).ok()
+    compute_streaming_hmac_bytes(key, timestamp, payload).ok()
 }
 
 /// Verifies a Stripe webhook signature per the official Stripe signature specification.
@@ -257,11 +255,12 @@ impl Webhook {
     }
 }
 
-/// Immutable, timestamped audit record produced upon webhook verification,
-/// satisfying ISO/IEC 27001:2022 Control A.8.15 (Logging and Monitoring).
+/// Structured event audit record produced upon webhook verification.
 ///
 /// Holds borrowed string references (`&'a str`) to prevent unnecessary heap allocation
 /// in compliance with Gate G-Borrow zero-clone invariants.
+/// Note that immutable persistence and compliance frameworks (e.g. ISO/IEC 27001) require
+/// external log sinks, access controls, and retention policies.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WebhookAuditRecord<'a> {
     /// Unique identifier of the Stripe event (`evt_...`).
@@ -331,8 +330,7 @@ impl StripeWebhookWrapper {
         Self { event, verified_at }
     }
 
-    /// Produces an immutable, timestamped audit record for this event,
-    /// satisfying ISO/IEC 27001:2022 Control A.8.15.
+    /// Produces a structured audit record for this event.
     pub fn audit_record(&self) -> WebhookAuditRecord<'_> {
         WebhookAuditRecord {
             event_id: &self.event.id,
@@ -594,5 +592,28 @@ mod tests {
         let w_open = make_session("checkout.session.completed", "open", "paid");
         assert!(!w_open.is_checkout_completed());
         assert!(!w_open.is_checkout_fulfillment_ready());
+    }
+
+    #[test]
+    fn test_streaming_hmac_sha256_hex_verbatim_bytes() {
+        let key = b"whsec_test_secret";
+        let timestamp_with_zeros = b"01728345600";
+        let payload = b"{\"id\":\"evt_123\"}";
+
+        let hex = streaming_hmac_sha256_hex(key, timestamp_with_zeros, payload)
+            .expect("signature computation should succeed");
+        assert_eq!(hex.len(), 64);
+
+        // Verification against manual concatenation of verbatim bytes
+        let mut expected_input = Vec::new();
+        expected_input.extend_from_slice(timestamp_with_zeros);
+        expected_input.push(b'.');
+        expected_input.extend_from_slice(payload);
+        let expected_hex = hmac_sha256_hex(key, &expected_input).unwrap();
+        assert_eq!(hex, expected_hex);
+
+        // Ensure non-canonical timestamp slice produces a different digest than canonical decimal slice
+        let canonical_hex = streaming_hmac_sha256_hex(key, b"1728345600", payload).unwrap();
+        assert_ne!(hex, canonical_hex);
     }
 }
