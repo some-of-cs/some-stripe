@@ -84,19 +84,39 @@ fn flatten_value(
     Ok(())
 }
 
-/// Serializes a data structure into an RFC 3986 compliant `application/x-www-form-urlencoded` string.
-pub fn to_form_urlencoded<T: Serialize>(value: &T) -> Result<String, StripeError> {
-    let params = to_form_params(value)?;
+/// Encodes key-value pairs into an RFC 3986 compliant `application/x-www-form-urlencoded` string.
+///
+/// Both keys and values are percent-encoded per RFC 3986, joined by `=`, and delimited by `&`.
+///
+/// # Examples
+/// ```rust
+/// use some_stripe_core::patterns::serializer::encode_form_pairs;
+///
+/// let pairs = vec![
+///     ("name".to_string(), "Jane Doe".to_string()),
+///     ("metadata[env]".to_string(), "test/prod".to_string()),
+/// ];
+/// let encoded = encode_form_pairs(&pairs);
+/// assert_eq!(encoded, "name=Jane%20Doe&metadata%5Benv%5D=test%2Fprod");
+/// ```
+#[must_use]
+pub fn encode_form_pairs(pairs: &[(String, String)]) -> String {
     let mut encoded = String::new();
-    for (i, (k, v)) in params.into_iter().enumerate() {
+    for (i, (k, v)) in pairs.iter().enumerate() {
         if i > 0 {
             encoded.push('&');
         }
-        encoded.push_str(&percent_encode(&k));
+        encoded.push_str(&percent_encode(k));
         encoded.push('=');
-        encoded.push_str(&percent_encode(&v));
+        encoded.push_str(&percent_encode(v));
     }
-    Ok(encoded)
+    encoded
+}
+
+/// Serializes a data structure into an RFC 3986 compliant `application/x-www-form-urlencoded` string.
+pub fn to_form_urlencoded<T: Serialize>(value: &T) -> Result<String, StripeError> {
+    let params = to_form_params(value)?;
+    Ok(encode_form_pairs(&params))
 }
 
 /// Alias for [`to_form_urlencoded`] matching the Stripe API v1 protocol contract.
@@ -151,5 +171,15 @@ mod tests {
                 ("items[1][id]".to_string(), "si_2".to_string()),
             ]
         );
+    }
+
+    #[test]
+    fn test_encode_form_pairs() {
+        let pairs = vec![
+            ("key1".to_string(), "val1".to_string()),
+            ("key with space".to_string(), "val/slash".to_string()),
+        ];
+        let encoded = encode_form_pairs(&pairs);
+        assert_eq!(encoded, "key1=val1&key%20with%20space=val%2Fslash");
     }
 }
