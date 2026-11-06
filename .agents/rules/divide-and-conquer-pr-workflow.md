@@ -16,6 +16,13 @@ All operations involving Git repositories, worktrees, branches, atomic commits, 
 
 ### 1. Strict Chronological Bottom-Up Promotion & PR Creation Order
 All agents and processes MUST adhere to a strict bottom-up promotion sequence. **Never open a parent PR before all of its child unit PRs are created and verified:**
+
+#### 1.1 Non-Termination Invariant & Iterative Review-Fix Loop
+- **Unit Implementer Non-Termination Invariant**: The Unit Implementer is **NEVER terminated** and cannot consider its task complete until its invoked `Code Reviewer` subagent (applying `.agents/skills/security-audit`) confirms clean sign-off with 0 issues found. If the reviewer identifies any issues, the implementer must fix them and re-invoke the reviewer until 100% clean.
+- **Story Leader Non-Termination Invariant**: The Story Leader is **NEVER terminated** until its invoked `Code Reviewer` subagent (applying `.agents/skills/security-audit`) audits the merged story branch and confirms clean sign-off with 0 issues found.
+- **Module Leader Non-Termination Invariant**: The Module Leader is **NEVER terminated** until its invoked `Code Reviewer` subagent (applying `.agents/skills/security-audit`) audits the merged module branch and confirms clean sign-off with 0 issues found.
+- **Mandatory PR Conversation Documentation**: All implementation reports, security audit reports, and code review reports (including each iteration of review findings and corresponding fixes) MUST be posted directly as comments on the GitHub PR conversation (`gh pr comment <PR> --body "..."`).
+
 1. **Level 3 (Atomic Micro-Unit Agent)**:
    - Operates on branch `feat/us-x.y.z/unit-w-<scope>` in dedicated worktree `.worktrees/feat-us-x.y.z-unit-w-<scope>` provisioned by `Git Workflow Master` (Skills: `antigravity-guide`, `stripe-best-practices`).
    - **Mandatory Branch Naming**: Must explicitly include `/unit-w` (e.g. `feat/us-4.1.0/unit-1-session-line-item-entities`).

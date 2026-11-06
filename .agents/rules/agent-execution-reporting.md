@@ -59,3 +59,6 @@ The attached PR report MUST include:
 - Full verification and gate results: G0 (0 warnings), G-Borrow (zero-clone evidence), G2 (cryptography/security), G-Law (PCI-DSS & statutory compliance), G1/G4 (test coverage & wire mocks).
 - Exact test execution commands and verbatim terminal output logs.
 PRs submitted without a full report including validation and gate results are strictly prohibited and will be rejected by gatekeepers.
+
+### 4. Mandatory PR Conversation Documentation for All Audits and Review Cycles
+All code review reports, security audit reports (`.agents/skills/security-audit`), implementation reports, and each cycle of review findings and remediation diffs MUST be posted directly as comments on the GitHub PR conversation (`gh pr comment <PR> --body '...'`). Neither a Unit Implementer, Story Leader, nor Module Leader may terminate until the invoked Code Reviewer subagent confirms 0 issues found and posts the clean sign-off in the PR conversation. Merging is strictly prohibited without documented in-conversation evidence of clean review sign-off.

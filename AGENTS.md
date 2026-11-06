@@ -37,6 +37,11 @@ Welcome to the **`some-stripe`** workspace. All AI agents, contributors, and aut
      - **Gate G-Docs**: `Technical Writer` (Skill: `stripe-docs`)
      - **Gate G-Review**: `Code Reviewer` (Skills: `security-audit`, `stripe-best-practices`) — Council President, formal GitHub sign-off.
    - Merging via `gh pr merge` is strictly blocked until the independent `Code Reviewer` posts the structured sign-off comment. Self-approval is rejected.
+   - **Mandatory 3-Tier Code Review & Self-Correction Loop (Never Terminate Until Clean)**:
+     - Every Unit Implementer upon finishing implementation MUST invoke a distinct `Code Reviewer` subagent armed with `security-audit`. If any issues are flagged, the implementer must fix the issues and re-invoke review until 0 issues remain. **The Unit Implementer is NEVER terminated until the subagent Code Reviewer tells them everything is OK.**
+     - At the User Story level, after all 5 units are merged into the story branch, the Story Leader MUST enter an iterative review and implementation loop by invoking a distinct `Code Reviewer` subagent with `security-audit`. **The Story Leader is NEVER terminated until the Code Reviewer confirms everything is OK.**
+     - At the Module level, after all User Stories are merged into the module branch, the Module Leader MUST enter a full module review and implementation loop with an invoked distinct `Code Reviewer` subagent with `security-audit`. **The Module Leader is NEVER terminated until the Code Reviewer gives a 100% clean sign-off.**
+     - **Mandatory GitHub PR In-Conversation Audit Trail**: All implementation reports, security audit reports (`.agents/skills/security-audit`), and code review reports (including every iteration of review findings and corresponding remediation summaries) MUST be documented directly as comments on the GitHub PR conversation (`gh pr comment <PR> --body "..."`). Merging without documented in-conversation evidence of clean sign-off is strictly prohibited.
 
 6. **[Global Financial & Statutory Legal Compliance (Gate G-Law)](.agents/rules/legal-compliance.md)**:
    - PCI-DSS 4.0 data security and zero raw PAN handling in application memory.

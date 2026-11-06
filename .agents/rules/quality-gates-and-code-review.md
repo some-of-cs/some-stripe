@@ -95,9 +95,46 @@ The independent `Code Reviewer` subagent MUST post the following structured sign
 - **Panic Hardening**: Zero `unwrap()` in production paths; errors cleanly returned via `Result<T, StripeError>`.
 - **Maintainability**: Clean idiomatic Rust 2024 patterns, reusable abstractions in patterns crate.
 
-#### 🚀 Merge Verdict
-**APPROVED FOR MERGE** into `<target-branch>` via `gh pr merge <PR_NUMBER> --merge`.
-*(Executed by `Git Workflow Master` with skills `antigravity-guide` and `stripe-best-practices`)*
+## 4. Mandatory 3-Tier Code Review & Self-Correction Loop (Never Terminate Until Clean)
+
+To ensure zero defects and comprehensive verification, every tier of implementation operates in an iterative code review and self-correction loop with mandatory security auditing (`.agents/skills/security-audit`):
+
+```mermaid
+flowchart TD
+    Start[Implementation Completed] --> InvokeReviewer[Invoke Distinct Code Reviewer Subagent with security-audit]
+    InvokeReviewer --> Audit[Audit: Code Quality, Invariants, Security & Tests]
+    Audit --> HasIssues{Issues Found?}
+    HasIssues -- Yes --> Remediate[Implementer Remediates & Fixes Issues]
+    Remediate --> PostPRFinding[Post Review Finding & Fix Summary to PR]
+    PostPRFinding --> InvokeReviewer
+    HasIssues -- No --> CleanSignOff[Post Final Clean Sign-Off on GitHub PR]
+    CleanSignOff --> PermittedToTerminate[Implementer/Leader Permitted to Terminate & Proceed to Merge]
+```
+
+### 4.1 Non-Termination Invariant at All 3 Tiers
+1. **Level 3 Micro-Unit Level**:
+   - Upon completing implementation, the Unit Implementer MUST invoke a distinct `Code Reviewer` subagent paired with `.agents/skills/security-audit`.
+   - The Code Reviewer evaluates code quality, panic safety, borrowing discipline, and security vulnerabilities.
+   - If ANY issues are found, the Unit Implementer MUST fix them and re-invoke the Code Reviewer.
+   - **MANDATORY INVARIANT**: The Unit Implementer is **NEVER terminated** and cannot consider its task complete until the subagent Code Reviewer issues a clean sign-off (`0 issues found`).
+2. **Level 2 User Story Level**:
+   - After all 5 micro-units are merged into the User Story branch, the Story Leader MUST invoke a distinct `Code Reviewer` subagent paired with `.agents/skills/security-audit`.
+   - The reviewer audits combined integration integrity, wire mock tests, and cross-unit cohesion.
+   - If issues or regressions exist, the Story Leader must remediate them and re-invoke the Code Reviewer.
+   - **MANDATORY INVARIANT**: The Story Leader is **NEVER terminated** until the subagent Code Reviewer confirms everything is clean.
+3. **Level 1 Module Level**:
+   - After all User Stories are merged into the Module branch, the Module Leader MUST invoke a distinct `Code Reviewer` subagent paired with `.agents/skills/security-audit`.
+   - The reviewer audits full workspace coherence, crate modularity, feature flag isolation, and end-to-end acceptance.
+   - If any regressions or issues arise, the Module Leader resolves them and re-invokes the Code Reviewer.
+   - **MANDATORY INVARIANT**: The Module Leader is **NEVER terminated** until the subagent Code Reviewer issues a 100% clean sign-off.
+
+### 4.2 Mandatory PR Conversation Documentation
+Every review finding, security audit, and implementation summary MUST be documented directly in the GitHub PR conversation:
+- **Implementation Report**: Posted upon opening the PR.
+- **Security Audit Report**: Posted by the reviewer executing `.agents/skills/security-audit`.
+- **Code Review Report & Fix Iterations**: Every iteration of findings and subsequent fixes MUST be posted as distinct comments on the GitHub PR (`gh pr comment <PR> --body "..."`).
+- No PR may be merged without documented in-conversation evidence of the review-remediation loop and final clean sign-off.
+
 ```
 
 ---
