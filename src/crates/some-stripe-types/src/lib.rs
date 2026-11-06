@@ -91,6 +91,7 @@ pub use omnibus::*;
 pub mod customer;
 pub use customer::*;
 pub mod subscription;
+#[allow(unused_imports)]
 pub use subscription::*;
 
 /// Strongly typed Stripe Connect Account ID (`acct_...`).
