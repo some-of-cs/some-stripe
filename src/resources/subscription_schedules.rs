@@ -39,7 +39,7 @@
 use some_stripe_core::patterns::pagination::Paginator;
 use some_stripe_core::patterns::serializer::to_form_params;
 use some_stripe_core::{StripeClient, StripeError, validate_and_encode_id};
-use some_stripe_types::{
+use some_stripe_types::subscription::{
     CancelSubscriptionScheduleParams, CreateSubscriptionScheduleParams,
     ListSubscriptionSchedulesParams, ReleaseSubscriptionScheduleParams, SubscriptionSchedule,
     UpdateSubscriptionScheduleParams, subscription_schedule_id,
