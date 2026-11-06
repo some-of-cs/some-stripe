@@ -21,6 +21,15 @@ pub fn default_payment_link_object() -> String {
 }
 
 /// Strongly typed Stripe Payment Link ID (`plink_...`).
+///
+/// # Example
+/// ```
+/// use some_stripe_types::payment_link::PaymentLinkId;
+///
+/// let id = PaymentLinkId::from("plink_1N42iV2eZvKYlo2CUbdf5V4L");
+/// assert_eq!(id.as_ref(), "plink_1N42iV2eZvKYlo2CUbdf5V4L");
+/// assert_eq!(format!("{id}"), "plink_1N42iV2eZvKYlo2CUbdf5V4L");
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct PaymentLinkId(pub String);
 
@@ -474,6 +483,16 @@ impl PaymentLink {
     }
 
     /// Returns the payment link ID as a borrowed string slice (`&str`).
+    ///
+    /// # Example
+    /// ```
+    /// use some_stripe_types::PaymentLink;
+    ///
+    /// let link = PaymentLink::new("plink_123", "https://buy.stripe.com/test", true);
+    /// assert_eq!(link.id(), "plink_123");
+    /// assert_eq!(link.url(), "https://buy.stripe.com/test");
+    /// assert!(link.is_active());
+    /// ```
     #[must_use]
     pub fn id(&self) -> &str {
         &self.id
@@ -684,6 +703,18 @@ impl CreatePaymentLinkParams {
 }
 
 /// Parameters for updating an existing Stripe Payment Link (`POST /v1/payment_links/:id`).
+///
+/// # Example
+/// ```
+/// use some_stripe_types::UpdatePaymentLinkParams;
+///
+/// let params = UpdatePaymentLinkParams::new()
+///     .active(false)
+///     .metadata_entry("archived_reason", "out_of_stock");
+///
+/// assert_eq!(params.active, Some(false));
+/// assert!(params.validate().is_ok());
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct UpdatePaymentLinkParams {
     /// Whether the payment link's URL is active. Set to `false` to deactivate.
@@ -822,6 +853,21 @@ impl UpdatePaymentLinkParams {
 }
 
 /// Line item parameter for creating or presenting a Payment Link.
+///
+/// # Example
+/// ```
+/// use some_stripe_types::{PaymentLinkLineItemParams, AdjustableQuantityParams};
+///
+/// let item = PaymentLinkLineItemParams::new("price_123", 2)
+///     .adjustable_quantity(AdjustableQuantityParams {
+///         enabled: true,
+///         minimum: Some(1),
+///         maximum: Some(10),
+///     });
+///
+/// assert_eq!(item.quantity, 2);
+/// assert!(item.validate().is_ok());
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PaymentLinkLineItemParams {
     /// The ID of the Price object or multi-currency price (`price_...`).
@@ -935,6 +981,23 @@ impl AdjustableQuantityParams {
 }
 
 /// Post-completion behavior configuration for a Payment Link.
+///
+/// # Example
+/// ```
+/// use some_stripe_types::payment_link::PaymentLinkAfterCompletionParams;
+///
+/// // Redirect mode
+/// let redirect = PaymentLinkAfterCompletionParams::redirect("https://myshop.com/thank-you");
+/// assert_eq!(redirect.r#type, "redirect");
+/// assert!(redirect.validate().is_ok());
+///
+/// // Hosted confirmation mode
+/// let confirmation = PaymentLinkAfterCompletionParams::hosted_confirmation(
+///     Some("Thank you for your purchase!".into())
+/// );
+/// assert_eq!(confirmation.r#type, "hosted_confirmation");
+/// assert!(confirmation.validate().is_ok());
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PaymentLinkAfterCompletionParams {
     /// The type of post-completion action (`redirect` or `hosted_confirmation`).
@@ -1033,6 +1096,22 @@ impl HostedConfirmationParams {
 // ============================================================================
 
 /// Inline price data for creating prices or line items with multi-currency presentation.
+///
+/// # Example
+/// ```
+/// use some_stripe_types::payment_link::{PaymentLinkPriceDataParams, CurrencyOptionParams};
+///
+/// let price_data = PaymentLinkPriceDataParams::new("usd", 2000)
+///     .currency_option("eur", CurrencyOptionParams {
+///         unit_amount: Some(1800),
+///         tax_behavior: Some("inclusive".into()),
+///         custom_unit_amount: None,
+///     });
+///
+/// assert_eq!(price_data.currency, "usd");
+/// assert_eq!(price_data.unit_amount, Some(2000));
+/// assert!(price_data.validate().is_ok());
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PaymentLinkPriceDataParams {
     /// Three-letter ISO currency code, in lowercase (must be a valid ISO 4217 code).

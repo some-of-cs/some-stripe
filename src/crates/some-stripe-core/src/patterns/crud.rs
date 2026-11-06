@@ -46,6 +46,9 @@ pub fn validate_and_encode_id(id: &str) -> Result<String, StripeError> {
         || id.contains('\\')
         || id.contains('?')
         || id.contains('#')
+        || id.contains('\0')
+        || id.contains('\r')
+        || id.contains('\n')
     {
         return Err(StripeError::InvalidRequest(format!(
             "Invalid resource ID '{id}': path traversal and URL control characters are not permitted"

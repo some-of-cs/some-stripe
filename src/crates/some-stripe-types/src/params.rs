@@ -924,6 +924,33 @@ impl LineItemParams {
 }
 
 /// Parameters for creating a Stripe Checkout Session (`POST /v1/checkout/sessions`).
+///
+/// Supports multi-line items, customer attribution, custom metadata,
+/// expiration scheduling (30m–24h), and mode specification (`payment`, `setup`, `subscription`).
+///
+/// Serde field attributes (such as `#[serde(default, skip_serializing_if = "Option::is_none")]`
+/// and `#[serde(default, skip_serializing)]`) ensure wire payload fidelity per Rule 9.
+///
+/// # Example
+/// ```
+/// use some_stripe_types::params::CreateCheckoutSessionParams;
+///
+/// let params = CreateCheckoutSessionParams::new("https://example.com/success")
+///     .cancel_url("https://example.com/cancel")
+///     .mode("payment")
+///     .client_reference_id("order_12345")
+///     .add_metadata("user_id", "42");
+///
+/// assert!(params.validate().is_ok());
+/// assert_eq!(params.success_url, "https://example.com/success");
+/// assert_eq!(params.mode, "payment");
+///
+/// // Wire serialization check: omitted fields are skipped, mode is included
+/// let json = serde_json::to_string(&params).unwrap();
+/// assert!(json.contains("\"success_url\":\"https://example.com/success\""));
+/// assert!(json.contains("\"mode\":\"payment\""));
+/// assert!(!json.contains("idempotency_key")); // skipped from JSON body
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CreateCheckoutSessionParams {
     /// The URL the customer will be directed to upon successful payment.
@@ -958,7 +985,7 @@ pub struct CreateCheckoutSessionParams {
     pub metadata: Option<std::collections::HashMap<String, String>>,
 
     /// Idempotency key for safe retries. Not serialized into request body.
-    #[serde(skip)]
+    #[serde(default, skip_serializing)]
     pub idempotency_key: Option<String>,
 
     /// A list of items the customer is purchasing.
@@ -1014,6 +1041,24 @@ impl CreateCheckoutSessionParams {
     }
 
     /// Backward-compatible constructor for creating a single-item Checkout Session.
+    ///
+    /// # Example
+    /// ```
+    /// use some_stripe_types::params::CreateCheckoutSessionParams;
+    ///
+    /// let params = CreateCheckoutSessionParams::single_item(
+    ///     "https://example.com/success",
+    ///     "usd",
+    ///     1500,
+    ///     "Pro Plan",
+    ///     1,
+    /// );
+    /// assert_eq!(params.currency.as_deref(), Some("usd"));
+    /// assert_eq!(params.unit_amount, Some(1500));
+    /// assert_eq!(params.product_name.as_deref(), Some("Pro Plan"));
+    /// assert_eq!(params.quantity, Some(1));
+    /// assert!(params.validate().is_ok());
+    /// ```
     pub fn single_item(
         success_url: impl Into<String>,
         currency: impl Into<String>,
@@ -1200,6 +1245,21 @@ impl CreateCheckoutSessionParams {
     }
 
     /// Validates the checkout session parameters according to Stripe requirements and Gate G-Law ISO 4217 rules.
+    ///
+    /// # Errors
+    /// Returns [`PaymentIntentValidationError`] if `success_url` is empty, currency is unsupported,
+    /// or item amounts are negative.
+    ///
+    /// # Example
+    /// ```
+    /// use some_stripe_types::params::CreateCheckoutSessionParams;
+    ///
+    /// let valid = CreateCheckoutSessionParams::new("https://example.com/success");
+    /// assert!(valid.validate().is_ok());
+    ///
+    /// let invalid = CreateCheckoutSessionParams::new("");
+    /// assert!(invalid.validate().is_err());
+    /// ```
     pub fn validate(&self) -> Result<(), PaymentIntentValidationError> {
         if self.success_url.trim().is_empty() {
             return Err(PaymentIntentValidationError::InvalidParameter {
@@ -1249,6 +1309,25 @@ impl CreateCheckoutSessionParams {
 }
 
 /// Query parameters for listing line items of a Checkout Session (`GET /v1/checkout/sessions/{id}/line_items`).
+///
+/// Supports limit pagination and cursor-based forward/backward navigation (`starting_after`, `ending_before`).
+///
+/// # Example
+/// ```
+/// use some_stripe_types::params::ListLineItemsParams;
+///
+/// let params = ListLineItemsParams::new()
+///     .limit(20)
+///     .starting_after("li_1N42iV2eZvKYlo2CUbdf5V4L");
+///
+/// assert_eq!(params.limit, Some(20));
+/// assert_eq!(params.starting_after.as_deref(), Some("li_1N42iV2eZvKYlo2CUbdf5V4L"));
+/// assert!(params.ending_before.is_none());
+///
+/// // Conversion from integer limit
+/// let from_int: ListLineItemsParams = 50.into();
+/// assert_eq!(from_int.limit, Some(50));
+/// ```
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ListLineItemsParams {
     /// Limit on the number of objects returned (between 1 and 100). Default is 10.

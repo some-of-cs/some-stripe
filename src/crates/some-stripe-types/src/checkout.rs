@@ -104,6 +104,21 @@ impl std::fmt::Display for CheckoutSessionLifecycleError {
 impl std::error::Error for CheckoutSessionLifecycleError {}
 
 /// Validates an expiration timestamp against Stripe requirements (30 mins to 24 hours).
+///
+/// # Example
+/// ```
+/// use some_stripe_types::checkout::validate_expires_at;
+///
+/// let created = 1_700_000_000;
+/// // Valid expiration: 1 hour after creation
+/// assert!(validate_expires_at(created + 3_600, created).is_ok());
+///
+/// // Invalid expiration: 10 minutes after creation (less than MIN_EXPIRATION_SECONDS = 1800)
+/// assert!(validate_expires_at(created + 600, created).is_err());
+///
+/// // Invalid expiration: 25 hours after creation (more than MAX_EXPIRATION_SECONDS = 86400)
+/// assert!(validate_expires_at(created + 90_000, created).is_err());
+/// ```
 pub fn validate_expires_at(
     expires_at: i64,
     created_at: i64,
@@ -381,6 +396,29 @@ impl CheckoutSession {
     /// For delayed payment methods (e.g. SEPA Direct Debit, Boleto, Konbini),
     /// initial `checkout.session.completed` has `payment_status: "unpaid"`.
     /// Fulfillment **MUST** be deferred until `payment_status == "paid"`.
+    ///
+    /// # Example
+    /// ```
+    /// use some_stripe_types::CheckoutSession;
+    ///
+    /// // Card payment: instant completion with paid status -> ready for fulfillment
+    /// let session_paid = CheckoutSession::new("cs_test_paid")
+    ///     .with_status("complete")
+    ///     .with_payment_status("paid");
+    /// assert!(session_paid.is_fulfillment_ready());
+    ///
+    /// // SEPA Direct Debit: complete session with unpaid status -> NOT ready for fulfillment
+    /// let session_delayed = CheckoutSession::new("cs_test_sepa")
+    ///     .with_status("complete")
+    ///     .with_payment_status("unpaid");
+    /// assert!(!session_delayed.is_fulfillment_ready());
+    ///
+    /// // Open session is never ready
+    /// let session_open = CheckoutSession::new("cs_test_open")
+    ///     .with_status("open")
+    ///     .with_payment_status("unpaid");
+    /// assert!(!session_open.is_fulfillment_ready());
+    /// ```
     #[must_use]
     pub fn is_fulfillment_ready(&self) -> bool {
         self.is_complete() && (self.is_paid() || self.is_no_payment_required())
@@ -411,6 +449,27 @@ impl CheckoutSession {
     }
 
     /// Validates and applies a status transition in accordance with the Stripe Checkout lifecycle state machine.
+    ///
+    /// Supported transitions:
+    /// - `open` -> `complete`
+    /// - `open` -> `expired`
+    ///
+    /// Illegal transitions (such as `complete` -> `expired` or `expired` -> `open`) return
+    /// a [`CheckoutSessionLifecycleError::InvalidTransition`].
+    ///
+    /// # Example
+    /// ```
+    /// use some_stripe_types::CheckoutSession;
+    ///
+    /// let mut session = CheckoutSession::new("cs_test_trans")
+    ///     .with_status("open");
+    ///
+    /// assert!(session.mark_completed().is_ok());
+    /// assert!(session.is_complete());
+    ///
+    /// // Reopening or expiring completed sessions is rejected
+    /// assert!(session.mark_expired().is_err());
+    /// ```
     pub fn transition_to(&mut self, target: &str) -> Result<(), CheckoutSessionLifecycleError> {
         let current = self
             .status
@@ -488,6 +547,17 @@ impl CheckoutSession {
     }
 
     /// Returns a recovery URL for this checkout session to resume checkout or handle abandonment.
+    ///
+    /// # Example
+    /// ```
+    /// use some_stripe_types::CheckoutSession;
+    ///
+    /// let session = CheckoutSession::new("cs_test_rec123");
+    /// assert_eq!(
+    ///     session.recovery_url(),
+    ///     "https://checkout.stripe.com/c/recover/cs_test_rec123"
+    /// );
+    /// ```
     #[must_use]
     pub fn recovery_url(&self) -> String {
         if let Some(ref url) = self.url {
@@ -505,6 +575,17 @@ pub fn default_price_object() -> String {
 }
 
 /// Price object associated with a [`LineItem`].
+///
+/// # Example
+/// ```
+/// use some_stripe_types::checkout::LineItemPrice;
+///
+/// let price = LineItemPrice::new("price_123")
+///     .with_amount(2500, "usd");
+/// assert_eq!(price.id, "price_123");
+/// assert_eq!(price.unit_amount, Some(2500));
+/// assert_eq!(price.currency.as_deref(), Some("usd"));
+/// ```
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LineItemPrice {
     /// Unique identifier for the price (`price_...`).
@@ -759,6 +840,14 @@ impl<'a> IntoIterator for &'a LineItemList {
 /// Extracts the line item ID from a [`LineItem`].
 ///
 /// Conforms to the `fn(&T) -> &str` function pointer signature required by `Paginator::new`.
+///
+/// # Example
+/// ```
+/// use some_stripe_types::{LineItem, line_item_id};
+///
+/// let item = LineItem::new("li_12345", 1000, 1000, "usd");
+/// assert_eq!(line_item_id(&item), "li_12345");
+/// ```
 pub fn line_item_id(item: &LineItem) -> &str {
     &item.id
 }
