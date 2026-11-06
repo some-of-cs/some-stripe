@@ -34,19 +34,17 @@ fn test_multi_item_subscription_creation_bracket_form_serialization() {
     let mut item0_meta = HashMap::new();
     item0_meta.insert("seat_type".into(), "developer".into());
 
-    let params = CreateSubscriptionParams::new("cus_vault_test_001")
+    let params = CreateSubscriptionParams::new("cus_vault_test_001", vec![])
         .currency("usd")
         .trial_period_days(14)
         .proration_behavior(ProrationBehavior::CreateProrations)
         .add_item(
-            SubscriptionItemParam::new("price_pro_seat_monthly")
-                .quantity(5)
+            SubscriptionItemParam::new("price_pro_seat_monthly", 5)
                 .metadata(item0_meta)
                 .billing_thresholds(SubscriptionItemBillingThresholds::new(100)),
         )
         .add_item(
-            SubscriptionItemParam::new("price_analytics_addon_monthly")
-                .quantity(1)
+            SubscriptionItemParam::new("price_analytics_addon_monthly", 1)
                 .tax_rates(vec!["txr_vat_20".into()]),
         );
 
@@ -59,10 +57,7 @@ fn test_multi_item_subscription_creation_bracket_form_serialization() {
         Some("cus_vault_test_001")
     );
     assert_eq!(map.get("currency").map(String::as_str), Some("usd"));
-    assert_eq!(
-        map.get("trial_period_days").map(String::as_str),
-        Some("14")
-    );
+    assert_eq!(map.get("trial_period_days").map(String::as_str), Some("14"));
     assert_eq!(
         map.get("proration_behavior").map(String::as_str),
         Some("create_prorations")
@@ -265,8 +260,8 @@ async fn test_subscription_items_create_auto_and_custom_idempotency() {
         }
     });
 
-    let config = StripeConfig::new("sk_test_subscription_items")
-        .with_api_base(format!("http://{address}"));
+    let config =
+        StripeConfig::new("sk_test_subscription_items").with_api_base(format!("http://{address}"));
     let client = StripeClient::with_config(config);
 
     // Call 1: Auto idempotency
@@ -302,7 +297,9 @@ async fn test_subscription_items_retrieve_update_delete_and_path_traversal() {
             let n = socket.read(&mut buf).await.unwrap();
             let req_str = String::from_utf8(buf[..n].to_vec()).unwrap();
 
-            assert!(req_str.starts_with("GET /v1/subscription_items/si_test_retrieve_123 HTTP/1.1"));
+            assert!(
+                req_str.starts_with("GET /v1/subscription_items/si_test_retrieve_123 HTTP/1.1")
+            );
             assert!(
                 !req_str.to_lowercase().contains("idempotency-key:"),
                 "Idempotent GET must not inject Idempotency-Key"
@@ -336,7 +333,9 @@ async fn test_subscription_items_retrieve_update_delete_and_path_traversal() {
             let n = socket.read(&mut buf).await.unwrap();
             let req_str = String::from_utf8(buf[..n].to_vec()).unwrap();
 
-            assert!(req_str.starts_with("POST /v1/subscription_items/si_test_retrieve_123 HTTP/1.1"));
+            assert!(
+                req_str.starts_with("POST /v1/subscription_items/si_test_retrieve_123 HTTP/1.1")
+            );
             assert!(req_str.contains("quantity=7") || req_str.contains("quantity%3D7"));
 
             let resp = serde_json::json!({
@@ -391,8 +390,8 @@ async fn test_subscription_items_retrieve_update_delete_and_path_traversal() {
         }
     });
 
-    let config = StripeConfig::new("sk_test_subscription_items")
-        .with_api_base(format!("http://{address}"));
+    let config =
+        StripeConfig::new("sk_test_subscription_items").with_api_base(format!("http://{address}"));
     let client = StripeClient::with_config(config);
 
     // Path traversal check: must return InvalidRequest before making any network call
@@ -540,8 +539,8 @@ async fn test_subscription_items_list_and_paginator_stream() {
         }
     });
 
-    let config = StripeConfig::new("sk_test_subscription_items")
-        .with_api_base(format!("http://{address}"));
+    let config =
+        StripeConfig::new("sk_test_subscription_items").with_api_base(format!("http://{address}"));
     let client = StripeClient::with_config(config);
 
     let list_params = ListSubscriptionItemsParams::new("sub_stream_001").limit(2);
@@ -581,7 +580,9 @@ async fn test_subscription_items_create_usage_record() {
         ));
         assert!(req_str.contains("quantity=250") || req_str.contains("quantity%3D250"));
         assert!(req_str.contains("action=increment") || req_str.contains("action%3Dincrement"));
-        assert!(req_str.contains("timestamp=1728345600") || req_str.contains("timestamp%3D1728345600"));
+        assert!(
+            req_str.contains("timestamp=1728345600") || req_str.contains("timestamp%3D1728345600")
+        );
 
         let resp = serde_json::json!({
             "id": "mbur_test_record_001",
@@ -606,8 +607,8 @@ async fn test_subscription_items_create_usage_record() {
             .unwrap();
     });
 
-    let config = StripeConfig::new("sk_test_subscription_items")
-        .with_api_base(format!("http://{address}"));
+    let config =
+        StripeConfig::new("sk_test_subscription_items").with_api_base(format!("http://{address}"));
     let client = StripeClient::with_config(config);
 
     // Path traversal check
@@ -615,10 +616,7 @@ async fn test_subscription_items_create_usage_record() {
         client
             .subscriptions()
             .items
-            .create_usage_record(
-                "../si_evil",
-                &CreateUsageRecordParams::new(100),
-            )
+            .create_usage_record("../si_evil", &CreateUsageRecordParams::new(100),)
             .await
             .is_err()
     );
