@@ -82,9 +82,9 @@ pub use some_stripe_webhooks::{
 pub mod resources;
 pub use resources::{
     AccountsResource, BalanceResource, BalanceTransactionsResource, CheckoutResource,
-    CheckoutSessionExt, DisputesResource, PaymentIntentsResource, PaymentLinksResource,
-    RedirectError, RefundsResource, SessionsResource, WebhooksResource, generate_uuid_v4,
-    is_fulfillment_ready, is_valid_uuid_v4, validate_redirect_url,
+    CheckoutSessionExt, CustomersResource, DisputesResource, PaymentIntentsResource,
+    PaymentLinksResource, RedirectError, RefundsResource, SessionsResource, WebhooksResource,
+    generate_uuid_v4, is_fulfillment_ready, is_valid_uuid_v4, validate_redirect_url,
 };
 
 /// The main Stripe client used to interact with the Stripe API, modeled after `stripe-node`.
@@ -126,6 +126,11 @@ impl StripeClient {
     /// Access the Accounts resource namespace (`stripe.accounts`).
     pub fn accounts(&self) -> AccountsResource<'_> {
         AccountsResource::new(&self.0)
+    }
+
+    /// Access the Customers resource namespace (`stripe.customers`).
+    pub fn customers(&self) -> CustomersResource<'_> {
+        CustomersResource::new(&self.0)
     }
 
     /// Access the Webhooks helper resource (`stripe.webhooks`).
