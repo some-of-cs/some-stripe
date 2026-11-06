@@ -4,10 +4,13 @@
 //! mark uncollectible, send, and list invoices, adhering to EU VAT Directive 2006/112/EC
 //! sequential numbering requirements and RFC 4122 UUID v4 idempotency.
 
+use some_stripe_core::patterns::{Paginator, to_form_params};
 use some_stripe_core::{StripeClient, StripeError, validate_and_encode_id};
 use some_stripe_types::{
-    CreateInvoiceParams, FinalizeInvoiceParams, Invoice, InvoiceList, ListInvoicesParams,
-    PayInvoiceParams, UpdateInvoiceParams, VoidInvoiceParams,
+    AddInvoiceLinesParams, CreateInvoiceParams, FinalizeInvoiceParams, Invoice, InvoiceLineItem,
+    InvoiceList, InvoiceUpcomingParams, ListInvoiceLineItemsParams, ListInvoicesParams,
+    PayInvoiceParams, RemoveInvoiceLinesParams, UpdateInvoiceLineParams, UpdateInvoiceParams,
+    VoidInvoiceParams, invoice_line_item_id,
 };
 
 /// Resource for managing Stripe Invoices (`stripe.invoices()`).
@@ -382,5 +385,173 @@ impl<'a> InvoicesResource<'a> {
         let val = self.client.execute(req).await?;
         let list: InvoiceList = serde_json::from_value(val)?;
         Ok(list)
+    }
+
+    /// Retrieves an upcoming invoice preview for a customer or subscription (`GET /v1/invoices/upcoming`).
+    ///
+    /// Handles the upcoming invoice null-ID wire safety invariant (`invoice.id` is `None`).
+    pub async fn upcoming(&self, params: &InvoiceUpcomingParams) -> Result<Invoice, StripeError> {
+        let mut url = format!("{}/v1/invoices/upcoming", self.client.config.api_base);
+        let form_pairs = to_form_params(params)?;
+
+        if !form_pairs.is_empty() {
+            let encoded: Vec<String> = form_pairs.iter().map(|(k, v)| format!("{k}={v}")).collect();
+            url.push('?');
+            url.push_str(&encoded.join("&"));
+        }
+
+        let req = self.client.http.get(&url);
+        let val = self.client.execute(req).await?;
+        let invoice: Invoice = serde_json::from_value(val)?;
+        Ok(invoice)
+    }
+
+    /// Dynamically appends line items to an invoice (`POST /v1/invoices/{id}/add_lines`).
+    pub async fn add_lines(
+        &self,
+        invoice_id: &str,
+        params: &AddInvoiceLinesParams,
+    ) -> Result<Invoice, StripeError> {
+        let encoded_id = validate_and_encode_id(invoice_id)?;
+        let url = format!(
+            "{}/v1/invoices/{}/add_lines",
+            self.client.config.api_base, encoded_id
+        );
+
+        let generated_key;
+        let idempotency_key = match params.idempotency_key.as_deref() {
+            Some(k) if !k.trim().is_empty() => k,
+            _ => {
+                generated_key = crate::resources::generate_uuid_v4();
+                &generated_key
+            }
+        };
+
+        let form_pairs = to_form_params(params)?;
+
+        let req = self
+            .client
+            .http
+            .post(&url)
+            .form(&form_pairs)
+            .header("Idempotency-Key", idempotency_key);
+
+        let val = self.client.execute(req).await?;
+        let invoice: Invoice = serde_json::from_value(val)?;
+        Ok(invoice)
+    }
+
+    /// Updates a specific line item on an invoice (`POST /v1/invoices/{id}/lines/{line_id}`).
+    pub async fn update_lines(
+        &self,
+        invoice_id: &str,
+        line_id: &str,
+        params: &UpdateInvoiceLineParams,
+    ) -> Result<InvoiceLineItem, StripeError> {
+        let encoded_inv_id = validate_and_encode_id(invoice_id)?;
+        let encoded_line_id = validate_and_encode_id(line_id)?;
+        let url = format!(
+            "{}/v1/invoices/{}/lines/{}",
+            self.client.config.api_base, encoded_inv_id, encoded_line_id
+        );
+
+        let generated_key;
+        let idempotency_key = match params.idempotency_key.as_deref() {
+            Some(k) if !k.trim().is_empty() => k,
+            _ => {
+                generated_key = crate::resources::generate_uuid_v4();
+                &generated_key
+            }
+        };
+
+        let form_pairs = to_form_params(params)?;
+
+        let req = self
+            .client
+            .http
+            .post(&url)
+            .form(&form_pairs)
+            .header("Idempotency-Key", idempotency_key);
+
+        let val = self.client.execute(req).await?;
+        let line_item: InvoiceLineItem = serde_json::from_value(val)?;
+        Ok(line_item)
+    }
+
+    /// Removes line items from an invoice (`POST /v1/invoices/{id}/remove_lines`).
+    pub async fn remove_lines(
+        &self,
+        invoice_id: &str,
+        line_ids: &[&str],
+    ) -> Result<Invoice, StripeError> {
+        let encoded_id = validate_and_encode_id(invoice_id)?;
+        let url = format!(
+            "{}/v1/invoices/{}/remove_lines",
+            self.client.config.api_base, encoded_id
+        );
+
+        let params = RemoveInvoiceLinesParams::from_ids(line_ids.iter().copied());
+        let form_pairs = to_form_params(&params)?;
+        let idempotency_key = crate::resources::generate_uuid_v4();
+
+        let req = self
+            .client
+            .http
+            .post(&url)
+            .form(&form_pairs)
+            .header("Idempotency-Key", idempotency_key);
+
+        let val = self.client.execute(req).await?;
+        let invoice: Invoice = serde_json::from_value(val)?;
+        Ok(invoice)
+    }
+
+    /// Returns a zero-clone paginator streaming line items for an Invoice (`GET /v1/invoices/{id}/lines`).
+    pub fn list_line_items(
+        &self,
+        invoice_id: &str,
+        params: &ListInvoiceLineItemsParams,
+    ) -> Paginator<'a, InvoiceLineItem> {
+        let (path, initial_err) = match validate_and_encode_id(invoice_id) {
+            Ok(encoded) => (format!("v1/invoices/{encoded}/lines"), None),
+            Err(e) => (String::new(), Some(e)),
+        };
+
+        let mut paginator = Paginator::new(
+            self.client,
+            path,
+            params.limit.unwrap_or(10),
+            invoice_line_item_id,
+        );
+
+        if let Some(err) = initial_err {
+            paginator = paginator.with_initial_error(err);
+        }
+        if let Some(ref sa) = params.starting_after {
+            paginator = paginator.starting_after(sa);
+        }
+        if let Some(ref eb) = params.ending_before {
+            paginator = paginator.ending_before(eb);
+        }
+
+        paginator
+    }
+
+    /// Convenience helper returning an auto-paginator for line items with default page limit (10).
+    pub fn list_line_items_default(&self, invoice_id: &str) -> Paginator<'a, InvoiceLineItem> {
+        self.list_line_items(invoice_id, &ListInvoiceLineItemsParams::default())
+    }
+
+    /// Convenience helper returning an auto-paginator with an optional page limit.
+    pub fn list_line_items_with_limit(
+        &self,
+        invoice_id: &str,
+        limit: Option<u32>,
+    ) -> Paginator<'a, InvoiceLineItem> {
+        let params = ListInvoiceLineItemsParams {
+            limit,
+            ..Default::default()
+        };
+        self.list_line_items(invoice_id, &params)
     }
 }
