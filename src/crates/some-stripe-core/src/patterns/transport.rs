@@ -20,6 +20,20 @@ pub trait HttpClient: Send + Sync + Debug {
 }
 
 /// Production HTTP transport implementation backed by `reqwest::Client`.
+///
+/// Features:
+/// - Connection pooling with 90-second idle timeout and 32 max idle connections per host.
+/// - 60-second TCP keepalive to maintain live HTTP/1.1 and HTTP/2 connections.
+/// - Strict redirect policy of `none` (prevents credential leakage on redirects per Gate G2 / RFC-9110).
+///
+/// # Examples
+/// ```rust
+/// use some_stripe_core::patterns::transport::ReqwestTransport;
+/// use std::time::Duration;
+///
+/// let transport = ReqwestTransport::new(Duration::from_secs(30));
+/// assert!(transport.inner().get("https://api.stripe.com/healthcheck").build().is_ok());
+/// ```
 #[derive(Debug, Clone)]
 pub struct ReqwestTransport {
     client: reqwest::Client,
@@ -68,7 +82,24 @@ impl HttpClient for ReqwestTransport {
     }
 }
 
-/// Computes exponential backoff delay with jitter.
+/// Computes exponential backoff delay with deterministic pseudorandom jitter.
+///
+/// The formula calculates:
+/// `delay = min(base_ms * 2^min(attempt, 6), max_ms) - jitter`
+/// where jitter avoids thundering herd spikes when multiple requests fail simultaneously.
+///
+/// # Examples
+/// ```rust
+/// use some_stripe_core::patterns::transport::compute_backoff_delay;
+/// use std::time::Duration;
+///
+/// let delay0 = compute_backoff_delay(0, 100, 5000);
+/// assert!(delay0 >= Duration::from_millis(50));
+/// assert!(delay0 <= Duration::from_millis(100));
+///
+/// let delay_max = compute_backoff_delay(10, 100, 5000);
+/// assert!(delay_max <= Duration::from_millis(5000));
+/// ```
 pub fn compute_backoff_delay(attempt: u32, base_ms: u64, max_ms: u64) -> Duration {
     let exponential = base_ms.saturating_mul(1u64 << attempt.min(6));
     let capped = exponential.min(max_ms);

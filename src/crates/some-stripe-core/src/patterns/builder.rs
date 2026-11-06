@@ -4,13 +4,26 @@ use crate::client::StripeClient;
 use crate::error::StripeError;
 use crate::patterns::crud::resource_url;
 use crate::patterns::idempotency::IdempotencyKeyManager;
-use crate::patterns::serializer::{to_form_params, to_form_urlencoded};
+use crate::patterns::serializer::{encode_form_pairs, to_form_params};
 use reqwest::Method;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use std::time::Duration;
 
 /// Fluent request builder standardizing outbound HTTP request preparation.
+///
+/// # Examples
+/// ```rust
+/// use some_stripe_core::{StripeClient, SecretKey};
+/// use some_stripe_core::patterns::builder::StripeRequestBuilder;
+/// use reqwest::Method;
+///
+/// let client = StripeClient::new(SecretKey::new("sk_test_123"));
+/// let builder = StripeRequestBuilder::new(&client, Method::POST, "/v1/customers")
+///     .stripe_account("acct_123")
+///     .idempotency_key("tx_unique_001")
+///     .unwrap();
+/// ```
 pub struct StripeRequestBuilder<'a> {
     client: &'a StripeClient,
     method: Method,
@@ -80,15 +93,11 @@ impl<'a> StripeRequestBuilder<'a> {
     /// Attaches a JSON payload encoded into form-urlencoded format with fluent chaining.
     pub fn form_json(mut self, value: &serde_json::Value) -> Self {
         match to_form_params(value) {
-            Ok(pairs) => match to_form_urlencoded(value) {
-                Ok(encoded) => {
-                    self.form_params = Some(pairs);
-                    self.form_body = Some(encoded);
-                }
-                Err(e) => {
-                    self.deferred_error = Some(e);
-                }
-            },
+            Ok(pairs) => {
+                let encoded = encode_form_pairs(&pairs);
+                self.form_params = Some(pairs);
+                self.form_body = Some(encoded);
+            }
             Err(e) => {
                 self.deferred_error = Some(e);
             }
@@ -99,7 +108,7 @@ impl<'a> StripeRequestBuilder<'a> {
     /// Fallible variant of [`form_json`](Self::form_json) returning immediate error on invalid inputs.
     pub fn try_form_json(mut self, value: &serde_json::Value) -> Result<Self, StripeError> {
         let pairs = to_form_params(value)?;
-        let encoded = to_form_urlencoded(value)?;
+        let encoded = encode_form_pairs(&pairs);
         self.form_params = Some(pairs);
         self.form_body = Some(encoded);
         Ok(self)

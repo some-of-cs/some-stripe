@@ -21,6 +21,15 @@
 //!    - Bounded-history circular cursor sentinel circuit breaker preventing infinite pagination loops.
 //!    - Pluggable `HttpClient` transport port with exponential backoff and jitter.
 //!
+//! 4. **Idempotency-Aware Retries & Resilient Transport**:
+//!    - Production `ReqwestTransport` with 90-second idle connection pooling, 60-second TCP keepalive, and redirect policy `none`.
+//!    - Automatic exponential backoff with deterministic jitter (`compute_backoff_delay`).
+//!    - Strict retry safety: state-mutating POST requests are only retried across network drops when guarded by an `Idempotency-Key`.
+//!
+//! 5. **Anti-Traversal Resource ID Security**:
+//!    - Strict path traversal prevention via `validate_and_encode_id`, `try_resource_url_with_id`, and `try_resource_sub_url`.
+//!    - Blocks path separators (`/`, `\`), directory traversal (`..`), and URI delimiter injection (`?`, `#`).
+//!
 //! ## Client Initialization Example
 //!
 //! ```

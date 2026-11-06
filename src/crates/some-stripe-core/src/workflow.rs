@@ -27,13 +27,13 @@ pub enum ErrorAction {
 /// Trait defining hook callbacks for API errors, webhook security violations, and retries.
 #[async_trait]
 pub trait ErrorWorkflowHandler: Send + Sync + Debug {
-    /// Invoked whenever the Stripe REST API returns an HTTP 4xx or 5xx status code.
+    /// Invoked whenever the Stripe REST API returns an HTTP 4xx or 5xx status code or transient network failure.
     async fn on_api_error(
         &self,
         status: u16,
         code: &str,
         message: &str,
-        attempt: u32,
+        retries_taken: u32,
         max_retries: u32,
     ) -> ErrorAction;
 
@@ -42,6 +42,22 @@ pub trait ErrorWorkflowHandler: Send + Sync + Debug {
 }
 
 /// Default built-in error workflow implementation with automatic exponential backoff.
+///
+/// # Examples
+/// ```rust
+/// use some_stripe_core::workflow::{DefaultErrorWorkflow, ErrorWorkflowHandler, ErrorAction};
+///
+/// #[tokio::main]
+/// async fn main() {
+///     let workflow = DefaultErrorWorkflow::new();
+///     assert_eq!(workflow.retry_count(), 0);
+///
+///     // Rate limit 429 triggers retry
+///     let action = workflow.on_api_error(429, "rate_limit", "Too many requests", 0, 3).await;
+///     assert_eq!(action, ErrorAction::Retry);
+///     assert_eq!(workflow.retry_count(), 1);
+/// }
+/// ```
 #[derive(Debug, Default)]
 pub struct DefaultErrorWorkflow {
     retry_count: AtomicU32,
@@ -54,6 +70,19 @@ impl DefaultErrorWorkflow {
             retry_count: AtomicU32::new(0),
         }
     }
+
+    /// Returns the total number of retries authorized by this workflow.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use some_stripe_core::workflow::DefaultErrorWorkflow;
+    ///
+    /// let workflow = DefaultErrorWorkflow::new();
+    /// assert_eq!(workflow.retry_count(), 0);
+    /// ```
+    pub fn retry_count(&self) -> u32 {
+        self.retry_count.load(Ordering::SeqCst)
+    }
 }
 
 #[async_trait]
@@ -63,10 +92,10 @@ impl ErrorWorkflowHandler for DefaultErrorWorkflow {
         status: u16,
         _code: &str,
         _message: &str,
-        attempt: u32,
+        retries_taken: u32,
         max_retries: u32,
     ) -> ErrorAction {
-        if attempt >= max_retries {
+        if retries_taken >= max_retries {
             return ErrorAction::Fail;
         }
 
