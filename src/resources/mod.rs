@@ -3,6 +3,7 @@
 pub mod accounts;
 pub mod balance;
 pub mod checkout;
+pub mod customers;
 pub mod disputes;
 pub mod payment_intents;
 pub mod payment_links;
@@ -17,6 +18,7 @@ pub use checkout::{
     CheckoutResource, CheckoutSessionExt, RedirectError, SessionsResource, is_fulfillment_ready,
     validate_and_encode_id, validate_redirect_url,
 };
+pub use customers::CustomersResource;
 pub use disputes::DisputesResource;
 pub use payment_intents::{PaymentIntentsResource, generate_uuid_v4, is_valid_uuid_v4};
 pub use payment_links::PaymentLinksResource;
