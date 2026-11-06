@@ -82,9 +82,10 @@ pub use some_stripe_webhooks::{
 pub mod resources;
 pub use resources::{
     AccountsResource, BalanceResource, BalanceTransactionsResource, CheckoutResource,
-    CheckoutSessionExt, DisputesResource, InvoicesResource, PaymentIntentsResource,
-    PaymentLinksResource, RedirectError, RefundsResource, SessionsResource, WebhooksResource,
-    generate_uuid_v4, is_fulfillment_ready, is_valid_uuid_v4, validate_redirect_url,
+    CheckoutSessionExt, CreditNotesResource, DisputesResource, InvoicesResource,
+    PaymentIntentsResource, PaymentLinksResource, RedirectError, RefundsResource, SessionsResource,
+    WebhooksResource, credit_note_id, generate_uuid_v4, is_fulfillment_ready, is_valid_uuid_v4,
+    validate_redirect_url,
 };
 
 /// The main Stripe client used to interact with the Stripe API, modeled after `stripe-node`.
@@ -162,6 +163,11 @@ impl StripeClient {
     pub fn invoices(&self) -> InvoicesResource<'_> {
         InvoicesResource::new(&self.0)
     }
+
+    /// Access the CreditNotes resource namespace (`stripe.credit_notes`).
+    pub fn credit_notes(&self) -> CreditNotesResource<'_> {
+        CreditNotesResource::new(&self.0)
+    }
 }
 
 /// Validates compliance with EU Omnibus Directive 2019/2161 Article 6a regarding price reductions.
@@ -231,6 +237,9 @@ pub trait StripeClientExt {
 
     /// Access the Invoices resource namespace (`stripe.invoices`).
     fn invoices(&self) -> InvoicesResource<'_>;
+
+    /// Access the CreditNotes resource namespace (`stripe.credit_notes`).
+    fn credit_notes(&self) -> CreditNotesResource<'_>;
 }
 
 impl StripeClientExt for some_stripe_core::StripeClient {
@@ -272,6 +281,10 @@ impl StripeClientExt for some_stripe_core::StripeClient {
 
     fn invoices(&self) -> InvoicesResource<'_> {
         InvoicesResource::new(self)
+    }
+
+    fn credit_notes(&self) -> CreditNotesResource<'_> {
+        CreditNotesResource::new(self)
     }
 }
 
