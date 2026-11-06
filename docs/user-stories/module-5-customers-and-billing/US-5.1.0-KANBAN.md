@@ -18,12 +18,12 @@ config:
 kanban
   todo[📋 Backlog / Ready]
   spawning[🤖 Subagent Creating]
+  in_progress[🔄 Units In Progress]
     u511[Unit 1: Customer, Subscription, Item & Schedule Entities]@{ ticket: 'main', assigned: 'agent-b', priority: 'High' }
     u512[Unit 2: CreateSubscriptionParams & Multi-Item Form Serde]@{ ticket: 'main', assigned: 'agent-c', priority: 'High' }
     u513[Unit 3: Customers & Subscriptions Resource CRUD & Lifecycle]@{ ticket: 'main', assigned: 'agent-a', priority: 'High' }
     u514[Unit 4: Prorations, 14-Day Trial & GDPR Article 17 Tests]@{ ticket: 'main', assigned: 'agent-b', priority: 'High' }
     u515[Unit 5: Gate G-Borrow Audit, Doctests & Acceptance Gates]@{ ticket: 'main', assigned: 'agent-c', priority: 'High' }
-  in_progress[🔄 Units In Progress]
   review[🔍 PR Open / Gate Review]
   done[✅ Merged into Story Branch]
     s51_pr[US-5.1.0 Story Promotion PR into Module Branch]@{ ticket: 'main', assigned: 'agent-a', priority: 'Very High' }
