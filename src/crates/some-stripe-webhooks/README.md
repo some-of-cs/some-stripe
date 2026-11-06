@@ -13,8 +13,9 @@ Cryptographic Webhook Signature Verification, Replay Guards & Edge Runtime Inges
 - **Constant-Time Verification (Gate G2 Invariant 1)**:
   - HMAC-SHA256 signature verification executed strictly using constant-time byte comparisons (`safe_constant_time_eq` / `subtle::ConstantTimeEq`).
   - Safe against length-mismatch side channels and timing attacks.
-- **Zero-Clone Streaming HMAC (Gate G-Borrow)**:
-  - Streaming HMAC computation via [`streaming_hmac_sha256_hex`] eliminates intermediate heap-allocated `${timestamp}.${payload}` vectors.
+- **Pure-Rust Zero-Clone Streaming HMAC (Gate G-Borrow)**:
+  - Streaming HMAC computation via [`streaming_hmac_sha256_hex`] powered by pure-Rust `hmac` and `sha2` crates (zero C/OpenSSL dependencies, WASM & Edge runtime ready).
+  - Eliminates intermediate heap-allocated `${timestamp}.${payload}` vectors.
   - Zero copies of the raw webhook payload during verification.
 - **Timestamp Replay Protection (Gate G2 Invariant 2)**:
   - Default 300-second drift tolerance window (`DEFAULT_TOLERANCE_SECONDS = 300`).
@@ -24,7 +25,7 @@ Cryptographic Webhook Signature Verification, Replay Guards & Edge Runtime Inges
   - Rejects oversized requests prior to parsing or signature computation.
 - **Zero-Allocation Ingestion Wrapper (`StripeWebhookWrapper`)**:
   - Direct pointer parsing for high-throughput webhook handling (`order_id`, `customer_id`, `payment_intent_id`, `amount_total`).
-  - Helper predicate `is_checkout_completed()` checking both event type and nested status properties.
+  - Helper predicates `is_checkout_completed()` (supporting `paid`, `unpaid`, and `no_payment_required`) and `is_checkout_fulfillment_ready()` (enforcing payment guarantee prior to order fulfillment).
 - **Statutory Financial Compliance (Gate G-Law)**:
   - Zero raw PAN handling; error and wrapper types redact secrets in `Debug` / `Display`.
   - PSD2 SCA 3DS 2.0 challenge structures preserved without modification.
@@ -45,3 +46,5 @@ let wrapper = StripeWebhookWrapper::from_raw(payload, &header, secret, None).unw
 
 assert_eq!(wrapper.event_id(), "evt_123");
 assert!(wrapper.is_checkout_completed());
+assert!(wrapper.is_checkout_fulfillment_ready());
+```

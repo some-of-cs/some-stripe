@@ -98,7 +98,22 @@ pub struct V2RelatedObject {
     pub url: Option<String>,
 }
 
+/// Lightweight probe struct to detect Stripe API v2 thin events without full DOM allocation.
+///
+/// Uses `serde::de::IgnoredAny` for payload subtrees (`related_object` and `data`) to eliminate
+/// heap allocations on large incoming webhooks (Gate G-Borrow zero-clone discipline).
+#[derive(Debug, Deserialize)]
+struct ThinEventProbe<'a> {
+    #[serde(borrow)]
+    object: Option<&'a str>,
+    related_object: Option<serde::de::IgnoredAny>,
+    data: Option<serde::de::IgnoredAny>,
+}
+
 /// Inspects root JSON properties to determine whether a webhook payload represents a Stripe API v2 thin event.
+///
+/// Evaluates payload format using a lightweight zero-copy probe ([`ThinEventProbe`]) rather than allocating
+/// a full DOM representation with `serde_json::Value`.
 ///
 /// Returns `true` if:
 /// - The root JSON is an object,
@@ -119,21 +134,14 @@ pub struct V2RelatedObject {
 /// assert!(!is_thin_event(v1_payload));
 /// ```
 pub fn is_thin_event(payload: &[u8]) -> bool {
-    let Ok(val) = serde_json::from_slice::<serde_json::Value>(payload) else {
-        return false;
-    };
-    let Some(map) = val.as_object() else {
+    let Ok(probe) = serde_json::from_slice::<ThinEventProbe<'_>>(payload) else {
         return false;
     };
 
-    let has_related_object = map.contains_key("related_object");
-    let is_v2_object = map
-        .get("object")
-        .and_then(|v| v.as_str())
-        .map(|s| s.starts_with("v2."))
-        .unwrap_or(false);
+    let has_related_object = probe.related_object.is_some();
+    let is_v2_object = probe.object.map(|s| s.starts_with("v2.")).unwrap_or(false);
 
-    (has_related_object || is_v2_object) && !map.contains_key("data")
+    (has_related_object || is_v2_object) && probe.data.is_none()
 }
 
 #[cfg(test)]
