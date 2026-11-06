@@ -11,7 +11,8 @@ some-stripe-core = { path = "../some-stripe-core" }
 some-stripe-types = { path = "../some-stripe-types" }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.154" }
-openssl = { version = "0.10.82", features = ["vendored"] }
+hmac = "0.13.0"
+sha2 = "0.11.1"
 chrono = { version = "0.4.45", features = ["serde"] }
 subtle = "2.6.1"
 thiserror = "2.0.21"

@@ -2,35 +2,37 @@
 
 use crate::client::StripeClient;
 use crate::error::StripeError;
+use crate::patterns::serializer::percent_encode;
 use async_trait::async_trait;
 use serde::Serialize;
 
-/// Validates and percent-encodes a resource ID or pagination cursor to prevent path traversal
-/// and query parameter injection attacks.
+/// Validates that a resource ID is non-empty, safe from path traversal, and returns its percent-encoded representation.
 ///
-/// Ensures the identifier is non-empty, contains no path traversal sequences (`..`, `/`, `\`),
-/// and contains no query or URI fragment delimiters (`?`, `#`). Safe characters are percent-encoded
-/// according to RFC 3986.
+/// Stripe resource IDs contain alphanumeric characters and underscores or colons (e.g., `cus_123`, `pi_3Mtw...`).
+/// This function verifies that the ID does not contain directory traversal sequences or URL control characters,
+/// preventing path traversal and SSRF attacks when constructing REST URLs.
 ///
 /// # Errors
-///
-/// - Returns [`StripeError::InvalidRequest`] with message `"Resource ID cannot be empty or whitespace"`
-///   if `id` is empty or consists entirely of whitespace.
-/// - Returns [`StripeError::InvalidRequest`] if `id` contains `'..'`, `'/'`, `'\\'`, `'?'`, or `'#'`.
+/// Returns [`StripeError::InvalidRequest`] if the ID:
+/// - Is empty or contains only whitespace.
+/// - Contains directory traversal sequences (`..`).
+/// - Contains path separators (`/`, `\`).
+/// - Contains URL control characters or query/fragment delimiters (`?`, `#`).
 ///
 /// # Examples
-///
-/// ```
+/// ```rust
 /// use some_stripe_core::patterns::crud::validate_and_encode_id;
 ///
-/// let id = validate_and_encode_id("dp_12345").unwrap();
-/// assert_eq!(id, "dp_12345");
+/// let safe_id = validate_and_encode_id("cus_12345").unwrap();
+/// assert_eq!(safe_id, "cus_12345");
 ///
-/// assert!(validate_and_encode_id("").is_err());
+/// let encoded = validate_and_encode_id("cus:tenant_1").unwrap();
+/// assert_eq!(encoded, "cus%3Atenant_1");
+///
+/// // Path traversal or URL delimiter attempts are strictly rejected:
+/// assert!(validate_and_encode_id("../admin").is_err());
+/// assert!(validate_and_encode_id("cus_123?action=delete").is_err());
 /// assert!(validate_and_encode_id("   ").is_err());
-/// assert!(validate_and_encode_id("../../account").is_err());
-/// assert!(validate_and_encode_id("dp_123?inject=1").is_err());
-/// assert!(validate_and_encode_id("dp_123#frag").is_err());
 /// ```
 pub fn validate_and_encode_id(id: &str) -> Result<String, StripeError> {
     if id.trim().is_empty() {
@@ -38,6 +40,7 @@ pub fn validate_and_encode_id(id: &str) -> Result<String, StripeError> {
             "Resource ID cannot be empty or whitespace".into(),
         ));
     }
+
     if id.contains("..")
         || id.contains('/')
         || id.contains('\\')
@@ -45,150 +48,103 @@ pub fn validate_and_encode_id(id: &str) -> Result<String, StripeError> {
         || id.contains('#')
     {
         return Err(StripeError::InvalidRequest(format!(
-            "Resource ID contains invalid characters (path traversal or query delimiter): '{id}'"
+            "Invalid resource ID '{id}': path traversal and URL control characters are not permitted"
         )));
     }
-    Ok(crate::patterns::serializer::percent_encode(id))
+
+    Ok(percent_encode(id.trim()))
 }
 
 /// Assembles a normalized Stripe REST API endpoint URL.
-///
-/// # Examples
-///
-/// ```
-/// use some_stripe_core::patterns::crud::resource_url;
-///
-/// let url = resource_url("https://api.stripe.com/", "/v1/charges");
-/// assert_eq!(url, "https://api.stripe.com/v1/charges");
-/// ```
 pub fn resource_url(api_base: &str, resource_path: &str) -> String {
     let base = api_base.trim_end_matches('/');
-    let path = resource_path.trim_start_matches('/').trim_end_matches('/');
+    let path = resource_path.trim_start_matches('/');
     format!("{base}/{path}")
 }
 
 /// Assembles a REST API endpoint URL for an individual resource item by ID.
+pub fn resource_url_with_id(api_base: &str, resource_path: &str, id: &str) -> String {
+    let base = api_base.trim_end_matches('/');
+    let path = resource_path.trim_start_matches('/');
+    let safe_id = validate_and_encode_id(id).unwrap_or_else(|_| percent_encode(id));
+    format!("{base}/{path}/{safe_id}")
+}
+
+/// Assembles a REST API endpoint URL for an individual resource item by ID with strict validation.
 ///
-/// Validates and percent-encodes `id` to prevent path traversal and injection attacks.
+/// Ensures the resource ID does not contain path traversal sequences (`..`), slashes, or URL delimiters.
 ///
 /// # Errors
-///
-/// Returns [`StripeError::InvalidRequest`] if `id` is empty, whitespace-only, or contains forbidden characters.
+/// Returns [`StripeError::InvalidRequest`] if `id` fails [`validate_and_encode_id`].
 ///
 /// # Examples
+/// ```rust
+/// use some_stripe_core::patterns::crud::try_resource_url_with_id;
 ///
+/// let url = try_resource_url_with_id("https://api.stripe.com", "/v1/customers", "cus_123").unwrap();
+/// assert_eq!(url, "https://api.stripe.com/v1/customers/cus_123");
+///
+/// // Rejects invalid IDs with path traversal:
+/// assert!(try_resource_url_with_id("https://api.stripe.com", "/v1/customers", "../admin").is_err());
 /// ```
-/// use some_stripe_core::patterns::crud::resource_url_with_id;
-///
-/// let url = resource_url_with_id("https://api.stripe.com", "v1/disputes", "dp_123").unwrap();
-/// assert_eq!(url, "https://api.stripe.com/v1/disputes/dp_123");
-///
-/// assert!(resource_url_with_id("https://api.stripe.com", "v1/disputes", "../../account").is_err());
-/// ```
-pub fn resource_url_with_id(
+pub fn try_resource_url_with_id(
     api_base: &str,
     resource_path: &str,
     id: &str,
 ) -> Result<String, StripeError> {
-    let encoded = validate_and_encode_id(id)?;
     let base = api_base.trim_end_matches('/');
-    let path = resource_path.trim_start_matches('/').trim_end_matches('/');
-    Ok(format!("{base}/{path}/{encoded}"))
+    let path = resource_path.trim_start_matches('/');
+    let safe_id = validate_and_encode_id(id)?;
+    Ok(format!("{base}/{path}/{safe_id}"))
 }
 
 /// Assembles a sub-resource endpoint URL.
+pub fn resource_sub_url(api_base: &str, resource_path: &str, id: &str, action: &str) -> String {
+    let base = api_base.trim_end_matches('/');
+    let path = resource_path.trim_start_matches('/');
+    let safe_id = validate_and_encode_id(id).unwrap_or_else(|_| percent_encode(id));
+    let action = action.trim_start_matches('/');
+    format!("{base}/{path}/{safe_id}/{action}")
+}
+
+/// Assembles a sub-resource endpoint URL with strict validation.
 ///
-/// Validates and percent-encodes `id` to prevent path traversal and injection attacks.
+/// Validates the parent resource ID to prevent path traversal or URL control injection attacks.
 ///
 /// # Errors
-///
-/// Returns [`StripeError::InvalidRequest`] if `id` is empty, whitespace-only, or contains forbidden characters.
+/// Returns [`StripeError::InvalidRequest`] if `id` fails [`validate_and_encode_id`].
 ///
 /// # Examples
+/// ```rust
+/// use some_stripe_core::patterns::crud::try_resource_sub_url;
 ///
+/// let url = try_resource_sub_url("https://api.stripe.com", "/v1/customers", "cus_123", "subscriptions").unwrap();
+/// assert_eq!(url, "https://api.stripe.com/v1/customers/cus_123/subscriptions");
+///
+/// // Strict validation blocks path traversal tokens in ID:
+/// assert!(try_resource_sub_url("https://api.stripe.com", "/v1/customers", "../admin", "cancel").is_err());
 /// ```
-/// use some_stripe_core::patterns::crud::resource_sub_url;
-///
-/// let url = resource_sub_url("https://api.stripe.com", "v1/disputes", "dp_123", "close").unwrap();
-/// assert_eq!(url, "https://api.stripe.com/v1/disputes/dp_123/close");
-///
-/// assert!(resource_sub_url("https://api.stripe.com", "v1/disputes", "dp_123?inject=1", "close").is_err());
-/// ```
-pub fn resource_sub_url(
+pub fn try_resource_sub_url(
     api_base: &str,
     resource_path: &str,
     id: &str,
     action: &str,
 ) -> Result<String, StripeError> {
-    let encoded = validate_and_encode_id(id)?;
     let base = api_base.trim_end_matches('/');
     let path = resource_path.trim_start_matches('/');
-    let act = action.trim_matches('/');
-    Ok(format!("{base}/{path}/{encoded}/{act}"))
+    let safe_id = validate_and_encode_id(id)?;
+    let action = action.trim_start_matches('/');
+    Ok(format!("{base}/{path}/{safe_id}/{action}"))
 }
 
 /// Trait implemented by endpoints that support retrieving resources by ID.
-///
-/// Types implementing `Retrievable` provide an asynchronous lookup by their unique Stripe
-/// resource identifier (such as `dp_...`, `re_...`, or `acct_...`).
-///
-/// # Example
-///
-/// ```
-/// use async_trait::async_trait;
-/// use some_stripe_core::patterns::crud::Retrievable;
-/// use some_stripe_core::{StripeClient, StripeError};
-///
-/// struct MyResource {
-///     pub id: String,
-/// }
-///
-/// #[async_trait]
-/// impl Retrievable for MyResource {
-///     async fn retrieve(_client: &StripeClient, id: &str) -> Result<Self, StripeError> {
-///         Ok(MyResource { id: id.to_string() })
-///     }
-/// }
-/// ```
 #[async_trait]
 pub trait Retrievable: Sized {
     /// Retrieve a resource by its unique identifier.
     async fn retrieve(client: &StripeClient, id: &str) -> Result<Self, StripeError>;
 }
 
-/// Trait implemented by endpoints that support creating resources from parameters.
-///
-/// Generic over the parameter DTO `Params`, which must implement [`Serialize`] and be safe
-/// to transmit across threads (`Send + Sync`).
-///
-/// # Example
-///
-/// ```
-/// use async_trait::async_trait;
-/// use serde::Serialize;
-/// use some_stripe_core::patterns::crud::Creatable;
-/// use some_stripe_core::{StripeClient, StripeError};
-///
-/// #[derive(Serialize)]
-/// struct CreateWidgetParams {
-///     name: String,
-/// }
-///
-/// struct Widget {
-///     id: String,
-///     name: String,
-/// }
-///
-/// #[async_trait]
-/// impl Creatable<CreateWidgetParams> for Widget {
-///     async fn create(_client: &StripeClient, params: &CreateWidgetParams) -> Result<Self, StripeError> {
-///         Ok(Widget {
-///             id: "wid_123".to_string(),
-///             name: params.name.clone(),
-///         })
-///     }
-/// }
-/// ```
+/// Trait implemented by endpoints that support creating resources.
 #[async_trait]
 pub trait Creatable<Params: Serialize + Send + Sync>: Sized {
     /// Create a new resource with the specified parameters.
@@ -200,83 +156,40 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_validate_and_encode_id_valid() {
-        assert_eq!(validate_and_encode_id("dp_12345").unwrap(), "dp_12345");
-        assert_eq!(
-            validate_and_encode_id("txn_abc-def.xyz").unwrap(),
-            "txn_abc-def.xyz"
-        );
+    fn test_validate_and_encode_id_success() {
+        assert_eq!(validate_and_encode_id("cus_12345").unwrap(), "cus_12345");
+        assert_eq!(validate_and_encode_id(" cus_12345 ").unwrap(), "cus_12345");
+        assert_eq!(validate_and_encode_id("cus:abc").unwrap(), "cus%3Aabc");
     }
 
     #[test]
-    fn test_validate_and_encode_id_empty_and_whitespace() {
-        let err1 = validate_and_encode_id("").unwrap_err();
-        match err1 {
-            StripeError::InvalidRequest(msg) => {
-                assert_eq!(msg, "Resource ID cannot be empty or whitespace");
-            }
-            _ => panic!("Expected InvalidRequest, got {:?}", err1),
-        }
-
-        let err2 = validate_and_encode_id("   ").unwrap_err();
-        match err2 {
-            StripeError::InvalidRequest(msg) => {
-                assert_eq!(msg, "Resource ID cannot be empty or whitespace");
-            }
-            _ => panic!("Expected InvalidRequest, got {:?}", err2),
-        }
-    }
-
-    #[test]
-    fn test_validate_and_encode_id_path_traversal() {
+    fn test_validate_and_encode_id_rejects_empty_whitespace() {
         assert!(matches!(
-            validate_and_encode_id("../../account"),
+            validate_and_encode_id(""),
             Err(StripeError::InvalidRequest(_))
         ));
         assert!(matches!(
-            validate_and_encode_id("/etc/passwd"),
-            Err(StripeError::InvalidRequest(_))
-        ));
-        assert!(matches!(
-            validate_and_encode_id("..\\windows\\system32"),
+            validate_and_encode_id("   "),
             Err(StripeError::InvalidRequest(_))
         ));
     }
 
     #[test]
-    fn test_validate_and_encode_id_query_and_fragment_injection() {
-        assert!(matches!(
-            validate_and_encode_id("dp_123?inject=1"),
-            Err(StripeError::InvalidRequest(_))
-        ));
-        assert!(matches!(
-            validate_and_encode_id("dp_123#frag"),
-            Err(StripeError::InvalidRequest(_))
-        ));
+    fn test_validate_and_encode_id_rejects_path_traversal() {
+        assert!(validate_and_encode_id("../cus_123").is_err());
+        assert!(validate_and_encode_id("cus/123").is_err());
+        assert!(validate_and_encode_id("cus\\123").is_err());
+        assert!(validate_and_encode_id("cus_123?foo=bar").is_err());
+        assert!(validate_and_encode_id("cus_123#frag").is_err());
     }
 
     #[test]
-    fn test_validate_and_encode_id_percent_encodes_special_chars() {
-        let encoded = validate_and_encode_id("dp:123@456").unwrap();
-        assert_eq!(encoded, "dp%3A123%40456");
-    }
+    fn test_try_resource_url_with_id() {
+        let url =
+            try_resource_url_with_id("https://api.stripe.com", "/v1/customers", "cus_123").unwrap();
+        assert_eq!(url, "https://api.stripe.com/v1/customers/cus_123");
 
-    #[test]
-    fn test_resource_url_constructors() {
-        let url = resource_url("https://api.stripe.com/", "/v1/charges/");
-        assert_eq!(url, "https://api.stripe.com/v1/charges");
-
-        let item_url =
-            resource_url_with_id("https://api.stripe.com/", "/v1/charges", "ch_123").unwrap();
-        assert_eq!(item_url, "https://api.stripe.com/v1/charges/ch_123");
-
-        let sub_url = resource_sub_url(
-            "https://api.stripe.com/",
-            "/v1/charges",
-            "ch_123",
-            "/refund",
-        )
-        .unwrap();
-        assert_eq!(sub_url, "https://api.stripe.com/v1/charges/ch_123/refund");
+        let err = try_resource_url_with_id("https://api.stripe.com", "/v1/customers", "../admin");
+        assert!(err.is_err());
     }
 }

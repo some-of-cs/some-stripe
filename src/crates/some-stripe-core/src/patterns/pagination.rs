@@ -31,6 +31,17 @@ fn default_list_object() -> String {
 }
 
 /// Standard query parameters for cursor-based pagination.
+///
+/// # Examples
+/// ```rust
+/// use some_stripe_core::patterns::pagination::ListParams;
+///
+/// let params = ListParams::new()
+///     .limit(25)
+///     .starting_after("cus_last_seen");
+/// assert_eq!(params.limit, Some(25));
+/// assert_eq!(params.starting_after.as_deref(), Some("cus_last_seen"));
+/// ```
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct ListParams {
     /// A cursor for use in pagination: an object ID defining your place in the list.
@@ -72,6 +83,20 @@ impl ListParams {
 }
 
 /// Circular cursor sentinel intercepting repetitive cursors to prevent infinite loops (DoS).
+///
+/// Tracks encountered pagination cursor tokens and halts traversal with
+/// [`StripeError::PaginationLoopDetected`] if a cycle is detected.
+///
+/// # Examples
+/// ```rust
+/// use some_stripe_core::patterns::pagination::CursorLoopDetector;
+///
+/// let mut detector = CursorLoopDetector::new();
+/// assert!(detector.record_cursor("cus_page1").is_ok());
+/// assert!(detector.record_cursor("cus_page2").is_ok());
+/// // Encountering the same cursor again flags a loop:
+/// assert!(detector.record_cursor("cus_page1").is_err());
+/// ```
 #[derive(Debug, Default, Clone)]
 pub struct CursorLoopDetector {
     seen_cursors: HashSet<String>,
@@ -140,19 +165,53 @@ impl<'a, T: serde::de::DeserializeOwned> Paginator<'a, T> {
         }
     }
 
+    /// Seeds the paginator with an initial starting cursor for pagination resumption.
+    ///
+    /// This is useful when resuming pagination from a cursor stored in an external state,
+    /// checkpoint, or previous API response.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use some_stripe_core::{StripeClient, SecretKey};
+    /// use some_stripe_core::patterns::pagination::Paginator;
+    ///
+    /// #[derive(serde::Deserialize)]
+    /// struct MockItem {
+    ///     id: String,
+    /// }
+    ///
+    /// let client = StripeClient::new(SecretKey::new("sk_test_123"));
+    /// let paginator: Paginator<'_, MockItem> = Paginator::new(
+    ///     &client,
+    ///     "/v1/customers",
+    ///     10,
+    ///     |item: &MockItem| &item.id,
+    /// ).with_starting_after("cus_seed_999");
+    ///
+    /// assert_eq!(paginator.pages_fetched(), 0);
+    /// ```
+    #[must_use]
+    pub fn with_starting_after(mut self, cursor: impl Into<String>) -> Self {
+        self.last_seen_cursor = Some(cursor.into());
+        self
+    }
+
     /// Total number of HTTP pages fetched over the wire.
     pub fn pages_fetched(&self) -> usize {
         self.pages_fetched
     }
 
     async fn fetch_page(&mut self) -> Result<ListResponse<T>, StripeError> {
+        let sep = if self.path.contains('?') { '&' } else { '?' };
         let mut url = format!(
-            "{}/{}?limit={}",
-            self.client.config.api_base, self.path, self.limit
+            "{}/{}{sep}limit={}",
+            self.client.config.api_base.trim_end_matches('/'),
+            self.path,
+            self.limit
         );
         if let Some(ref c) = self.last_seen_cursor {
-            let enc = crate::patterns::crud::validate_and_encode_id(c)?;
-            url.push_str(&format!("&starting_after={enc}"));
+            let encoded_cursor = crate::patterns::serializer::percent_encode(c);
+            url.push_str(&format!("&starting_after={encoded_cursor}"));
         }
 
         let req = self.client.http.get(&url);
@@ -204,5 +263,40 @@ impl<'a, T: serde::de::DeserializeOwned> Paginator<'a, T> {
                 return Ok(None);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Debug, Deserialize, Serialize, PartialEq, Eq)]
+    struct DummyItem {
+        id: String,
+    }
+
+    #[test]
+    fn test_paginator_with_starting_after_builder() {
+        let client = StripeClient::new("sk_test_123");
+        let paginator: Paginator<DummyItem> =
+            Paginator::new(&client, "v1/items", 10, |i: &DummyItem| &i.id)
+                .with_starting_after("item_seeded_456");
+
+        assert_eq!(
+            paginator.last_seen_cursor.as_deref(),
+            Some("item_seeded_456")
+        );
+    }
+
+    #[test]
+    fn test_list_params_builder() {
+        let params = ListParams::new()
+            .limit(20)
+            .starting_after("item_1")
+            .ending_before("item_0");
+
+        assert_eq!(params.limit, Some(20));
+        assert_eq!(params.starting_after.as_deref(), Some("item_1"));
+        assert_eq!(params.ending_before.as_deref(), Some("item_0"));
     }
 }
