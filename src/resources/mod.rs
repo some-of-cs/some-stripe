@@ -4,6 +4,7 @@ pub mod accounts;
 pub mod balance;
 pub mod checkout;
 pub mod disputes;
+pub mod invoices;
 pub mod payment_intents;
 pub mod payment_links;
 pub mod refunds;
@@ -16,6 +17,7 @@ pub use checkout::{
     validate_and_encode_id, validate_redirect_url,
 };
 pub use disputes::DisputesResource;
+pub use invoices::InvoicesResource;
 pub use payment_intents::{PaymentIntentsResource, generate_uuid_v4, is_valid_uuid_v4};
 pub use payment_links::PaymentLinksResource;
 pub use refunds::RefundsResource;

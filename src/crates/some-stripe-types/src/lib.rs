@@ -685,79 +685,10 @@ fn default_account_object() -> String {
     "account".into()
 }
 
-/// Represents a Stripe Invoice object.
-///
-/// Handles `invoice.upcoming` preview events where `id` is `None` (JSON `null`).
-///
-/// # Example
-/// ```
-/// use some_stripe_types::Invoice;
-///
-/// let json = r#"{
-///     "id": null,
-///     "object": "invoice",
-///     "customer": "cus_test_123",
-///     "amount_due": 4500,
-///     "currency": "usd"
-/// }"#;
-/// let invoice: Invoice = serde_json::from_str(json).unwrap();
-/// assert!(invoice.id.is_none());
-/// assert_eq!(invoice.amount_due, Some(4500));
-/// ```
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Invoice {
-    /// Unique identifier for the invoice (`in_...`).
-    ///
-    /// For upcoming invoice preview events (`invoice.upcoming`), `id` is `None` (JSON `null`).
-    pub id: Option<String>,
-
-    /// Object type, always `invoice`.
-    #[serde(default = "default_invoice_object")]
-    pub object: String,
-
-    /// The ID of the customer who will be billed.
-    pub customer: Option<String>,
-
-    /// Final amount due at this time for this invoice in minor currency units (e.g., cents).
-    pub amount_due: Option<i64>,
-
-    /// The amount, in minor currency units, that was paid.
-    pub amount_paid: Option<i64>,
-
-    /// The difference between amount_due and amount_paid, in minor currency units.
-    pub amount_remaining: Option<i64>,
-
-    /// Total after discounts and taxes in minor currency units.
-    pub total: Option<i64>,
-
-    /// Total of all items before discounts and taxes in minor currency units.
-    pub subtotal: Option<i64>,
-
-    /// Three-letter ISO currency code in lowercase.
-    pub currency: Option<String>,
-
-    /// The status of the invoice: `draft`, `open`, `paid`, `uncollectible`, or `void`.
-    pub status: Option<String>,
-
-    /// Whether payment was successfully made for this invoice.
-    pub paid: Option<bool>,
-
-    /// The ID of the subscription that this invoice was prepared for, if any.
-    pub subscription: Option<String>,
-
-    /// Start of the usage period that this invoice covers (UNIX epoch seconds).
-    pub period_start: Option<i64>,
-
-    /// End of the usage period that this invoice covers (UNIX epoch seconds).
-    pub period_end: Option<i64>,
-
-    /// Time at which the object was created (UNIX epoch seconds).
-    pub created: Option<i64>,
-}
-
-fn default_invoice_object() -> String {
-    "invoice".into()
-}
+pub mod invoice;
+pub use invoice::*;
+pub mod invoice_params;
+pub use invoice_params::*;
 
 /// Strongly typed, discriminated union of Stripe event payload objects.
 ///
