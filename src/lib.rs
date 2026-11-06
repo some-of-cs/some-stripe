@@ -163,7 +163,6 @@ impl StripeClient {
     pub fn subscriptions(&self) -> SubscriptionsResource<'_> {
         SubscriptionsResource::new(&self.0)
     }
-
     /// Access the SubscriptionSchedules resource namespace (`stripe.subscription_schedules`).
     pub fn subscription_schedules(&self) -> SubscriptionSchedulesResource<'_> {
         SubscriptionSchedulesResource::new(&self.0)
@@ -237,7 +236,6 @@ pub trait StripeClientExt {
 
     /// Access the Subscriptions resource namespace (`stripe.subscriptions`).
     fn subscriptions(&self) -> SubscriptionsResource<'_>;
-
     /// Access the SubscriptionSchedules resource namespace (`stripe.subscription_schedules`).
     fn subscription_schedules(&self) -> SubscriptionSchedulesResource<'_>;
 }
