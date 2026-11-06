@@ -114,6 +114,8 @@ pub struct Paginator<'a, T> {
     done: bool,
     last_id_extractor: fn(&T) -> &str,
     last_seen_cursor: Option<String>,
+    ending_before: Option<String>,
+    initial_error: Option<StripeError>,
 }
 
 impl<'a, T: serde::de::DeserializeOwned> Paginator<'a, T> {
@@ -137,7 +139,37 @@ impl<'a, T: serde::de::DeserializeOwned> Paginator<'a, T> {
             done: false,
             last_id_extractor: id_extractor,
             last_seen_cursor: None,
+            ending_before: None,
+            initial_error: None,
         }
+    }
+
+    /// Seeds the paginator with an initial `starting_after` cursor for forward pagination.
+    pub fn starting_after(mut self, cursor: impl Into<String>) -> Self {
+        self.last_seen_cursor = Some(cursor.into());
+        self
+    }
+
+    /// Fluent alias for [`starting_after`].
+    pub fn with_starting_after(self, cursor: impl Into<String>) -> Self {
+        self.starting_after(cursor)
+    }
+
+    /// Seeds the paginator with an initial `ending_before` cursor for backward pagination.
+    pub fn ending_before(mut self, cursor: impl Into<String>) -> Self {
+        self.ending_before = Some(cursor.into());
+        self
+    }
+
+    /// Fluent alias for [`ending_before`].
+    pub fn with_ending_before(self, cursor: impl Into<String>) -> Self {
+        self.ending_before(cursor)
+    }
+
+    /// Seeds the paginator with an initial error that will be returned on the first call to `next_item`.
+    pub fn with_initial_error(mut self, error: StripeError) -> Self {
+        self.initial_error = Some(error);
+        self
     }
 
     /// Total number of HTTP pages fetched over the wire.
@@ -146,11 +178,14 @@ impl<'a, T: serde::de::DeserializeOwned> Paginator<'a, T> {
     }
 
     async fn fetch_page(&mut self) -> Result<ListResponse<T>, StripeError> {
+        let delimiter = if self.path.contains('?') { '&' } else { '?' };
         let mut url = format!(
-            "{}/{}?limit={}",
-            self.client.config.api_base, self.path, self.limit
+            "{}/{}{}limit={}",
+            self.client.config.api_base, self.path, delimiter, self.limit
         );
-        if let Some(ref c) = self.last_seen_cursor {
+        if let Some(eb) = self.ending_before.take() {
+            url.push_str(&format!("&ending_before={eb}"));
+        } else if let Some(ref c) = self.last_seen_cursor {
             url.push_str(&format!("&starting_after={c}"));
         }
 
@@ -163,6 +198,11 @@ impl<'a, T: serde::de::DeserializeOwned> Paginator<'a, T> {
 
     /// Fetches the next item by value with zero heap clones.
     pub async fn next_item(&mut self) -> Result<Option<T>, StripeError> {
+        if let Some(err) = self.initial_error.take() {
+            self.done = true;
+            return Err(err);
+        }
+
         loop {
             // 1. Yield buffered item directly via move (Zero-Clone)
             if let Some(item) = self.buffer.pop_front() {

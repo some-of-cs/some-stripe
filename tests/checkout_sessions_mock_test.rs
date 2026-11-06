@@ -11,7 +11,7 @@ use some_stripe::resources::is_valid_uuid_v4;
 use some_stripe::{
     CheckoutSession, CreateCheckoutSessionParams, LineItem, LineItemParams,
     LineItemPriceDataParams, LineItemProductDataParams, ListLineItemsParams, StripeClient,
-    StripeClientExt, StripeConfig,
+    StripeClientExt, StripeConfig, StripeError, validate_and_encode_id,
 };
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -412,6 +412,258 @@ async fn test_checkout_session_facade_and_extension_trait() {
         .await
         .unwrap();
     assert_eq!(s2.id, "cs_facade_2");
+
+    server.await.unwrap();
+}
+
+#[tokio::test]
+async fn test_checkout_session_create_unified_serialization_and_custom_idempotency_validation() {
+    let config = StripeConfig::new("sk_test_mock").with_api_base("http://127.0.0.1:9");
+    let client = StripeClient::with_config(config);
+
+    // 1. Invalid whitespace/empty custom idempotency keys fail fast
+    let empty_idem_params =
+        CreateCheckoutSessionParams::new("https://example.com/success").idempotency_key("");
+    let err = client
+        .checkout()
+        .sessions()
+        .create(&empty_idem_params)
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(err, StripeError::InvalidRequest(_)),
+        "Empty idempotency key must return InvalidRequest: {err:?}"
+    );
+
+    let whitespace_idem_params =
+        CreateCheckoutSessionParams::new("https://example.com/success").idempotency_key("   ");
+    let err2 = client
+        .checkout()
+        .sessions()
+        .create(&whitespace_idem_params)
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(err2, StripeError::InvalidRequest(_)),
+        "Whitespace idempotency key must return InvalidRequest: {err2:?}"
+    );
+
+    // 2. Unified shorthand fields + metadata + customer serialization e2e
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+
+    let server = tokio::spawn(async move {
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let mut req_buf = vec![0; 8192];
+        let n = socket.read(&mut req_buf).await.unwrap();
+        let wire = String::from_utf8(req_buf[..n].to_vec()).unwrap();
+
+        assert!(wire.starts_with("POST /v1/checkout/sessions HTTP/1.1"));
+        assert!(wire.contains("idempotency-key: idem_valid_key_456"));
+
+        // Synthesized single item parameters
+        assert!(wire.contains("line_items%5B0%5D%5Bprice_data%5D%5Bcurrency%5D=eur"));
+        assert!(wire.contains("line_items%5B0%5D%5Bprice_data%5D%5Bunit_amount%5D=4500"));
+        assert!(wire.contains(
+            "line_items%5B0%5D%5Bprice_data%5D%5Bproduct_data%5D%5Bname%5D=Custom+T-Shirt"
+        ));
+        assert!(wire.contains("line_items%5B0%5D%5Bquantity%5D=2"));
+
+        // Preserved top-level customer and metadata fields
+        assert!(wire.contains("customer=cus_alice_123"));
+        assert!(wire.contains("customer_email=alice%40example.com"));
+        assert!(wire.contains("metadata%5Bsource%5D=checkout_patch"));
+        assert!(wire.contains("cancel_url=https%3A%2F%2Fexample.com%2Fcancel"));
+
+        // Must NOT emit un-nested flat fields as top-level parameters
+        assert!(!wire.contains("&currency="));
+        assert!(!wire.contains("&unit_amount="));
+        assert!(!wire.contains("&product_name="));
+        assert!(!wire.contains("&idempotency_key="));
+
+        let body = r#"{
+            "id": "cs_test_unified_001",
+            "object": "checkout.session",
+            "status": "open",
+            "payment_status": "unpaid",
+            "mode": "payment",
+            "amount_total": 9000,
+            "currency": "eur",
+            "customer": "cus_alice_123"
+        }"#;
+        write_json_response(&mut socket, body).await;
+    });
+
+    let config = StripeConfig::new("sk_test_checkout").with_api_base(format!("http://{address}"));
+    let client = StripeClient::with_config(config);
+
+    let params = CreateCheckoutSessionParams::new("https://example.com/success")
+        .cancel_url("https://example.com/cancel")
+        .currency("eur")
+        .unit_amount(4500)
+        .product_name("Custom T-Shirt")
+        .quantity(2)
+        .customer("cus_alice_123")
+        .customer_email("alice@example.com")
+        .add_metadata("source", "checkout_patch")
+        .idempotency_key("idem_valid_key_456");
+
+    let session = client.checkout().sessions().create(&params).await.unwrap();
+    server.await.unwrap();
+
+    assert_eq!(session.id, "cs_test_unified_001");
+    assert_eq!(session.customer.as_deref(), Some("cus_alice_123"));
+    assert_eq!(session.amount_total, Some(9000));
+}
+
+#[tokio::test]
+async fn test_checkout_session_id_validation_and_url_encoding_security() {
+    // 1. Direct validation function tests
+    assert!(validate_and_encode_id("").is_err());
+    assert!(validate_and_encode_id("   ").is_err());
+    assert!(validate_and_encode_id("cs_test/../traversal").is_err());
+    assert!(validate_and_encode_id("cs_test\\evil").is_err());
+    assert!(validate_and_encode_id("cs_test?param=1").is_err());
+    assert!(validate_and_encode_id("cs_test#hash").is_err());
+    assert!(validate_and_encode_id("cs_test\0null").is_err());
+    assert!(validate_and_encode_id("cs_test\r\ninjection").is_err());
+    assert_eq!(
+        validate_and_encode_id("cs_test_valid_123").unwrap(),
+        "cs_test_valid_123"
+    );
+
+    let config = StripeConfig::new("sk_test_mock").with_api_base("http://127.0.0.1:9");
+    let client = StripeClient::with_config(config);
+
+    // 2. retrieve fails fast on invalid IDs without network request
+    assert!(matches!(
+        client.checkout().sessions().retrieve("").await.unwrap_err(),
+        StripeError::InvalidRequest(_)
+    ));
+    assert!(matches!(
+        client
+            .checkout()
+            .sessions()
+            .retrieve("cs_test/../evil")
+            .await
+            .unwrap_err(),
+        StripeError::InvalidRequest(_)
+    ));
+
+    // 3. expire fails fast on invalid IDs
+    assert!(matches!(
+        client.checkout().sessions().expire("  ").await.unwrap_err(),
+        StripeError::InvalidRequest(_)
+    ));
+    assert!(matches!(
+        client
+            .checkout()
+            .sessions()
+            .expire("cs_test?evil=1")
+            .await
+            .unwrap_err(),
+        StripeError::InvalidRequest(_)
+    ));
+
+    // 4. list_line_items fails fast on invalid session IDs
+    let mut paginator_empty = client
+        .checkout()
+        .sessions()
+        .list_line_items("", &ListLineItemsParams::default());
+    let err_pag = paginator_empty.next_item().await.unwrap_err();
+    assert!(matches!(err_pag, StripeError::InvalidRequest(_)));
+
+    let mut paginator_traversal = client
+        .checkout()
+        .sessions()
+        .list_line_items("cs/evil/traversal", &ListLineItemsParams::default());
+    let err_pag2 = paginator_traversal.next_item().await.unwrap_err();
+    assert!(matches!(err_pag2, StripeError::InvalidRequest(_)));
+}
+
+#[tokio::test]
+async fn test_checkout_session_list_line_items_cursor_propagation() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+
+    let server = tokio::spawn(async move {
+        // Request 1: starting_after cursor propagation
+        let (mut socket1, _) = listener.accept().await.unwrap();
+        let mut buf1 = vec![0; 4096];
+        let n1 = socket1.read(&mut buf1).await.unwrap();
+        let req1 = String::from_utf8(buf1[..n1].to_vec()).unwrap();
+        assert!(req1.contains("GET /v1/checkout/sessions/cs_test_curs/line_items?limit=5&starting_after=li_cursor_start_1"));
+
+        let body1 = r#"{
+            "object": "list",
+            "data": [
+                {
+                    "id": "li_cursor_start_2",
+                    "object": "item",
+                    "amount_subtotal": 1000,
+                    "amount_total": 1000,
+                    "currency": "usd"
+                }
+            ],
+            "has_more": false
+        }"#;
+        write_json_response(&mut socket1, body1).await;
+
+        // Request 2: ending_before cursor propagation
+        let (mut socket2, _) = listener.accept().await.unwrap();
+        let mut buf2 = vec![0; 4096];
+        let n2 = socket2.read(&mut buf2).await.unwrap();
+        let req2 = String::from_utf8(buf2[..n2].to_vec()).unwrap();
+        assert!(req2.contains("GET /v1/checkout/sessions/cs_test_curs/line_items?limit=3&ending_before=li_cursor_end_9"));
+
+        let body2 = r#"{
+            "object": "list",
+            "data": [
+                {
+                    "id": "li_cursor_end_8",
+                    "object": "item",
+                    "amount_subtotal": 2000,
+                    "amount_total": 2000,
+                    "currency": "usd"
+                }
+            ],
+            "has_more": false
+        }"#;
+        write_json_response(&mut socket2, body2).await;
+    });
+
+    let config = StripeConfig::new("sk_test_curs").with_api_base(format!("http://{address}"));
+    let client = StripeClient::with_config(config);
+
+    // Test 1: starting_after
+    let params_sa = ListLineItemsParams::new()
+        .limit(5)
+        .starting_after("li_cursor_start_1");
+    let mut paginator_sa = client
+        .checkout()
+        .sessions()
+        .list_line_items("cs_test_curs", &params_sa);
+    let item_sa = paginator_sa
+        .next_item()
+        .await
+        .unwrap()
+        .expect("Item expected");
+    assert_eq!(item_sa.id, "li_cursor_start_2");
+
+    // Test 2: ending_before
+    let params_eb = ListLineItemsParams::new()
+        .limit(3)
+        .ending_before("li_cursor_end_9");
+    let mut paginator_eb = client
+        .checkout()
+        .sessions()
+        .list_line_items("cs_test_curs", &params_eb);
+    let item_eb = paginator_eb
+        .next_item()
+        .await
+        .unwrap()
+        .expect("Item expected");
+    assert_eq!(item_eb.id, "li_cursor_end_8");
 
     server.await.unwrap();
 }

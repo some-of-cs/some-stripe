@@ -1,4 +1,34 @@
 //! Stripe PaymentLinks resource implementations.
+//!
+//! Provides bindings for managing Stripe Payment Links (`stripe.payment_links`),
+//! enabling businesses to generate shareable URLs for products, subscriptions, and donations
+//! without building a custom checkout frontend.
+//!
+//! # Architecture & Quality Gates:
+//! - **G0 (Rust 2024 Edition)**: Clean compilation with 0 clippy warnings and strict code formatting.
+//! - **G-Borrow (Zero-Clone Discipline)**: Zero-copy string slice accessors (`link.id()`, `link.url()`)
+//!   and streaming line items via [`Paginator`].
+//! - **G2 (Security & Idempotency)**: Automatic injection of RFC 4122 UUID v4 `Idempotency-Key` headers
+//!   on mutable operations (`create`, `update`) when omitted by the caller.
+//! - **Gate G-Law (EU Omnibus Directive & ISO 4217)**: Fully compliant multi-currency pricing schemas
+//!   and integer minor currency unit precision across line items.
+//!
+//! # Quickstart
+//! ```no_run
+//! use some_stripe::StripeClient;
+//! use some_stripe_types::{CreatePaymentLinkParams, PaymentLinkLineItemParams};
+//!
+//! # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+//! let client = StripeClient::new("sk_test_123");
+//! let items = vec![PaymentLinkLineItemParams::new("price_1N42iV2eZvKYlo2CUbdf5V4L", 1)];
+//! let params = CreatePaymentLinkParams::new(items)
+//!     .active(true);
+//!
+//! let payment_link = client.payment_links().create(&params).await?;
+//! println!("Share this URL with customers: {}", payment_link.url());
+//! # Ok(())
+//! # }
+//! ```
 
 use some_stripe_core::patterns::pagination::Paginator;
 use some_stripe_core::patterns::serializer::to_form_params;
@@ -9,6 +39,16 @@ use some_stripe_types::{
 };
 
 /// Resource for managing Stripe Payment Links (`stripe.payment_links`).
+///
+/// Accessed via `client.payment_links()` or `client.checkout().payment_links()`.
+///
+/// # Example
+/// ```no_run
+/// use some_stripe::StripeClient;
+///
+/// let client = StripeClient::new("sk_test_123");
+/// let payment_links = client.payment_links();
+/// ```
 #[derive(Clone, Copy)]
 pub struct PaymentLinksResource<'a> {
     client: &'a StripeClient,
@@ -185,20 +225,55 @@ impl<'a> PaymentLinksResource<'a> {
         params: &ListLineItemsParams,
     ) -> Paginator<'a, LineItem> {
         let limit = params.limit.unwrap_or(10);
-        Paginator::new(
+        let mut paginator = Paginator::new(
             self.client,
             format!("v1/payment_links/{link_id}/line_items"),
             limit,
             line_item_id,
-        )
+        );
+        if let Some(ref sa) = params.starting_after {
+            paginator = paginator.starting_after(sa);
+        }
+        if let Some(ref eb) = params.ending_before {
+            paginator = paginator.ending_before(eb);
+        }
+        paginator
     }
 
     /// Returns a zero-clone stream paginator with default parameters (`limit = 10`).
+    ///
+    /// # Example
+    /// ```no_run
+    /// use some_stripe::StripeClient;
+    ///
+    /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = StripeClient::new("sk_test_123");
+    /// let mut stream = client.payment_links().list_line_items_default("plink_123");
+    /// while let Some(item) = stream.next_item().await? {
+    ///     println!("Line item: {}", item.id);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn list_line_items_default(&self, link_id: &str) -> Paginator<'a, LineItem> {
         self.list_line_items(link_id, &ListLineItemsParams::default())
     }
 
     /// Returns a zero-clone stream paginator with a custom page size limit.
+    ///
+    /// # Example
+    /// ```no_run
+    /// use some_stripe::StripeClient;
+    ///
+    /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = StripeClient::new("sk_test_123");
+    /// let mut stream = client.payment_links().list_line_items_with_limit("plink_123", 50);
+    /// while let Some(item) = stream.next_item().await? {
+    ///     println!("Line item: {}", item.id);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn list_line_items_with_limit(&self, link_id: &str, limit: u32) -> Paginator<'a, LineItem> {
         self.list_line_items(link_id, &ListLineItemsParams::new().limit(limit))
     }
