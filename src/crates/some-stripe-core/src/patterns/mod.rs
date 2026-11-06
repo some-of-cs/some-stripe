@@ -9,7 +9,10 @@ pub mod serializer;
 pub mod transport;
 
 pub use builder::StripeRequestBuilder;
-pub use crud::{Creatable, Retrievable, resource_sub_url, resource_url, resource_url_with_id};
+pub use crud::{
+    Creatable, Retrievable, resource_sub_url, resource_url, resource_url_with_id,
+    validate_and_encode_id,
+};
 pub use idempotency::IdempotencyKeyManager;
 pub use nullable::Nullable;
 pub use pagination::{CursorLoopDetector, ListParams, ListResponse, Paginator};

@@ -151,7 +151,8 @@ impl<'a, T: serde::de::DeserializeOwned> Paginator<'a, T> {
             self.client.config.api_base, self.path, self.limit
         );
         if let Some(ref c) = self.last_seen_cursor {
-            url.push_str(&format!("&starting_after={c}"));
+            let enc = crate::patterns::crud::validate_and_encode_id(c)?;
+            url.push_str(&format!("&starting_after={enc}"));
         }
 
         let req = self.client.http.get(&url);

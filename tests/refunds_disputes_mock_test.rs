@@ -613,3 +613,102 @@ async fn test_stripe_client_ext_trait_direct_access() {
     let _balance = core_client.balance();
     let _bt: BalanceTransactionsResource<'_> = core_client.balance_transactions();
 }
+
+#[tokio::test]
+async fn test_resource_ids_reject_empty_and_path_traversal_payloads() {
+    let config = StripeConfig::new("sk_test_security_validation");
+    let client = StripeClient::with_config(config);
+
+    let invalid_ids = [
+        "",
+        "   ",
+        "../../account",
+        "../admin",
+        "/v1/accounts",
+        "dp_123?inject=1",
+        "dp_123#fragment",
+        "..\\windows\\system32",
+    ];
+
+    for &bad_id in &invalid_ids {
+        // Accounts
+        let res_acc = client.accounts().retrieve_by_id(bad_id).await;
+        assert!(
+            matches!(res_acc, Err(some_stripe::StripeError::InvalidRequest(_))),
+            "accounts().retrieve_by_id({bad_id:?}) must fail fast with InvalidRequest, got: {res_acc:?}"
+        );
+
+        // Balance Transactions
+        let res_bt = client.balance_transactions().retrieve(bad_id).await;
+        assert!(
+            matches!(res_bt, Err(some_stripe::StripeError::InvalidRequest(_))),
+            "balance_transactions().retrieve({bad_id:?}) must fail fast with InvalidRequest, got: {res_bt:?}"
+        );
+
+        // Disputes retrieve
+        let res_disp_ret = client.disputes().retrieve(bad_id).await;
+        assert!(
+            matches!(
+                res_disp_ret,
+                Err(some_stripe::StripeError::InvalidRequest(_))
+            ),
+            "disputes().retrieve({bad_id:?}) must fail fast with InvalidRequest, got: {res_disp_ret:?}"
+        );
+
+        // Disputes update
+        let res_disp_upd = client
+            .disputes()
+            .update(bad_id, &UpdateDisputeParams::default())
+            .await;
+        assert!(
+            matches!(
+                res_disp_upd,
+                Err(some_stripe::StripeError::InvalidRequest(_))
+            ),
+            "disputes().update({bad_id:?}) must fail fast with InvalidRequest, got: {res_disp_upd:?}"
+        );
+
+        // Disputes close
+        let res_disp_close = client.disputes().close(bad_id).await;
+        assert!(
+            matches!(
+                res_disp_close,
+                Err(some_stripe::StripeError::InvalidRequest(_))
+            ),
+            "disputes().close({bad_id:?}) must fail fast with InvalidRequest, got: {res_disp_close:?}"
+        );
+
+        // Refunds retrieve
+        let res_ref_ret = client.refunds().retrieve(bad_id).await;
+        assert!(
+            matches!(
+                res_ref_ret,
+                Err(some_stripe::StripeError::InvalidRequest(_))
+            ),
+            "refunds().retrieve({bad_id:?}) must fail fast with InvalidRequest, got: {res_ref_ret:?}"
+        );
+
+        // Refunds update
+        let res_ref_upd = client
+            .refunds()
+            .update(bad_id, &UpdateRefundParams::default())
+            .await;
+        assert!(
+            matches!(
+                res_ref_upd,
+                Err(some_stripe::StripeError::InvalidRequest(_))
+            ),
+            "refunds().update({bad_id:?}) must fail fast with InvalidRequest, got: {res_ref_upd:?}"
+        );
+
+        // Refunds cancel
+        let res_ref_cnc = client.refunds().cancel(bad_id, None).await;
+        assert!(
+            matches!(
+                res_ref_cnc,
+                Err(some_stripe::StripeError::InvalidRequest(_))
+            ),
+            "refunds().cancel({bad_id:?}) must fail fast with InvalidRequest, got: {res_ref_cnc:?}"
+        );
+    }
+}
