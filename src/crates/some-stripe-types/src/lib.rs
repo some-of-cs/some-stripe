@@ -88,6 +88,10 @@ pub mod payment_link;
 pub use payment_link::*;
 pub mod omnibus;
 pub use omnibus::*;
+pub mod customer;
+pub use customer::*;
+pub mod subscription;
+pub use subscription::*;
 
 /// Strongly typed Stripe Connect Account ID (`acct_...`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
