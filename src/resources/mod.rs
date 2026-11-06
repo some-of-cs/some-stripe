@@ -8,6 +8,7 @@ pub mod disputes;
 pub mod payment_intents;
 pub mod payment_links;
 pub mod refunds;
+pub mod subscriptions;
 pub mod webhooks;
 
 pub use accounts::AccountsResource;
@@ -21,4 +22,5 @@ pub use disputes::DisputesResource;
 pub use payment_intents::{PaymentIntentsResource, generate_uuid_v4, is_valid_uuid_v4};
 pub use payment_links::PaymentLinksResource;
 pub use refunds::RefundsResource;
+pub use subscriptions::SubscriptionsResource;
 pub use webhooks::WebhooksResource;
