@@ -54,13 +54,13 @@ kanban
   todo[📋 Backlog / Ready]
   spawning[🤖 Subagent Creating]
   in_progress[🔄 Units In Progress]
-    u511[Unit 1: Customer, Subscription, Item & Schedule Entities]@{ ticket: 'main', assigned: 'agent-b', priority: 'High' }
-    u512[Unit 2: CreateSubscriptionParams & Multi-Item Form Serde]@{ ticket: 'main', assigned: 'agent-c', priority: 'High' }
     u513[Unit 3: Customers & Subscriptions Resource CRUD & Lifecycle]@{ ticket: 'main', assigned: 'agent-a', priority: 'High' }
     u514[Unit 4: Prorations, 14-Day Trial & GDPR Article 17 Tests]@{ ticket: 'main', assigned: 'agent-b', priority: 'High' }
     u515[Unit 5: Gate G-Borrow Audit, Doctests & Acceptance Gates]@{ ticket: 'main', assigned: 'agent-c', priority: 'High' }
   review[🔍 PR Open / Gate Review]
   done[✅ Merged into Story Branch]
+    u511[Unit 1: Customer Vaulting, Cash Balance & Tax IDs (PR #76)]@{ ticket: '76', assigned: 'agent-a', priority: 'High' }
+    u512[Unit 2: Core Recurring Subscriptions Lifecycle & State Machine (PR #73)]@{ ticket: '73', assigned: 'agent-b', priority: 'High' }
     s51_pr[US-5.1.0 Story Promotion PR into Module Branch]@{ ticket: 'main', assigned: 'agent-a', priority: 'Very High' }
 ```
 
@@ -98,8 +98,8 @@ kanban
 | :--- | :---: | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :---: |
 | **M5-SETUP** | Module | `N/A (Baseline Commit)` | `Supervisor` (`agent-c`) | `antigravity-guide` | `Git Workflow Master` | `stripe-best-practices` | `.worktrees/feat-module-5-customers-and-billing` | `feat/module-5-customers-and-billing` | 📋 Ready |
 | **US-5.1.0** | Story | `feat(us-5.1.0): customer vaulting and subscriptions (Units 1..5 Promotion)` | `US-5.1.0 Story Lead` (`agent-a`) | `stripe-best-practices` | `Code Reviewer`<br>`API Tester` | `security-audit`<br>`stripe-docs` | `.worktrees/feat-us-5.1.0-customer-vaulting-and-subscriptions` | `feat/us-5.1.0-customer-vaulting-and-subscriptions` | 📋 Ready |
-| **US-5.1.0/U1** | Unit | `feat(us-5.1.0/unit-1): customer, subscription, and schedule domain entities` | `domain-codegen-specialist` (`agent-b`) | `stripe-docs` | `Code Reviewer`<br>`AppSec Engineer` | `stripe-best-practices`<br>`security-audit` | `.worktrees/feat-us-5.1.0-unit-1-customer-subscription-entities` | `feat/us-5.1.0/unit-1-customer-subscription-entities` | ✅ Merged |
-| **US-5.1.0/U2** | Unit | `feat(us-5.1.0/unit-2): core recurring subscriptions lifecycle and state machine` | `microkernel-architect` (`agent-b`) | `stripe-docs` | `Code Reviewer`<br>`Rust Refactoring` | `stripe-best-practices`<br>`upgrade-stripe` | `.worktrees/feat-us-5.1.0-unit-2-multi-item-subscription-params-serde` | `feat/us-5.1.0/unit-2-multi-item-subscription-params-serde` | 🔄 In Progress |
+| **US-5.1.0/U1** | Unit | `feat(us-5.1.0/unit-1): customer vaulting, cash balance, and tax ids` | `domain-codegen-specialist` (`agent-a`) | `stripe-docs`<br>`stripe-best-practices` | `Code Reviewer`<br>`AppSec Engineer` | `stripe-best-practices`<br>`security-audit` | `.worktrees/feat-us-5.1.0-unit-1-customer-subscription-entities` | `feat/us-5.1.0/unit-1-customer-subscription-entities` | ✅ Merged (PR #76) |
+| **US-5.1.0/U2** | Unit | `feat(us-5.1.0/unit-2): core recurring subscriptions lifecycle and state machine` | `microkernel-architect` (`agent-b`) | `stripe-docs`<br>`stripe-best-practices` | `Code Reviewer`<br>`Rust Refactoring` | `stripe-best-practices`<br>`upgrade-stripe` | `.worktrees/feat-us-5.1.0-unit-2-multi-item-subscription-params-serde` | `feat/us-5.1.0/unit-2-multi-item-subscription-params-serde` | ✅ Merged (PR #73) |
 | **US-5.1.0/U3** | Unit | `feat(us-5.1.0/unit-3): customers and subscriptions resource crud and client facade` | `domain-codegen-specialist` (`agent-a`) | `stripe-docs` | `Code Reviewer`<br>`AppSec Engineer` | `stripe-best-practices`<br>`security-audit` | `.worktrees/feat-us-5.1.0-unit-3-customers-subscriptions-resources` | `feat/us-5.1.0/unit-3-customers-subscriptions-resources` | 🤖 Spawning |
 | **US-5.1.0/U4** | Unit | `feat(us-5.1.0/unit-4): subscription wire mock tests and gdpr compliance verification` | `API Tester` (`agent-b`) | `stripe-docs` | `Code Reviewer`<br>`AppSec Engineer` | `stripe-best-practices`<br>`security-audit` | `.worktrees/feat-us-5.1.0-unit-4-proration-trials-mock-test` | `feat/us-5.1.0/unit-4-proration-trials-mock-test` | 🤖 Spawning |
 | **US-5.1.0/U5** | Unit | `feat(us-5.1.0/unit-5): zero-clone borrowing audit and documentation gates` | `Rust Refactoring Specialist` (`agent-c`) | `upgrade-stripe` | `Code Reviewer`<br>`Technical Writer` | `stripe-best-practices`<br>`stripe-docs` | `.worktrees/feat-us-5.1.0-unit-5-borrow-audit-doctests-gates` | `feat/us-5.1.0/unit-5-borrow-audit-doctests-gates` | 🤖 Spawning |
