@@ -114,6 +114,8 @@ pub mod transfer_params;
 pub use transfer_params::*;
 pub mod settlement;
 pub use settlement::*;
+pub mod terminal;
+pub use terminal::*;
 
 /// Strongly typed Stripe Connect Account ID (`acct_...`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -786,6 +788,18 @@ pub enum EventObject {
 
     /// Stripe Payout payload (`object = "payout"`).
     Payout(Payout),
+
+    /// Stripe Terminal Reader payload (`object = "terminal.reader"`).
+    #[serde(rename = "terminal.reader")]
+    TerminalReader(TerminalReader),
+
+    /// Stripe Terminal Location payload (`object = "terminal.location"`).
+    #[serde(rename = "terminal.location")]
+    TerminalLocation(TerminalLocation),
+
+    /// Stripe Terminal ConnectionToken payload (`object = "terminal.connection_token"`).
+    #[serde(rename = "terminal.connection_token")]
+    TerminalConnectionToken(ConnectionToken),
 
     /// Unrecognized, custom, or unsupported event object types.
     #[serde(other)]
@@ -1512,6 +1526,53 @@ mod tests {
                 );
             }
             other => panic!("Expected PortalConfiguration variant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_event_object_terminal_reader_and_token() {
+        let reader_json = serde_json::json!({
+            "id": "tmr_test_777",
+            "object": "terminal.reader",
+            "device_type": "bbpos_wisepos_e",
+            "livemode": false,
+            "serial_number": "WPOS-777",
+            "status": "online"
+        });
+
+        let data = EventData {
+            object: reader_json,
+        };
+        let obj = data
+            .deserialize_object()
+            .expect("Failed to deserialize terminal.reader event");
+
+        match obj {
+            EventObject::TerminalReader(r) => {
+                assert_eq!(r.id(), "tmr_test_777");
+                assert!(r.is_online());
+                assert!(r.is_emv_certified());
+            }
+            other => panic!("Expected TerminalReader variant, got {other:?}"),
+        }
+
+        let token_json = serde_json::json!({
+            "object": "terminal.connection_token",
+            "secret": "pst_test_secret_999",
+            "location": "loc_test_123"
+        });
+
+        let token_data = EventData { object: token_json };
+        let token_obj = token_data
+            .deserialize_object()
+            .expect("Failed to deserialize terminal.connection_token event");
+
+        match token_obj {
+            EventObject::TerminalConnectionToken(tok) => {
+                assert_eq!(tok.secret(), "pst_test_secret_999");
+                assert!(tok.is_bound_to_location("loc_test_123"));
+            }
+            other => panic!("Expected TerminalConnectionToken variant, got {other:?}"),
         }
     }
 }

@@ -86,11 +86,12 @@ pub use resources::{
     AccountLinksResource, AccountSessionsResource, AccountsResource, ApplicationFeesResource,
     BalanceResource, BalanceTransactionsResource, BillingPortalResource, CheckoutResource,
     CheckoutSessionExt, CreditNotesResource, CustomersResource, DisputesResource, InvoicesResource,
-    PaymentIntentsResource, PaymentLinksResource, PayoutsResource, PersonsResource, QuotesResource,
-    RedirectError, RefundsResource, SessionsResource, SubscriptionItemsResource,
-    SubscriptionSchedulesResource, SubscriptionsResource, TransfersResource, WebhooksResource,
-    credit_note_id, generate_uuid_v4, is_fulfillment_ready, is_valid_uuid_v4, quote_id,
-    validate_redirect_url,
+    IssuingResource, PaymentIntentsResource, PaymentLinksResource, PayoutsResource,
+    PersonsResource, QuotesResource, RedirectError, RefundsResource, SessionsResource,
+    SubscriptionItemsResource, SubscriptionSchedulesResource, SubscriptionsResource,
+    TerminalConnectionTokensResource, TerminalLocationsResource, TerminalReadersResource,
+    TerminalResource, TransfersResource, TreasuryResource, WebhooksResource, credit_note_id,
+    generate_uuid_v4, is_fulfillment_ready, is_valid_uuid_v4, quote_id, validate_redirect_url,
 };
 
 /// The main Stripe client used to interact with the Stripe API, modeled after `stripe-node`.
@@ -227,6 +228,21 @@ impl StripeClient {
     /// Access the Payouts resource namespace (`stripe.payouts`).
     pub fn payouts(&self) -> PayoutsResource<'_> {
         PayoutsResource::new(&self.0)
+    }
+
+    /// Access the Issuing resource namespace (`stripe.issuing`).
+    pub fn issuing(&self) -> IssuingResource<'_> {
+        IssuingResource::new(&self.0)
+    }
+
+    /// Access the Treasury resource namespace (`stripe.treasury`).
+    pub fn treasury(&self) -> TreasuryResource<'_> {
+        TreasuryResource::new(&self.0)
+    }
+
+    /// Access the Terminal resource namespace (`stripe.terminal`).
+    pub fn terminal(&self) -> TerminalResource<'_> {
+        TerminalResource::new(&self.0)
     }
 }
 
