@@ -59,6 +59,13 @@ impl ToleranceConfig {
         }
     }
 
+    /// Returns the future drift tolerance window in seconds (alias for `max_future_drift_seconds`).
+    #[inline]
+    #[must_use]
+    pub const fn future_tolerance_seconds(&self) -> i64 {
+        self.max_future_drift_seconds
+    }
+
     /// Validates whether an `event_timestamp` falls within the permissible time window
     /// relative to `current_timestamp`.
     ///
@@ -75,7 +82,8 @@ impl ToleranceConfig {
         current_timestamp: i64,
     ) -> Result<(), StripeWebhookError> {
         if self.past_tolerance_seconds > 0 {
-            let lower_bound = current_timestamp.saturating_sub(self.past_tolerance_seconds as i64);
+            let past_tolerance = i64::try_from(self.past_tolerance_seconds).unwrap_or(i64::MAX);
+            let lower_bound = current_timestamp.saturating_sub(past_tolerance);
             if event_timestamp < lower_bound {
                 return Err(StripeWebhookError::TimestampOutsideTolerance {
                     timestamp: event_timestamp,
@@ -197,10 +205,66 @@ mod tests {
         let config = ToleranceConfig::with_bounds(120, 10);
         let now = 1_700_000_000;
 
+        assert_eq!(config.future_tolerance_seconds(), 10);
         assert!(config.check_timestamp(now - 120, now).is_ok());
         assert!(config.check_timestamp(now + 10, now).is_ok());
 
         assert!(config.check_timestamp(now - 121, now).is_err());
         assert!(config.check_timestamp(now + 11, now).is_err());
+    }
+
+    #[test]
+    fn test_integer_bounds_u64_max_past_tolerance() {
+        // When past_tolerance_seconds is u64::MAX, narrowing with `as i64` would wrap to -1,
+        // making lower_bound = now - (-1) = now + 1, rejecting even current events.
+        // With i64::try_from(...).unwrap_or(i64::MAX), past_tolerance saturates at i64::MAX.
+        let config = ToleranceConfig::new(u64::MAX);
+        let now = 1_700_000_000;
+
+        // Current timestamp must be accepted
+        assert!(config.check_timestamp(now, now).is_ok());
+
+        // Timestamp 1,000,000s in past must be accepted with u64::MAX tolerance
+        assert!(config.check_timestamp(now - 1_000_000, now).is_ok());
+
+        // Distant future (> 60s) must still be rejected
+        assert!(config.check_timestamp(now + 61, now).is_err());
+    }
+
+    #[test]
+    fn test_integer_bounds_i64_max_plus_one_past_tolerance() {
+        let tolerance = (i64::MAX as u64) + 1;
+        let config = ToleranceConfig::new(tolerance);
+        let now = 1_700_000_000;
+
+        // Must safely saturate at i64::MAX without wrapping to negative i64
+        assert!(config.check_timestamp(now, now).is_ok());
+        assert!(config.check_timestamp(now - 500, now).is_ok());
+    }
+
+    #[test]
+    fn test_integer_bounds_extreme_timestamps() {
+        let config = ToleranceConfig::default();
+
+        // Extreme timestamp values must not panic or cause arithmetic underflow/overflow
+        assert!(config.check_timestamp(i64::MIN, 1_700_000_000).is_err());
+        assert!(config.check_timestamp(i64::MAX, 1_700_000_000).is_err());
+        assert!(config.check_timestamp(1_700_000_000, i64::MIN).is_err());
+        assert!(config.check_timestamp(1_700_000_000, i64::MAX).is_err());
+    }
+
+    #[test]
+    fn test_custom_bounds_with_extreme_future_drift() {
+        let config = ToleranceConfig::with_bounds(300, i64::MAX);
+        let now = 1_700_000_000;
+
+        assert_eq!(config.future_tolerance_seconds(), i64::MAX);
+        assert!(config.check_timestamp(now + 1_000_000, now).is_ok());
+
+        let config_negative = ToleranceConfig::with_bounds(300, -10);
+        assert_eq!(config_negative.future_tolerance_seconds(), -10);
+        // Current event rejected when max_future_drift is negative (clock required to be behind)
+        assert!(config_negative.check_timestamp(now, now).is_err());
+        assert!(config_negative.check_timestamp(now - 15, now).is_ok());
     }
 }

@@ -4,7 +4,7 @@
 //! enforcing balance deduction safety against paid invoices without mutating historical
 //! ledger records, ISO 4217 integer currency arithmetic, and RFC 4122 UUID v4 idempotency.
 
-use some_stripe_core::patterns::Paginator;
+use some_stripe_core::patterns::{Paginator, encode_form_pairs, to_form_params};
 use some_stripe_core::{StripeClient, StripeError, validate_and_encode_id};
 use some_stripe_types::{
     CreateCreditNoteParams, CreditNote, CreditNoteList, ListCreditNotesParams,
@@ -228,71 +228,16 @@ impl<'a> CreditNotesResource<'a> {
         &self,
         params: &PreviewCreditNoteParams,
     ) -> Result<CreditNote, StripeError> {
-        let mut url = format!("{}/v1/credit_notes/preview", self.client.config.api_base);
-        let mut query_params: Vec<(&str, String)> = Vec::new();
-
-        query_params.push(("invoice", params.invoice.clone()));
-
-        if let Some(a) = params.amount {
-            query_params.push(("amount", a.to_string()));
-        }
-        if let Some(ca) = params.credit_amount {
-            query_params.push(("credit_amount", ca.to_string()));
-        }
-        if let Some(ra) = params.refund_amount {
-            query_params.push(("refund_amount", ra.to_string()));
-        }
-        if let Some(ob) = params.out_of_band_amount {
-            query_params.push(("out_of_band_amount", ob.to_string()));
-        }
-        if let Some(r) = params.reason {
-            query_params.push(("reason", r.as_str().to_string()));
-        }
-        if let Some(ref m) = params.memo {
-            query_params.push(("memo", m.clone()));
-        }
-
-        if let Some(ref meta) = params.metadata {
-            for (k, v) in meta {
-                query_params.push(("metadata", format!("{k}={v}")));
-            }
-        }
-
-        if let Some(ref lines) = params.lines {
-            for (i, line) in lines.iter().enumerate() {
-                query_params.push(("line_type", format!("lines[{i}][type]={}", line.r#type)));
-                if let Some(ref il) = line.invoice_line_item {
-                    query_params.push(("line_il", format!("lines[{i}][invoice_line_item]={il}")));
-                }
-                if let Some(amount) = line.amount {
-                    query_params.push(("line_amount", format!("lines[{i}][amount]={amount}")));
-                }
-                if let Some(ref desc) = line.description {
-                    query_params.push(("line_desc", format!("lines[{i}][description]={desc}")));
-                }
-                if let Some(qty) = line.quantity {
-                    query_params.push(("line_qty", format!("lines[{i}][quantity]={qty}")));
-                }
-                if let Some(unit) = line.unit_amount {
-                    query_params.push(("line_unit", format!("lines[{i}][unit_amount]={unit}")));
-                }
-            }
-        }
-
-        if !query_params.is_empty() {
-            let encoded: Vec<String> = query_params
-                .iter()
-                .map(|(k, v)| {
-                    if k.starts_with("line_") || *k == "metadata" {
-                        v.clone()
-                    } else {
-                        format!("{k}={v}")
-                    }
-                })
-                .collect();
-            url.push('?');
-            url.push_str(&encoded.join("&"));
-        }
+        let query_data = to_form_params(params)?;
+        let url = if query_data.is_empty() {
+            format!("{}/v1/credit_notes/preview", self.client.config.api_base)
+        } else {
+            let query_str = encode_form_pairs(&query_data);
+            format!(
+                "{}/v1/credit_notes/preview?{query_str}",
+                self.client.config.api_base
+            )
+        };
 
         let req = self.client.http.get(&url);
         let val = self.client.execute(req).await?;
@@ -305,36 +250,21 @@ impl<'a> CreditNotesResource<'a> {
         &self,
         params: Option<&ListCreditNotesParams>,
     ) -> Result<CreditNoteList, StripeError> {
-        let mut url = format!("{}/v1/credit_notes", self.client.config.api_base);
-        let mut query_params = Vec::new();
-        let limit_str = params.and_then(|p| p.limit).map(|l| l.to_string());
-
-        if let Some(p) = params {
-            if let Some(ref inv) = p.invoice {
-                query_params.push(("invoice", inv.as_str()));
+        let url = match params {
+            Some(p) => {
+                let query_data = to_form_params(p)?;
+                if query_data.is_empty() {
+                    format!("{}/v1/credit_notes", self.client.config.api_base)
+                } else {
+                    let query_str = encode_form_pairs(&query_data);
+                    format!(
+                        "{}/v1/credit_notes?{query_str}",
+                        self.client.config.api_base
+                    )
+                }
             }
-            if let Some(ref c) = p.customer {
-                query_params.push(("customer", c.as_str()));
-            }
-            if let Some(ref l) = limit_str {
-                query_params.push(("limit", l.as_str()));
-            }
-            if let Some(ref a) = p.starting_after {
-                query_params.push(("starting_after", a.as_str()));
-            }
-            if let Some(ref b) = p.ending_before {
-                query_params.push(("ending_before", b.as_str()));
-            }
-        }
-
-        if !query_params.is_empty() {
-            let encoded: Vec<String> = query_params
-                .iter()
-                .map(|(k, v)| format!("{k}={v}"))
-                .collect();
-            url.push('?');
-            url.push_str(&encoded.join("&"));
-        }
+            None => format!("{}/v1/credit_notes", self.client.config.api_base),
+        };
 
         let req = self.client.http.get(&url);
         let val = self.client.execute(req).await?;
