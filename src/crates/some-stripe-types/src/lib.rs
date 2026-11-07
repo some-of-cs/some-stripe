@@ -689,6 +689,8 @@ pub mod invoice;
 pub use invoice::*;
 pub mod invoice_params;
 pub use invoice_params::*;
+pub mod credit_note;
+pub use credit_note::*;
 
 /// Strongly typed, discriminated union of Stripe event payload objects.
 ///
@@ -736,6 +738,10 @@ pub enum EventObject {
     /// Stripe PaymentLink payload (`object = "payment_link"`).
     #[serde(rename = "payment_link")]
     PaymentLink(PaymentLink),
+
+    /// Stripe CreditNote payload (`object = "credit_note"`).
+    #[serde(rename = "credit_note")]
+    CreditNote(CreditNote),
 
     /// Unrecognized, custom, or unsupported event object types.
     #[serde(other)]
@@ -1338,6 +1344,38 @@ mod tests {
                 assert_eq!(link.livemode, Some(false));
             }
             other => panic!("Expected PaymentLink variant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_event_object_credit_note() {
+        let json = serde_json::json!({
+            "id": "cn_evt_test_202",
+            "object": "credit_note",
+            "amount": 1500,
+            "currency": "usd",
+            "customer": "cus_test_123",
+            "invoice": "in_test_456",
+            "status": "issued"
+        });
+
+        let data = EventData { object: json };
+        let obj = data
+            .deserialize_object()
+            .expect("Failed to deserialize credit_note event");
+
+        match obj {
+            EventObject::CreditNote(cn) => {
+                assert_eq!(cn.id, "cn_evt_test_202");
+                assert_eq!(cn.object, "credit_note");
+                assert_eq!(cn.amount, 1500);
+                assert_eq!(cn.currency, "usd");
+                assert_eq!(cn.customer, "cus_test_123");
+                assert_eq!(cn.invoice, "in_test_456");
+                assert!(cn.is_issued());
+                assert!(!cn.is_void());
+            }
+            other => panic!("Expected CreditNote variant, got {other:?}"),
         }
     }
 }
