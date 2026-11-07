@@ -90,8 +90,8 @@ pub use resources::{
     PersonsResource, QuotesResource, RedirectError, RefundsResource, SessionsResource,
     SubscriptionItemsResource, SubscriptionSchedulesResource, SubscriptionsResource,
     TaxRegistrationsResource, TaxSettingsResource, TransactionsResource, TransfersResource,
-    WebhooksResource, credit_note_id, generate_uuid_v4, is_fulfillment_ready, is_valid_uuid_v4,
-    quote_id, tax_registration_id, validate_redirect_url,
+    VerificationSessionsResource, WebhooksResource, credit_note_id, generate_uuid_v4,
+    is_fulfillment_ready, is_valid_uuid_v4, quote_id, tax_registration_id, validate_redirect_url,
 };
 
 /// The main Stripe client used to interact with the Stripe API, modeled after `stripe-node`.
@@ -143,6 +143,11 @@ impl StripeClient {
     /// Access the AccountSessions resource namespace (`stripe.account_sessions`).
     pub fn account_sessions(&self) -> AccountSessionsResource<'_> {
         AccountSessionsResource::new(&self.0)
+    }
+
+    /// Access the Identity Verification Sessions resource namespace (`stripe.identity_sessions`).
+    pub fn identity_sessions(&self) -> VerificationSessionsResource<'_> {
+        VerificationSessionsResource::new(&self.0)
     }
 
     /// Access the Persons resource namespace (`stripe.accounts.persons`).

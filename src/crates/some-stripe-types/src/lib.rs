@@ -114,6 +114,8 @@ pub mod transfer_params;
 pub use transfer_params::*;
 pub mod settlement;
 pub use settlement::*;
+pub mod identity_session;
+pub use identity_session::*;
 pub mod tax_calculation;
 pub use tax_calculation::*;
 pub mod tax_settings;

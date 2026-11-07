@@ -10,6 +10,7 @@ pub mod checkout;
 pub mod credit_notes;
 pub mod customers;
 pub mod disputes;
+pub mod identity_sessions;
 pub mod invoices;
 pub mod payment_intents;
 pub mod payment_links;
@@ -40,6 +41,7 @@ pub use checkout::{
 pub use credit_notes::{CreditNotesResource, credit_note_id};
 pub use customers::CustomersResource;
 pub use disputes::DisputesResource;
+pub use identity_sessions::VerificationSessionsResource;
 pub use invoices::InvoicesResource;
 pub use payment_intents::{PaymentIntentsResource, generate_uuid_v4, is_valid_uuid_v4};
 pub use payment_links::PaymentLinksResource;
