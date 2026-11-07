@@ -114,6 +114,8 @@ pub mod transfer_params;
 pub use transfer_params::*;
 pub mod settlement;
 pub use settlement::*;
+pub mod tax_calculation;
+pub use tax_calculation::*;
 
 /// Strongly typed Stripe Connect Account ID (`acct_...`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -786,6 +788,10 @@ pub enum EventObject {
 
     /// Stripe Payout payload (`object = "payout"`).
     Payout(Payout),
+
+    /// Stripe TaxCalculation payload (`object = "tax.calculation"`).
+    #[serde(rename = "tax.calculation")]
+    TaxCalculation(TaxCalculation),
 
     /// Unrecognized, custom, or unsupported event object types.
     #[serde(other)]
