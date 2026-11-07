@@ -114,6 +114,16 @@ pub mod transfer_params;
 pub use transfer_params::*;
 pub mod settlement;
 pub use settlement::*;
+pub mod issuing_card;
+pub use issuing_card::*;
+pub mod issuing_cardholder;
+pub use issuing_cardholder::*;
+pub mod issuing_authorization;
+pub use issuing_authorization::*;
+pub mod issuing_transaction;
+pub use issuing_transaction::*;
+pub mod treasury_financial_account;
+pub use treasury_financial_account::*;
 pub mod treasury_transfer;
 pub use treasury_transfer::*;
 
@@ -788,6 +798,26 @@ pub enum EventObject {
 
     /// Stripe Payout payload (`object = "payout"`).
     Payout(Payout),
+
+    /// Stripe Issuing Card payload (`object = "issuing.card"`).
+    #[serde(rename = "issuing.card")]
+    IssuingCard(IssuingCard),
+
+    /// Stripe Issuing Cardholder payload (`object = "issuing.cardholder"`).
+    #[serde(rename = "issuing.cardholder")]
+    IssuingCardholder(IssuingCardholder),
+
+    /// Stripe Issuing Authorization payload (`object = "issuing.authorization"`).
+    #[serde(rename = "issuing.authorization")]
+    IssuingAuthorization(IssuingAuthorization),
+
+    /// Stripe Issuing Transaction payload (`object = "issuing.transaction"`).
+    #[serde(rename = "issuing.transaction")]
+    IssuingTransaction(IssuingTransaction),
+
+    /// Stripe Treasury FinancialAccount payload (`object = "treasury.financial_account"`).
+    #[serde(rename = "treasury.financial_account")]
+    TreasuryFinancialAccount(FinancialAccount),
 
     /// Stripe Treasury OutboundTransfer payload (`object = "treasury.outbound_transfer"`).
     #[serde(rename = "treasury.outbound_transfer")]
@@ -1526,6 +1556,43 @@ mod tests {
                 );
             }
             other => panic!("Expected PortalConfiguration variant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_event_object_treasury_financial_account() {
+        let json = serde_json::json!({
+            "id": "fa_test_999",
+            "object": "treasury.financial_account",
+            "active_features": ["deposit_insurance", "financial_addresses.aba"],
+            "balance": {
+                "cash": {"usd": 5000000},
+                "inbound_pending": {"usd": 100000},
+                "outbound_pending": {"usd": 50000}
+            },
+            "country": "US",
+            "created": 1728345600,
+            "financial_addresses": [],
+            "livemode": false,
+            "pending_features": [],
+            "restricted_features": [],
+            "status": "open",
+            "supported_currencies": ["usd"]
+        });
+
+        let data = EventData { object: json };
+        let obj = data
+            .deserialize_object()
+            .expect("Failed to deserialize treasury.financial_account event");
+
+        match obj {
+            EventObject::TreasuryFinancialAccount(fa) => {
+                assert_eq!(fa.id, "fa_test_999");
+                assert_eq!(fa.object, "treasury.financial_account");
+                assert!(fa.is_open());
+                assert_eq!(fa.balance.cash_amount("usd"), 5000000);
+            }
+            other => panic!("Expected TreasuryFinancialAccount variant, got {other:?}"),
         }
     }
 }
