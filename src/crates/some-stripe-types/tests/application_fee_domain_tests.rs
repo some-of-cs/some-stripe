@@ -156,7 +156,9 @@ fn test_event_object_application_fee_and_refund() {
         "fee": "fee_evt_123"
     });
 
-    let data_refund = EventData { object: refund_json };
+    let data_refund = EventData {
+        object: refund_json,
+    };
     match data_refund.deserialize_object().unwrap() {
         EventObject::FeeRefund(refund) => {
             assert_eq!(refund.id, "fr_evt_456");

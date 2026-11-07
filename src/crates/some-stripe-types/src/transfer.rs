@@ -224,10 +224,7 @@ impl Transfer {
     /// Returns the number of reversals attached to this transfer, if present.
     #[must_use]
     pub fn reversal_count(&self) -> usize {
-        self.reversals
-            .as_ref()
-            .map(|r| r.data.len())
-            .unwrap_or(0)
+        self.reversals.as_ref().map(|r| r.data.len()).unwrap_or(0)
     }
 }
 

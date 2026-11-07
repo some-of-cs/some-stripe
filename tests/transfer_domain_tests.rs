@@ -8,8 +8,8 @@
 
 use some_stripe_types::{
     CreateTransferParams, CreateTransferReversalParams, ListTransferReversalsParams,
-    ListTransfersParams, Transfer, TransferId, TransferList, TransferReversal,
-    TransferReversalId, TransferReversalList, UpdateTransferParams,
+    ListTransfersParams, Transfer, TransferId, TransferList, TransferReversal, TransferReversalId,
+    TransferReversalList, UpdateTransferParams,
 };
 
 #[test]
@@ -42,7 +42,11 @@ fn test_transfer_domain_entity_deserialization() {
     assert!(!transfer.reversed);
     assert_eq!(transfer.transfer_group.as_deref(), Some("group_order_123"));
     assert_eq!(
-        transfer.metadata.as_ref().and_then(|m| m.get("order_id")).map(String::as_str),
+        transfer
+            .metadata
+            .as_ref()
+            .and_then(|m| m.get("order_id"))
+            .map(String::as_str),
         Some("ord_987")
     );
 }
@@ -69,7 +73,11 @@ fn test_transfer_reversal_domain_entity_deserialization() {
     assert_eq!(reversal.currency, "usd");
     assert_eq!(reversal.transfer.as_str(), "tr_1MtwXYZ123456789");
     assert_eq!(
-        reversal.metadata.as_ref().and_then(|m| m.get("reason")).map(String::as_str),
+        reversal
+            .metadata
+            .as_ref()
+            .and_then(|m| m.get("reason"))
+            .map(String::as_str),
         Some("customer_refund")
     );
 }
@@ -114,8 +122,8 @@ fn test_transfer_lists_deserialization() {
         "url": "/v1/transfers/tr_1/reversals"
     }"#;
 
-    let reversal_list: TransferReversalList =
-        serde_json::from_str(reversal_list_json).expect("Failed to deserialize TransferReversalList");
+    let reversal_list: TransferReversalList = serde_json::from_str(reversal_list_json)
+        .expect("Failed to deserialize TransferReversalList");
     assert_eq!(reversal_list.data.len(), 1);
     assert_eq!(reversal_list.data[0].id.as_str(), "trr_1");
     assert!(reversal_list.has_more);

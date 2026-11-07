@@ -1,8 +1,8 @@
 //! Integration Tests for Settlement Math, P2B Compliance, and Zero-Clone Borrowing Audit
 
 use some_stripe_types::settlement::{
-    validate_eu_p2b_transparency_disclosure, validate_settlement_split, P2BFeeSchedule,
-    P2BComplianceError, SettlementSplitError,
+    P2BComplianceError, P2BFeeSchedule, SettlementSplitError,
+    validate_eu_p2b_transparency_disclosure, validate_settlement_split,
 };
 
 #[test]
@@ -19,7 +19,12 @@ fn test_settlement_split_valid_scenarios() {
 fn test_settlement_split_exceeds_total() {
     let err = validate_settlement_split(1600, 500, 2000).unwrap_err();
     match err {
-        SettlementSplitError::SplitExceedsTotal { transfer, fee, sum, total } => {
+        SettlementSplitError::SplitExceedsTotal {
+            transfer,
+            fee,
+            sum,
+            total,
+        } => {
             assert_eq!(transfer, 1600);
             assert_eq!(fee, 500);
             assert_eq!(sum, 2100);
@@ -100,7 +105,10 @@ fn test_eu_p2b_violations() {
     // Notice period too short
     assert_eq!(
         validate_eu_p2b_transparency_disclosure(&schedule).unwrap_err(),
-        P2BComplianceError::NoticePeriodTooShort { provided_days: 10, required_minimum: 15 }
+        P2BComplianceError::NoticePeriodTooShort {
+            provided_days: 10,
+            required_minimum: 15
+        }
     );
 }
 
