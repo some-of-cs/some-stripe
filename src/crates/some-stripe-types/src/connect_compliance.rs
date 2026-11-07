@@ -529,36 +529,40 @@ pub const DAC7_ACTIVITY_COUNT_THRESHOLD: u32 = 30;
 ///     Dac7ReportingStatus::ExemptLowVolume { .. } => panic!("Expected reportable seller"),
 /// }
 /// ```
-pub fn evaluate_dac7_reporting_status(
-    seller: &Dac7SellerProfile,
+fn validate_activity_summary(act: &Dac7ActivitySummary) -> Result<(), Dac7ComplianceError> {
+    if act.quarter < 1 || act.quarter > 4 {
+        return Err(Dac7ComplianceError::InvalidQuarter {
+            quarter: act.quarter,
+        });
+    }
+    if act.total_consideration_cents < 0 {
+        return Err(Dac7ComplianceError::NegativeConsideration {
+            cents: act.total_consideration_cents,
+        });
+    }
+    if act.fees_withheld_cents < 0 {
+        return Err(Dac7ComplianceError::NegativeFees {
+            cents: act.fees_withheld_cents,
+        });
+    }
+    if act.fees_withheld_cents > act.total_consideration_cents {
+        return Err(Dac7ComplianceError::FeesExceedConsideration {
+            fees: act.fees_withheld_cents,
+            consideration: act.total_consideration_cents,
+        });
+    }
+    Ok(())
+}
+
+fn validate_and_aggregate_activities(
     activities: &[Dac7ActivitySummary],
-) -> Result<Dac7ReportingStatus, Dac7ComplianceError> {
+) -> Result<(u32, i64, i64), Dac7ComplianceError> {
     let mut total_activities: u32 = 0;
     let mut total_consideration: i64 = 0;
     let mut total_fees: i64 = 0;
 
     for act in activities {
-        if act.quarter < 1 || act.quarter > 4 {
-            return Err(Dac7ComplianceError::InvalidQuarter {
-                quarter: act.quarter,
-            });
-        }
-        if act.total_consideration_cents < 0 {
-            return Err(Dac7ComplianceError::NegativeConsideration {
-                cents: act.total_consideration_cents,
-            });
-        }
-        if act.fees_withheld_cents < 0 {
-            return Err(Dac7ComplianceError::NegativeFees {
-                cents: act.fees_withheld_cents,
-            });
-        }
-        if act.fees_withheld_cents > act.total_consideration_cents {
-            return Err(Dac7ComplianceError::FeesExceedConsideration {
-                fees: act.fees_withheld_cents,
-                consideration: act.total_consideration_cents,
-            });
-        }
+        validate_activity_summary(act)?;
 
         total_activities = total_activities
             .checked_add(act.number_of_activities)
@@ -573,28 +577,45 @@ pub fn evaluate_dac7_reporting_status(
             .ok_or(Dac7ComplianceError::ArithmeticOverflow)?;
     }
 
+    Ok((total_activities, total_consideration, total_fees))
+}
+
+fn resolve_reportable_identifiers(
+    seller: &Dac7SellerProfile,
+) -> Result<(String, String), Dac7ComplianceError> {
+    let tax_id = match seller.tax_identification_number() {
+        Some(tin) if !tin.trim().is_empty() => tin.to_string(),
+        _ => {
+            return Err(Dac7ComplianceError::MissingTaxIdentifier {
+                seller_id: seller.seller_id.clone(),
+            });
+        }
+    };
+
+    let iban = match seller.iban() {
+        Some(ib) if !ib.trim().is_empty() => ib.to_string(),
+        _ => {
+            return Err(Dac7ComplianceError::MissingFinancialIdentifier {
+                seller_id: seller.seller_id.clone(),
+            });
+        }
+    };
+
+    Ok((tax_id, iban))
+}
+
+pub fn evaluate_dac7_reporting_status(
+    seller: &Dac7SellerProfile,
+    activities: &[Dac7ActivitySummary],
+) -> Result<Dac7ReportingStatus, Dac7ComplianceError> {
+    let (total_activities, total_consideration, total_fees) =
+        validate_and_aggregate_activities(activities)?;
+
     let is_reportable = total_activities >= DAC7_ACTIVITY_COUNT_THRESHOLD
         || total_consideration > DAC7_CONSIDERATION_THRESHOLD_CENTS;
 
     if is_reportable {
-        let tax_id = match seller.tax_identification_number() {
-            Some(tin) if !tin.trim().is_empty() => tin.to_string(),
-            _ => {
-                return Err(Dac7ComplianceError::MissingTaxIdentifier {
-                    seller_id: seller.seller_id.clone(),
-                });
-            }
-        };
-
-        let iban = match seller.iban() {
-            Some(ib) if !ib.trim().is_empty() => ib.to_string(),
-            _ => {
-                return Err(Dac7ComplianceError::MissingFinancialIdentifier {
-                    seller_id: seller.seller_id.clone(),
-                });
-            }
-        };
-
+        let (tax_identifier, financial_identifier) = resolve_reportable_identifiers(seller)?;
         let net_consideration_cents = total_consideration
             .checked_sub(total_fees)
             .ok_or(Dac7ComplianceError::ArithmeticOverflow)?;
@@ -602,8 +623,8 @@ pub fn evaluate_dac7_reporting_status(
         Ok(Dac7ReportingStatus::ReportableSeller {
             total_activities,
             net_consideration_cents,
-            tax_identifier: tax_id,
-            financial_identifier: iban,
+            tax_identifier,
+            financial_identifier,
         })
     } else {
         Ok(Dac7ReportingStatus::ExemptLowVolume {
