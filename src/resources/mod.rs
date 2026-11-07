@@ -36,6 +36,7 @@ pub mod transfers;
 pub mod treasury;
 pub mod treasury_financial_accounts;
 pub mod treasury_transfers;
+pub mod v2;
 pub mod webhooks;
 
 pub use account_links::AccountLinksResource;
@@ -82,6 +83,10 @@ pub use treasury_financial_accounts::TreasuryFinancialAccountsResource;
 pub use treasury_transfers::{
     OutboundPaymentsResource, OutboundTransfersResource, ReceivedCreditsResource,
     TreasuryTransfersResource,
+};
+pub use v2::{
+    EventDestinationsResource, HydrationError, ThinEventHydrator, V2AccountsResource, V2Core,
+    V2EventsResource, V2Resource,
 };
 pub use webhooks::WebhooksResource;
 

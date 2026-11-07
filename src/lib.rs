@@ -93,10 +93,17 @@ pub use resources::{
     SubscriptionsResource, TaxRegistrationsResource, TaxResource, TaxSettingsResource,
     TerminalConnectionTokensResource, TerminalLocationsResource, TerminalReadersResource,
     TerminalResource, TransactionsResource, TransfersResource, TreasuryFinancialAccountsResource,
-    TreasuryResource, TreasuryTransfersResource, VerificationReportsResource,
-    VerificationSessionsResource, WebhooksResource, credit_note_id, generate_uuid_v4,
-    is_fulfillment_ready, is_valid_uuid_v4, quote_id, tax_registration_id, validate_redirect_url,
+    TreasuryResource, TreasuryTransfersResource, V2AccountsResource, V2Core,
+    V2EventsResource, V2Resource, VerificationReportsResource, VerificationSessionsResource,
+    WebhooksResource, credit_note_id, generate_uuid_v4, is_fulfillment_ready,
+    is_valid_uuid_v4, quote_id, tax_registration_id, validate_redirect_url,
+    EventDestinationsResource, HydrationError, ThinEventHydrator, EventNotification,
 };
+
+/// Stripe API v2 namespace and sub-resources.
+pub mod v2 {
+    pub use crate::resources::v2::*;
+}
 
 /// The main Stripe client used to interact with the Stripe API, modeled after `stripe-node`.
 ///
@@ -297,6 +304,27 @@ impl StripeClient {
     /// Access the Terminal resource namespace (`stripe.terminal`).
     pub fn terminal(&self) -> TerminalResource<'_> {
         TerminalResource::new(&self.0)
+    }
+
+    /// Access the API v2 resource namespace (`stripe.v2`).
+    pub fn v2(&self) -> V2Resource<'_> {
+        V2Resource::new(&self.0)
+    }
+
+    /// Access the API v2 Core namespace directly (`stripe.v2_core()`).
+    pub fn v2_core(&self) -> V2Core<'_> {
+        V2Core::new(&self.0)
+    }
+
+    /// Hydrates an inbound thin event notification envelope into the full live event.
+    ///
+    /// # Errors
+    /// Returns [`HydrationError`] if timestamp freshness fails or event retrieval fails.
+    pub async fn hydrate_thin_event(
+        &self,
+        notification: &some_stripe_types::V2ThinEvent,
+    ) -> Result<some_stripe_types::V2Event, HydrationError> {
+        self.v2_core().hydrate_thin_event(notification).await
     }
 }
 
