@@ -111,56 +111,28 @@ sequenceDiagram
 
 ## 4. Granular Implementation Tasks
 
-### 4.1 The 10-PR Vertical Slicing Implementation Plan
+### 4.1 The 5-Unit Parallel Implementation Architecture
 
-| PR # | Pillar | Architectural Layer | Primary Scope & Files | Deliverables & Acceptance | Accountable Role / Agent | Assigned Skills |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **PR 1** | **Pillar 1** | **Stripe Tax Domain Models** | `crates/some-stripe-tax/src/types/calculation.rs` | Strongly typed `TaxCalculation`, `TaxTransaction`, `TaxRate`. | `domain-codegen-specialist` | `stripe-docs` |
-| **PR 2** | **Pillar 2** | **Stripe Identity Models** | `crates/some-stripe-identity/src/types/session.rs` | Strongly typed `VerificationSession`, `VerificationReport`. | `domain-codegen-specialist` | `stripe-docs` |
-| **PR 3** | **Pillar 3** | **Tax Calculations Resource** | `crates/some-stripe-tax/src/resources/calculations.rs` | `create`, `list_line_items`. | `domain-codegen-specialist` | `stripe-docs` |
-| **PR 4** | **Pillar 4** | **Tax Transactions Resource** | `crates/some-stripe-tax/src/resources/transactions.rs` | `create_from_calculation`, `create_reversal`. | `domain-codegen-specialist` | `stripe-docs` |
-| **PR 5** | **Pillar 5** | **Identity Resource Implementation** | `crates/some-stripe-identity/src/resources/sessions.rs` | `create`, `retrieve`, `cancel`, `redact`. | `domain-codegen-specialist` | `security-audit` |
-| **PR 6** | **Pillar 6** | **Facade Mounting** | `crates/some-stripe-tax/src/facade.rs` | Mount `stripe.tax()` and `stripe.identity()` on `StripeClient`. | `microkernel-architect` | `stripe-docs` |
-| **PR 7** | **Pillar 7** | **Zero-Clone Borrowing Audit** | `crates/some-stripe-tax/src/resources/calculations.rs` | Verify zero deep `.clone()` on tax breakdown arrays. | `engineering-rust-refactoring-specialist` | `stripe-best-practices` |
-| **PR 8** | **Pillar 8** | **Reverse Charge Logic Tests** | `tests/tax_reverse_charge_test.rs` | Unit and contract tests for EU VAT B2B reverse charge rules. | `testing-api-tester` | `stripe-docs` |
-| **PR 9** | **Pillar 9** | **Stripe-Mock Wire Verification** | `tests/tax_identity_mock_test.rs` | End-to-end tax calculation and identity verification on `stripe-mock`. | `testing-api-tester` | `stripe-docs` |
-| **PR 10** | **Pillar 10** | **Tax & Identity Documentation** | `README.md`, `docs/tax_identity.md` | Developer guide on automated tax compliance and KYC sessions. | `engineering-technical-writer` | `stripe-docs` |
+Every unit is a **100% implementing unit** with its own models, parameters, serializers, resource endpoints, and integration tests. No unit has a validation-only job, and no unit blocks another, enabling complete parallel execution:
 
-### 4.2 Implementation Phase Breakdown
+| Unit # | Pillar | Functional Implementation Scope | Primary Deliverables & Files | Implementing Role / Profile | Assigned Skills |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Unit 1** | **Tax Calculations** | Tax calculations and line item expansion | `TaxCalculation`, `TaxCalculationLineItem`, `TaxBreakdown`, `CreateTaxCalculationParams`, `CalculationsResource` (`create`, `list_line_items`). Files: `src/resources/tax_calculations.rs`, `some-stripe-types/src/tax_calculation.rs`. | `domain-codegen-specialist` (`agent-a`) | `stripe-docs`<br>`stripe-best-practices` |
+| **Unit 2** | **Tax Transactions** | Tax ledger transaction posting & reversals | `TaxTransaction`, `TaxTransactionLineItem`, `CreateTaxTransactionFromCalculationParams`, `CreateTaxTransactionReversalParams`, `TransactionsResource` (`create_from_calculation`, `create_reversal`, `retrieve`). Files: `src/resources/tax_transactions.rs`, `some-stripe-types/src/tax_transaction.rs`. | `domain-codegen-specialist` (`agent-b`) | `stripe-docs`<br>`stripe-best-practices` |
+| **Unit 3** | **Tax Settings & Registrations** | Tax registrations and jurisdictional settings | `TaxSettings`, `TaxRegistration`, `TaxStatus`, `UpdateTaxSettingsParams`, `CreateTaxRegistrationParams`, `SettingsResource` & `RegistrationsResource`. Files: `src/resources/tax_settings.rs`, `some-stripe-types/src/tax_settings.rs`. | `domain-codegen-specialist` (`agent-c`) | `stripe-docs`<br>`stripe-best-practices` |
+| **Unit 4** | **Identity Verification Sessions** | Biometric and document verification sessions | `VerificationSession`, `VerificationOptions`, `DocumentOptions`, `CreateVerificationSessionParams`, `UpdateVerificationSessionParams`, `VerificationSessionsResource` (`create`, `retrieve`, `update`, `cancel`, `redact`). Files: `src/resources/identity_sessions.rs`, `some-stripe-types/src/identity_session.rs`. | `domain-codegen-specialist` (`agent-a`) | `security-audit`<br>`stripe-best-practices` |
+| **Unit 5** | **Identity Reports & Facade Mounting** | Verification reports and product namespaces | `VerificationReport`, `DocumentReport`, `SelfieReport`, `ListVerificationReportsParams`, `VerificationReportsResource` (`retrieve`, `list`), and client namespace mounting `stripe.tax()` and `stripe.identity()`. Files: `src/resources/identity_reports.rs`, `some-stripe-types/src/identity_report.rs`, `src/resources/tax.rs`, `src/resources/identity.rs`. | `microkernel-architect` (`agent-b`) | `stripe-docs`<br>`stripe-best-practices` |
 
-#### Phase 1: Models & Parameter DTOs (PR 1–2)
-- [ ] **Task 1.1 (Types)**: Define `TaxCalculation`, `TaxTransaction`, and `VerificationSession` in `types/`.  
-  *Agent*: `domain-codegen-specialist` | *Skill*: `stripe-docs`
-- [ ] **Task 1.2 (Constants)**: Pin `/v1/tax/calculations` and `/v1/identity/verification_sessions` in `constants/`.  
-  *Agent*: `domain-codegen-specialist` | *Skill*: `stripe-docs`
-- [ ] **Task 1.3 (Logic)**: Implement parameter builders with address validation.  
-  *Agent*: `domain-codegen-specialist` | *Skill*: `stripe-best-practices`
-- [ ] **Task 1.4 (Unit Tests)**: Verify JSON deserialization of Tax and Identity fixture payloads.  
-  *Agent*: `testing-api-tester` | *Skill*: `stripe-docs`
+### 4.2 Independent Parallel Implementation Workstreams
 
-#### Phase 2: Resource Methods & Wire Execution (PR 3–6)
-- [ ] **Task 2.1 (Tax)**: Implement `CalculationsResource` and `TransactionsResource`.  
-  *Agent*: `domain-codegen-specialist` | *Skill*: `stripe-docs`
-- [ ] **Task 2.2 (Identity)**: Implement `VerificationSessionsResource` with create, cancel, and redact.  
-  *Agent*: `domain-codegen-specialist` | *Skill*: `security-audit`
-- [ ] **Task 2.3 (Facade)**: Expose `client.tax()` and `client.identity()` on `StripeClient`.  
-  *Agent*: `microkernel-architect` | *Skill*: `stripe-docs`
-- [ ] **Task 2.4 (Wire Tests)**: Verify HTTP form encoding for nested customer details.  
-  *Agent*: `testing-api-tester` | *Skill*: `stripe-docs`
+Each unit implementer executes autonomously in their assigned worktree without blocking dependencies:
+- **Unit 1 Workstream**: Implements `TaxCalculation` and `CalculationsResource` with line-item tax breakdown logic.
+- **Unit 2 Workstream**: Implements `TaxTransaction` and `TransactionsResource` with ledger commit & reversal endpoints.
+- **Unit 3 Workstream**: Implements `TaxSettings` and `RegistrationsResource` with international tax status models.
+- **Unit 4 Workstream**: Implements `VerificationSession` and `VerificationSessionsResource` with GDPR Article 17 redaction.
+- **Unit 5 Workstream**: Implements `VerificationReport` and `VerificationReportsResource` and mounts the `tax()` & `identity()` namespaces on `StripeClient`.
 
-#### Phase 3: Zero-Clone Borrowing & Reverse Charge Rules (PR 7–8)
-- [ ] **Task 3.1 (Borrow Check)**: Verify zero `.clone()` calls during tax response parsing.  
-  *Agent*: `engineering-rust-refactoring-specialist` | *Skill*: `stripe-best-practices`
-- [ ] **Task 3.2 (VAT Rule Tests)**: Assert valid business VAT IDs trigger zero-rate reverse charges.  
-  *Agent*: `testing-api-tester` | *Skill*: `stripe-docs`
-
-#### Phase 4: Mock Verification & Release Sign-Off (PR 9–10)
-- [ ] **Task 4.1 (Mock Suite)**: Run full tax and identity flows against `stripe-mock`.  
-  *Agent*: `testing-api-tester` | *Skill*: `stripe-docs`
-- [ ] **Task 4.2 (G-Review)**: Peer review for tax compliance accuracy and biometric privacy.  
-  *Agent*: `engineering-code-reviewer` | *Skill*: `stripe-best-practices`
-- [ ] **Task 4.3 (Docs)**: Publish developer documentation for Tax and Identity integration.  
-  *Agent*: `engineering-technical-writer` | *Skill*: `stripe-docs`
+All quality gates (G0–G4, G-Borrow, G2, G-Law, G-Complexity, G-Docs, G-Review) are enforced on each unit PR individually by the independent Gatekeeper Council before merge.
 
 ---
 

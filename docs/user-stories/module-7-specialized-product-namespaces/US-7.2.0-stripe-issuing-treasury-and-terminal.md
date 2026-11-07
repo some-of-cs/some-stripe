@@ -121,56 +121,28 @@ sequenceDiagram
 
 ## 4. Granular Implementation Tasks
 
-### 4.1 The 10-PR Vertical Slicing Implementation Plan
+### 4.1 The 5-Unit Parallel Implementation Architecture
 
-| PR # | Pillar | Architectural Layer | Primary Scope & Files | Deliverables & Acceptance | Accountable Role / Agent | Assigned Skills |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **PR 1** | **Pillar 1** | **Issuing Domain Entities** | `crates/some-stripe-issuing/src/types/card.rs` | Strongly typed `Card`, `Cardholder`, `Authorization`. | `domain-codegen-specialist` | `stripe-docs` |
-| **PR 2** | **Pillar 2** | **Treasury Domain Entities** | `crates/some-stripe-treasury/src/types/account.rs` | Strongly typed `FinancialAccount`, `OutboundTransfer`. | `domain-codegen-specialist` | `stripe-docs` |
-| **PR 3** | **Pillar 3** | **Terminal Domain Entities** | `crates/some-stripe-terminal/src/types/reader.rs` | Strongly typed `Reader`, `Location`, `ConnectionToken`. | `domain-codegen-specialist` | `stripe-docs` |
-| **PR 4** | **Pillar 4** | **Issuing Resource Implementation** | `crates/some-stripe-issuing/src/resources/cards.rs` | `create`, `retrieve`, `update` cards and cardholders. | `domain-codegen-specialist` | `stripe-docs` |
-| **PR 5** | **Pillar 5** | **Treasury Resource Implementation** | `crates/some-stripe-treasury/src/resources/transfers.rs` | `create`, `retrieve`, `cancel` outbound transfers. | `domain-codegen-specialist` | `stripe-docs` |
-| **PR 6** | **Pillar 6** | **Terminal Resource Implementation** | `crates/some-stripe-terminal/src/resources/tokens.rs` | `create` connection tokens and reader management. | `domain-codegen-specialist` | `stripe-docs` |
-| **PR 7** | **Pillar 7** | **Facade Mounting** | `crates/some-stripe-issuing/src/facade.rs` | Mount `stripe.issuing()`, `stripe.treasury()`, `stripe.terminal()`. | `microkernel-architect` | `stripe-docs` |
-| **PR 8** | **Pillar 8** | **Zero-Clone Borrowing Audit** | `crates/some-stripe-issuing/src/resources/cards.rs` | Verify zero deep `.clone()` on issuing and treasury models. | `engineering-rust-refactoring-specialist` | `stripe-best-practices` |
-| **PR 9** | **Pillar 9** | **Stripe-Mock Wire Verification** | `tests/issuing_treasury_terminal_mock_test.rs` | End-to-end card issuance and treasury transfer on `stripe-mock`. | `testing-api-tester` | `stripe-docs` |
-| **PR 10** | **Pillar 10** | **Fintech Infrastructure Docs** | `README.md`, `docs/fintech.md` | Guide on commercial cards, treasury banking, and POS setup. | `engineering-technical-writer` | `stripe-docs` |
+Every unit is a **100% implementing unit** with its own models, parameters, serializers, resource endpoints, and integration tests. No unit has a validation-only job, and no unit blocks another, enabling complete parallel execution:
 
-### 4.2 Implementation Phase Breakdown
+| Unit # | Pillar | Functional Implementation Scope | Primary Deliverables & Files | Implementing Role / Profile | Assigned Skills |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Unit 1** | **Issuing Cards & Cardholders** | Card & Cardholder management with spending limits | `IssuingCard`, `IssuingCardholder`, `SpendingControls`, `SpendingLimit`, `CreateCardParams`, `UpdateCardParams`, `CreateCardholderParams`, `UpdateCardholderParams`, `IssuingCardsResource` (`create`, `retrieve`, `update`, `list`). Files: `src/resources/issuing_cards.rs`, `src/crates/some-stripe-types/src/issuing_card.rs`, `src/crates/some-stripe-types/src/issuing_cardholder.rs`. | `domain-codegen-specialist` (`agent-a`) | `stripe-docs`<br>`stripe-best-practices` |
+| **Unit 2** | **Issuing Authorizations & Transactions** | Real-time card transaction approval & ledger tracking | `IssuingAuthorization`, `IssuingTransaction`, `AuthorizationMerchantData`, `ApproveAuthorizationParams`, `DeclineAuthorizationParams`, `ListIssuingAuthorizationsParams`, `ListIssuingTransactionsParams`, `IssuingAuthorizationsResource` (`retrieve`, `update`, `approve`, `decline`, `list`). Files: `src/resources/issuing_authorizations.rs`, `src/crates/some-stripe-types/src/issuing_authorization.rs`, `src/crates/some-stripe-types/src/issuing_transaction.rs`. | `domain-codegen-specialist` (`agent-b`) | `stripe-docs`<br>`stripe-best-practices` |
+| **Unit 3** | **Treasury Financial Accounts & Balances** | Commercial FDIC-insured account balances & feature flags | `FinancialAccount`, `FinancialAccountBalance`, `FinancialAccountFeatures`, `FinancialAddresses`, `CreateFinancialAccountParams`, `UpdateFinancialAccountParams`, `ListFinancialAccountsParams`, `TreasuryFinancialAccountsResource` (`create`, `retrieve`, `update`, `list`, `close`). Files: `src/resources/treasury_financial_accounts.rs`, `src/crates/some-stripe-types/src/treasury_financial_account.rs`. | `domain-codegen-specialist` (`agent-c`) | `stripe-docs`<br>`stripe-best-practices` |
+| **Unit 4** | **Treasury Outbound Transfers & Outbound Payments** | Wire transfers, ACH money movement & debit routing | `OutboundTransfer`, `OutboundPayment`, `ReceivedCredit`, `CreateOutboundTransferParams`, `CancelOutboundTransferParams`, `CreateOutboundPaymentParams`, `CancelOutboundPaymentParams`, `TreasuryTransfersResource` (`create`, `retrieve`, `cancel`, `list`). Files: `src/resources/treasury_transfers.rs`, `src/crates/some-stripe-types/src/treasury_transfer.rs`. | `domain-codegen-specialist` (`agent-a`) | `stripe-docs`<br>`stripe-best-practices` |
+| **Unit 5** | **Terminal POS Readers, Locations, Tokens & Facades** | Smart in-person POS hardware, connection tokens & client mounting | `TerminalReader`, `TerminalLocation`, `ConnectionToken`, `CreateReaderParams`, `CreateLocationParams`, `CreateConnectionTokenParams`, `TerminalResource` (`readers`, `locations`, `connection_tokens`), and client namespace mounting `stripe.issuing()`, `stripe.treasury()`, `stripe.terminal()`. Files: `src/resources/terminal.rs`, `src/crates/some-stripe-types/src/terminal.rs`, `src/resources/issuing.rs`, `src/resources/treasury.rs`. | `microkernel-architect` (`agent-b`) | `stripe-docs`<br>`stripe-best-practices` |
 
-#### Phase 1: Models & Banking Schemas (PR 1–3)
-- [ ] **Task 1.1 (Types)**: Define `Card`, `Cardholder`, `FinancialAccount`, and `ConnectionToken` in `types/`.  
-  *Agent*: `domain-codegen-specialist` | *Skill*: `stripe-docs`
-- [ ] **Task 1.2 (Constants)**: Pin endpoints `/v1/issuing/*`, `/v1/treasury/*`, `/v1/terminal/*` in `constants/`.  
-  *Agent*: `domain-codegen-specialist` | *Skill*: `stripe-docs`
-- [ ] **Task 1.3 (Logic)**: Implement parameter builders for card spending limits and outbound transfers.  
-  *Agent*: `domain-codegen-specialist` | *Skill*: `stripe-best-practices`
-- [ ] **Task 1.4 (Unit Tests)**: Verify JSON deserialization of Issuing and Treasury fixture payloads.  
-  *Agent*: `testing-api-tester` | *Skill*: `stripe-docs`
+### 4.2 Independent Parallel Implementation Workstreams
 
-#### Phase 2: Resource Methods & Wire Execution (PR 4–7)
-- [ ] **Task 2.1 (Issuing)**: Implement `IssuingResource` with cards, cardholders, and authorizations.  
-  *Agent*: `domain-codegen-specialist` | *Skill*: `stripe-docs`
-- [ ] **Task 2.2 (Treasury)**: Implement `TreasuryResource` with financial accounts and outbound wire transfers.  
-  *Agent*: `domain-codegen-specialist` | *Skill*: `stripe-docs`
-- [ ] **Task 2.3 (Terminal)**: Implement `TerminalResource` with connection tokens and reader management.  
-  *Agent*: `domain-codegen-specialist` | *Skill*: `stripe-docs`
-- [ ] **Task 2.4 (Facade)**: Expose fintech accessors on `StripeClient`.  
-  *Agent*: `microkernel-architect` | *Skill*: `stripe-docs`
+Each unit implementer executes autonomously in their assigned worktree without blocking dependencies:
+- **Unit 1 Workstream**: Implements `IssuingCard`, `IssuingCardholder`, and `IssuingCardsResource` with spending control parameter serializers.
+- **Unit 2 Workstream**: Implements `IssuingAuthorization`, `IssuingTransaction`, and `IssuingAuthorizationsResource` with approve/decline endpoints.
+- **Unit 3 Workstream**: Implements `FinancialAccount` and `TreasuryFinancialAccountsResource` with financial account feature flags.
+- **Unit 4 Workstream**: Implements `OutboundTransfer`, `OutboundPayment`, and `TreasuryTransfersResource` with ACH/wire routing endpoints.
+- **Unit 5 Workstream**: Implements `TerminalReader`, `ConnectionToken`, `TerminalResource`, and mounts `issuing()`, `treasury()`, and `terminal()` namespaces on `StripeClient`.
 
-#### Phase 3: Zero-Clone Borrowing & Spend Limit Validation (PR 8–9)
-- [ ] **Task 3.1 (Borrow Check)**: Verify zero `.clone()` calls during Treasury and Issuing response parsing.  
-  *Agent*: `engineering-rust-refactoring-specialist` | *Skill*: `stripe-best-practices`
-- [ ] **Task 3.2 (Limit Tests)**: Assert spending limit bounds checks reject negative limits locally.  
-  *Agent*: `testing-api-tester` | *Skill*: `stripe-docs`
-
-#### Phase 4: Mock Verification & Release Sign-Off (PR 9–10)
-- [ ] **Task 4.1 (Mock Suite)**: Run full issuing, treasury, and terminal flows against `stripe-mock`.  
-  *Agent*: `testing-api-tester` | *Skill*: `stripe-docs`
-- [ ] **Task 4.2 (G-Review)**: Peer review for banking compliance and cryptographic secret handling.  
-  *Agent*: `engineering-code-reviewer` | *Skill*: `stripe-best-practices`
-- [ ] **Task 4.3 (Docs)**: Publish developer documentation for commercial card issuance and Treasury banking.  
-  *Agent*: `engineering-technical-writer` | *Skill*: `stripe-docs`
+All quality gates (G0–G4, G-Borrow, G2, G-Law, G-Complexity, G-Docs, G-Review) are enforced on each unit PR individually by the independent Gatekeeper Council before merge.
 
 ---
 
