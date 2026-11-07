@@ -95,6 +95,11 @@ pub use customer::*;
 pub mod subscription;
 #[allow(unused_imports)]
 pub use subscription::*;
+pub mod fee;
+pub use fee::*;
+pub mod fee_params;
+#[allow(unused_imports)]
+pub use fee_params::*;
 pub mod nullable;
 pub use nullable::*;
 pub mod transfer;
@@ -781,6 +786,12 @@ pub enum EventObject {
     /// Stripe TransferReversal payload (`object = "transfer_reversal"`).
     #[serde(rename = "transfer_reversal")]
     TransferReversal(TransferReversal),
+
+    /// Stripe ApplicationFee payload (`object = "application_fee"`).
+    ApplicationFee(ApplicationFee),
+
+    /// Stripe FeeRefund payload (`object = "fee_refund"`).
+    FeeRefund(FeeRefund),
 
     /// Unrecognized, custom, or unsupported event object types.
     #[serde(other)]
