@@ -84,13 +84,14 @@ pub use some_stripe_webhooks::{
 pub mod resources;
 pub use resources::{
     AccountLinksResource, AccountSessionsResource, AccountsResource, ApplicationFeesResource,
-    BalanceResource, BalanceTransactionsResource, BillingPortalResource, CheckoutResource,
-    CheckoutSessionExt, CreditNotesResource, CustomersResource, DisputesResource, InvoicesResource,
-    PaymentIntentsResource, PaymentLinksResource, PayoutsResource, PersonsResource, QuotesResource,
-    RedirectError, RefundsResource, SessionsResource, SubscriptionItemsResource,
-    SubscriptionSchedulesResource, SubscriptionsResource, TransfersResource,
+    BalanceResource, BalanceTransactionsResource, BillingPortalResource, CalculationsResource,
+    CheckoutResource, CheckoutSessionExt, CreditNotesResource, CustomersResource, DisputesResource,
+    InvoicesResource, PaymentIntentsResource, PaymentLinksResource, PayoutsResource,
+    PersonsResource, QuotesResource, RedirectError, RefundsResource, SessionsResource,
+    SubscriptionItemsResource, SubscriptionSchedulesResource, SubscriptionsResource,
+    TaxRegistrationsResource, TaxSettingsResource, TransactionsResource, TransfersResource,
     VerificationSessionsResource, WebhooksResource, credit_note_id, generate_uuid_v4,
-    is_fulfillment_ready, is_valid_uuid_v4, quote_id, validate_redirect_url,
+    is_fulfillment_ready, is_valid_uuid_v4, quote_id, tax_registration_id, validate_redirect_url,
 };
 
 /// The main Stripe client used to interact with the Stripe API, modeled after `stripe-node`.
@@ -233,6 +234,11 @@ impl StripeClient {
     pub fn payouts(&self) -> PayoutsResource<'_> {
         PayoutsResource::new(&self.0)
     }
+
+    /// Access the Tax Transactions resource namespace (`stripe.tax_transactions`).
+    pub fn tax_transactions(&self) -> TransactionsResource<'_> {
+        TransactionsResource::new(&self.0)
+    }
 }
 
 /// Validates compliance with EU Omnibus Directive 2019/2161 Article 6a regarding price reductions.
@@ -320,6 +326,9 @@ pub trait StripeClientExt {
 
     /// Access the BillingPortal resource namespace (`stripe.billing_portal`).
     fn billing_portal(&self) -> BillingPortalResource<'_>;
+
+    /// Access the Tax Transactions resource namespace (`stripe.tax_transactions`).
+    fn tax_transactions(&self) -> TransactionsResource<'_>;
 }
 
 impl StripeClientExt for some_stripe_core::StripeClient {
@@ -385,6 +394,10 @@ impl StripeClientExt for some_stripe_core::StripeClient {
 
     fn billing_portal(&self) -> BillingPortalResource<'_> {
         BillingPortalResource::new(self)
+    }
+
+    fn tax_transactions(&self) -> TransactionsResource<'_> {
+        TransactionsResource::new(self)
     }
 }
 
