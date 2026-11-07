@@ -9,6 +9,7 @@ pub mod payment_intents;
 pub mod payment_links;
 pub mod refunds;
 pub mod subscription_items;
+pub mod subscription_schedules;
 pub mod subscriptions;
 pub mod webhooks;
 
@@ -24,5 +25,6 @@ pub use payment_intents::{PaymentIntentsResource, generate_uuid_v4, is_valid_uui
 pub use payment_links::PaymentLinksResource;
 pub use refunds::RefundsResource;
 pub use subscription_items::SubscriptionItemsResource;
+pub use subscription_schedules::SubscriptionSchedulesResource;
 pub use subscriptions::SubscriptionsResource;
 pub use webhooks::WebhooksResource;

@@ -84,8 +84,9 @@ pub use resources::{
     AccountsResource, BalanceResource, BalanceTransactionsResource, CheckoutResource,
     CheckoutSessionExt, CustomersResource, DisputesResource, PaymentIntentsResource,
     PaymentLinksResource, RedirectError, RefundsResource, SessionsResource,
-    SubscriptionItemsResource, SubscriptionsResource, WebhooksResource, generate_uuid_v4,
-    is_fulfillment_ready, is_valid_uuid_v4, validate_redirect_url,
+    SubscriptionItemsResource, SubscriptionSchedulesResource, SubscriptionsResource,
+    WebhooksResource, generate_uuid_v4, is_fulfillment_ready, is_valid_uuid_v4,
+    validate_redirect_url,
 };
 
 /// The main Stripe client used to interact with the Stripe API, modeled after `stripe-node`.
@@ -168,6 +169,10 @@ impl StripeClient {
     pub fn subscriptions(&self) -> SubscriptionsResource<'_> {
         SubscriptionsResource::new(&self.0)
     }
+    /// Access the SubscriptionSchedules resource namespace (`stripe.subscription_schedules`).
+    pub fn subscription_schedules(&self) -> SubscriptionSchedulesResource<'_> {
+        SubscriptionSchedulesResource::new(&self.0)
+    }
 }
 
 /// Validates compliance with EU Omnibus Directive 2019/2161 Article 6a regarding price reductions.
@@ -240,6 +245,8 @@ pub trait StripeClientExt {
 
     /// Access the Subscriptions resource namespace (`stripe.subscriptions`).
     fn subscriptions(&self) -> SubscriptionsResource<'_>;
+    /// Access the SubscriptionSchedules resource namespace (`stripe.subscription_schedules`).
+    fn subscription_schedules(&self) -> SubscriptionSchedulesResource<'_>;
 }
 
 impl StripeClientExt for some_stripe_core::StripeClient {
@@ -285,6 +292,10 @@ impl StripeClientExt for some_stripe_core::StripeClient {
 
     fn subscriptions(&self) -> SubscriptionsResource<'_> {
         SubscriptionsResource::new(self)
+    }
+
+    fn subscription_schedules(&self) -> SubscriptionSchedulesResource<'_> {
+        SubscriptionSchedulesResource::new(self)
     }
 }
 
