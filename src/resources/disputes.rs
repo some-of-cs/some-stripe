@@ -3,6 +3,7 @@
 //! Provides endpoints to retrieve dispute details, submit defense evidence to card issuers,
 //! and close or concede chargebacks, enforcing strict input sanitization and evidence locking invariants.
 
+use some_stripe_core::patterns::serializer::to_form_params;
 use some_stripe_core::{StripeClient, StripeError, validate_and_encode_id};
 use some_stripe_types::{Dispute, UpdateDisputeParams};
 
@@ -121,104 +122,16 @@ impl<'a> DisputesResource<'a> {
     ) -> Result<Dispute, StripeError> {
         let encoded = validate_and_encode_id(dispute_id)?;
         let url = format!("{}/v1/disputes/{encoded}", self.client.config.api_base);
-        let mut form_data = Vec::new();
+        let form_data = to_form_params(params)?;
 
-        let submit_str = params.submit.map(|s| s.to_string());
-        if let Some(ref s) = submit_str {
-            form_data.push(("submit", s.as_str()));
-        }
-
-        if let Some(ref ev) = params.evidence {
-            if let Some(ref val) = ev.customer_communication {
-                form_data.push(("evidence[customer_communication]", val.as_str()));
-            }
-            if let Some(ref val) = ev.customer_email_address {
-                form_data.push(("evidence[customer_email_address]", val.as_str()));
-            }
-            if let Some(ref val) = ev.customer_name {
-                form_data.push(("evidence[customer_name]", val.as_str()));
-            }
-            if let Some(ref val) = ev.customer_purchase_ip {
-                form_data.push(("evidence[customer_purchase_ip]", val.as_str()));
-            }
-            if let Some(ref val) = ev.billing_address {
-                form_data.push(("evidence[billing_address]", val.as_str()));
-            }
-            if let Some(ref val) = ev.shipping_address {
-                form_data.push(("evidence[shipping_address]", val.as_str()));
-            }
-            if let Some(ref val) = ev.shipping_date {
-                form_data.push(("evidence[shipping_date]", val.as_str()));
-            }
-            if let Some(ref val) = ev.shipping_documentation {
-                form_data.push(("evidence[shipping_documentation]", val.as_str()));
-            }
-            if let Some(ref val) = ev.shipping_tracking_number {
-                form_data.push(("evidence[shipping_tracking_number]", val.as_str()));
-            }
-            if let Some(ref val) = ev.service_date {
-                form_data.push(("evidence[service_date]", val.as_str()));
-            }
-            if let Some(ref val) = ev.service_documentation {
-                form_data.push(("evidence[service_documentation]", val.as_str()));
-            }
-            if let Some(ref val) = ev.duplicate_charge_documentation {
-                form_data.push(("evidence[duplicate_charge_documentation]", val.as_str()));
-            }
-            if let Some(ref val) = ev.duplicate_charge_explanation {
-                form_data.push(("evidence[duplicate_charge_explanation]", val.as_str()));
-            }
-            if let Some(ref val) = ev.duplicate_charge_id {
-                form_data.push(("evidence[duplicate_charge_id]", val.as_str()));
-            }
-            if let Some(ref val) = ev.refund_refusal_explanation {
-                form_data.push(("evidence[refund_refusal_explanation]", val.as_str()));
-            }
-            if let Some(ref val) = ev.cancellation_policy {
-                form_data.push(("evidence[cancellation_policy]", val.as_str()));
-            }
-            if let Some(ref val) = ev.cancellation_policy_disclosure {
-                form_data.push(("evidence[cancellation_policy_disclosure]", val.as_str()));
-            }
-            if let Some(ref val) = ev.product_description {
-                form_data.push(("evidence[product_description]", val.as_str()));
-            }
-            if let Some(ref val) = ev.receipt {
-                form_data.push(("evidence[receipt]", val.as_str()));
-            }
-            if let Some(ref val) = ev.uncategorized_documentation {
-                form_data.push(("evidence[uncategorized_documentation]", val.as_str()));
-            }
-            if let Some(ref val) = ev.uncategorized_text {
-                form_data.push(("evidence[uncategorized_text]", val.as_str()));
-            }
-        }
-
-        let mut metadata_entries = Vec::new();
-        if let Some(ref meta) = params.metadata {
-            for (k, v) in meta {
-                metadata_entries.push((format!("metadata[{k}]"), v.as_str()));
-            }
-        }
-        for (k, v) in &metadata_entries {
-            form_data.push((k.as_str(), *v));
-        }
-
-        let generated_key;
-        let idempotency_key = match params.idempotency_key.as_deref() {
-            Some(k) if !k.trim().is_empty() => k,
-            _ => {
-                generated_key = crate::resources::generate_uuid_v4();
-                &generated_key
-            }
-        };
+        let idempotency_key = super::resolve_idempotency_key(params.idempotency_key.as_deref());
 
         let req = self
             .client
             .http
             .post(&url)
             .form(&form_data)
-            .header("Idempotency-Key", idempotency_key);
+            .header("Idempotency-Key", &*idempotency_key);
 
         let val = self.client.execute(req).await?;
         let dispute: Dispute = serde_json::from_value(val)?;
@@ -260,13 +173,13 @@ impl<'a> DisputesResource<'a> {
             self.client.config.api_base
         );
         let form_data: Vec<(&str, &str)> = Vec::new();
-        let generated_key = crate::resources::generate_uuid_v4();
+        let idempotency_key = super::resolve_idempotency_key(None);
         let req = self
             .client
             .http
             .post(&url)
             .form(&form_data)
-            .header("Idempotency-Key", &generated_key);
+            .header("Idempotency-Key", &*idempotency_key);
         let val = self.client.execute(req).await?;
         let dispute: Dispute = serde_json::from_value(val)?;
         Ok(dispute)

@@ -4,7 +4,7 @@
 //! mark uncollectible, send, and list invoices, adhering to EU VAT Directive 2006/112/EC
 //! sequential numbering requirements and RFC 4122 UUID v4 idempotency.
 
-use some_stripe_core::patterns::{Paginator, to_form_params};
+use some_stripe_core::patterns::{Paginator, encode_form_pairs, to_form_params};
 use some_stripe_core::{StripeClient, StripeError, validate_and_encode_id};
 use some_stripe_types::{
     AddInvoiceLinesParams, CreateInvoiceParams, FinalizeInvoiceParams, Invoice, InvoiceLineItem,
@@ -71,21 +71,14 @@ impl<'a> InvoicesResource<'a> {
             form_data.push((k.as_str(), *v));
         }
 
-        let generated_key;
-        let idempotency_key = match params.idempotency_key.as_deref() {
-            Some(k) if !k.trim().is_empty() => k,
-            _ => {
-                generated_key = crate::resources::generate_uuid_v4();
-                &generated_key
-            }
-        };
+        let idempotency_key = super::resolve_idempotency_key(params.idempotency_key.as_deref());
 
         let req = self
             .client
             .http
             .post(&url)
             .form(&form_data)
-            .header("Idempotency-Key", idempotency_key);
+            .header("Idempotency-Key", &*idempotency_key);
 
         let val = self.client.execute(req).await?;
         let invoice: Invoice = serde_json::from_value(val)?;
@@ -137,21 +130,14 @@ impl<'a> InvoicesResource<'a> {
             form_data.push((k.as_str(), *v));
         }
 
-        let generated_key;
-        let idempotency_key = match params.idempotency_key.as_deref() {
-            Some(k) if !k.trim().is_empty() => k,
-            _ => {
-                generated_key = crate::resources::generate_uuid_v4();
-                &generated_key
-            }
-        };
+        let idempotency_key = super::resolve_idempotency_key(params.idempotency_key.as_deref());
 
         let req = self
             .client
             .http
             .post(&url)
             .form(&form_data)
-            .header("Idempotency-Key", idempotency_key);
+            .header("Idempotency-Key", &*idempotency_key);
 
         let val = self.client.execute(req).await?;
         let invoice: Invoice = serde_json::from_value(val)?;
@@ -185,21 +171,15 @@ impl<'a> InvoicesResource<'a> {
             form_data.push(("auto_advance", if auto { "true" } else { "false" }));
         }
 
-        let generated_key;
-        let idempotency_key = match params.and_then(|p| p.idempotency_key.as_deref()) {
-            Some(k) if !k.trim().is_empty() => k,
-            _ => {
-                generated_key = crate::resources::generate_uuid_v4();
-                &generated_key
-            }
-        };
+        let idempotency_key =
+            super::resolve_idempotency_key(params.and_then(|p| p.idempotency_key.as_deref()));
 
         let req = self
             .client
             .http
             .post(&url)
             .form(&form_data)
-            .header("Idempotency-Key", idempotency_key);
+            .header("Idempotency-Key", &*idempotency_key);
 
         let val = self.client.execute(req).await?;
         let invoice: Invoice = serde_json::from_value(val)?;
@@ -240,21 +220,15 @@ impl<'a> InvoicesResource<'a> {
             }
         }
 
-        let generated_key;
-        let idempotency_key = match params.and_then(|p| p.idempotency_key.as_deref()) {
-            Some(k) if !k.trim().is_empty() => k,
-            _ => {
-                generated_key = crate::resources::generate_uuid_v4();
-                &generated_key
-            }
-        };
+        let idempotency_key =
+            super::resolve_idempotency_key(params.and_then(|p| p.idempotency_key.as_deref()));
 
         let req = self
             .client
             .http
             .post(&url)
             .form(&form_data)
-            .header("Idempotency-Key", idempotency_key);
+            .header("Idempotency-Key", &*idempotency_key);
 
         let val = self.client.execute(req).await?;
         let invoice: Invoice = serde_json::from_value(val)?;
@@ -274,21 +248,15 @@ impl<'a> InvoicesResource<'a> {
         );
         let form_data: Vec<(&str, &str)> = Vec::new();
 
-        let generated_key;
-        let idempotency_key = match params.and_then(|p| p.idempotency_key.as_deref()) {
-            Some(k) if !k.trim().is_empty() => k,
-            _ => {
-                generated_key = crate::resources::generate_uuid_v4();
-                &generated_key
-            }
-        };
+        let idempotency_key =
+            super::resolve_idempotency_key(params.and_then(|p| p.idempotency_key.as_deref()));
 
         let req = self
             .client
             .http
             .post(&url)
             .form(&form_data)
-            .header("Idempotency-Key", idempotency_key);
+            .header("Idempotency-Key", &*idempotency_key);
 
         let val = self.client.execute(req).await?;
         let invoice: Invoice = serde_json::from_value(val)?;
@@ -303,14 +271,14 @@ impl<'a> InvoicesResource<'a> {
             self.client.config.api_base, safe_id
         );
         let form_data: Vec<(&str, &str)> = Vec::new();
-        let key = crate::resources::generate_uuid_v4();
+        let idempotency_key = super::resolve_idempotency_key(None);
 
         let req = self
             .client
             .http
             .post(&url)
             .form(&form_data)
-            .header("Idempotency-Key", &key);
+            .header("Idempotency-Key", &*idempotency_key);
 
         let val = self.client.execute(req).await?;
         let invoice: Invoice = serde_json::from_value(val)?;
@@ -325,14 +293,14 @@ impl<'a> InvoicesResource<'a> {
             self.client.config.api_base, safe_id
         );
         let form_data: Vec<(&str, &str)> = Vec::new();
-        let key = crate::resources::generate_uuid_v4();
+        let idempotency_key = super::resolve_idempotency_key(None);
 
         let req = self
             .client
             .http
             .post(&url)
             .form(&form_data)
-            .header("Idempotency-Key", &key);
+            .header("Idempotency-Key", &*idempotency_key);
 
         let val = self.client.execute(req).await?;
         let invoice: Invoice = serde_json::from_value(val)?;
@@ -344,42 +312,18 @@ impl<'a> InvoicesResource<'a> {
         &self,
         params: Option<&ListInvoicesParams>,
     ) -> Result<InvoiceList, StripeError> {
-        let mut url = format!("{}/v1/invoices", self.client.config.api_base);
-        let mut query_params = Vec::new();
-        let limit_str = params.and_then(|p| p.limit).map(|l| l.to_string());
-
-        if let Some(p) = params {
-            if let Some(ref c) = p.customer {
-                query_params.push(("customer", c.as_str()));
+        let url = match params {
+            Some(p) => {
+                let query_data = to_form_params(p)?;
+                if query_data.is_empty() {
+                    format!("{}/v1/invoices", self.client.config.api_base)
+                } else {
+                    let query_str = encode_form_pairs(&query_data);
+                    format!("{}/v1/invoices?{query_str}", self.client.config.api_base)
+                }
             }
-            if let Some(s) = p.status {
-                query_params.push(("status", s.as_str()));
-            }
-            if let Some(ref s) = p.subscription {
-                query_params.push(("subscription", s.as_str()));
-            }
-            if let Some(ref m) = p.collection_method {
-                query_params.push(("collection_method", m.as_str()));
-            }
-            if let Some(ref l) = limit_str {
-                query_params.push(("limit", l.as_str()));
-            }
-            if let Some(ref a) = p.starting_after {
-                query_params.push(("starting_after", a.as_str()));
-            }
-            if let Some(ref b) = p.ending_before {
-                query_params.push(("ending_before", b.as_str()));
-            }
-        }
-
-        if !query_params.is_empty() {
-            let encoded: Vec<String> = query_params
-                .iter()
-                .map(|(k, v)| format!("{k}={v}"))
-                .collect();
-            url.push('?');
-            url.push_str(&encoded.join("&"));
-        }
+            None => format!("{}/v1/invoices", self.client.config.api_base),
+        };
 
         let req = self.client.http.get(&url);
         let val = self.client.execute(req).await?;
@@ -391,14 +335,16 @@ impl<'a> InvoicesResource<'a> {
     ///
     /// Handles the upcoming invoice null-ID wire safety invariant (`invoice.id` is `None`).
     pub async fn upcoming(&self, params: &InvoiceUpcomingParams) -> Result<Invoice, StripeError> {
-        let mut url = format!("{}/v1/invoices/upcoming", self.client.config.api_base);
         let form_pairs = to_form_params(params)?;
-
-        if !form_pairs.is_empty() {
-            let encoded: Vec<String> = form_pairs.iter().map(|(k, v)| format!("{k}={v}")).collect();
-            url.push('?');
-            url.push_str(&encoded.join("&"));
-        }
+        let url = if form_pairs.is_empty() {
+            format!("{}/v1/invoices/upcoming", self.client.config.api_base)
+        } else {
+            let query_str = encode_form_pairs(&form_pairs);
+            format!(
+                "{}/v1/invoices/upcoming?{query_str}",
+                self.client.config.api_base
+            )
+        };
 
         let req = self.client.http.get(&url);
         let val = self.client.execute(req).await?;
@@ -418,15 +364,7 @@ impl<'a> InvoicesResource<'a> {
             self.client.config.api_base, encoded_id
         );
 
-        let generated_key;
-        let idempotency_key = match params.idempotency_key.as_deref() {
-            Some(k) if !k.trim().is_empty() => k,
-            _ => {
-                generated_key = crate::resources::generate_uuid_v4();
-                &generated_key
-            }
-        };
-
+        let idempotency_key = super::resolve_idempotency_key(params.idempotency_key.as_deref());
         let form_pairs = to_form_params(params)?;
 
         let req = self
@@ -434,7 +372,7 @@ impl<'a> InvoicesResource<'a> {
             .http
             .post(&url)
             .form(&form_pairs)
-            .header("Idempotency-Key", idempotency_key);
+            .header("Idempotency-Key", &*idempotency_key);
 
         let val = self.client.execute(req).await?;
         let invoice: Invoice = serde_json::from_value(val)?;
@@ -455,15 +393,7 @@ impl<'a> InvoicesResource<'a> {
             self.client.config.api_base, encoded_inv_id, encoded_line_id
         );
 
-        let generated_key;
-        let idempotency_key = match params.idempotency_key.as_deref() {
-            Some(k) if !k.trim().is_empty() => k,
-            _ => {
-                generated_key = crate::resources::generate_uuid_v4();
-                &generated_key
-            }
-        };
-
+        let idempotency_key = super::resolve_idempotency_key(params.idempotency_key.as_deref());
         let form_pairs = to_form_params(params)?;
 
         let req = self
@@ -471,7 +401,7 @@ impl<'a> InvoicesResource<'a> {
             .http
             .post(&url)
             .form(&form_pairs)
-            .header("Idempotency-Key", idempotency_key);
+            .header("Idempotency-Key", &*idempotency_key);
 
         let val = self.client.execute(req).await?;
         let line_item: InvoiceLineItem = serde_json::from_value(val)?;
@@ -492,14 +422,14 @@ impl<'a> InvoicesResource<'a> {
 
         let params = RemoveInvoiceLinesParams::from_ids(line_ids.iter().copied());
         let form_pairs = to_form_params(&params)?;
-        let idempotency_key = crate::resources::generate_uuid_v4();
+        let idempotency_key = super::resolve_idempotency_key(None);
 
         let req = self
             .client
             .http
             .post(&url)
             .form(&form_pairs)
-            .header("Idempotency-Key", idempotency_key);
+            .header("Idempotency-Key", &*idempotency_key);
 
         let val = self.client.execute(req).await?;
         let invoice: Invoice = serde_json::from_value(val)?;

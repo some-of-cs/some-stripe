@@ -32,7 +32,6 @@
 //! # }
 //! ```
 
-use crate::resources::generate_uuid_v4;
 use crate::resources::subscription_items::SubscriptionItemsResource;
 use some_stripe_core::patterns::pagination::{ListResponse, Paginator};
 use some_stripe_core::patterns::serializer::{encode_form_pairs, percent_encode, to_form_params};
@@ -120,21 +119,14 @@ impl<'a> SubscriptionsResource<'a> {
         let url = format!("{}/v1/subscriptions", self.client.config.api_base);
         let form_data = to_form_params(params)?;
 
-        let generated_key;
-        let idempotency_key = match params.idempotency_key.as_deref() {
-            Some(k) if !k.trim().is_empty() => k,
-            _ => {
-                generated_key = generate_uuid_v4();
-                &generated_key
-            }
-        };
+        let idempotency_key = super::resolve_idempotency_key(params.idempotency_key.as_deref());
 
         let req = self
             .client
             .http
             .post(&url)
             .form(&form_data)
-            .header("Idempotency-Key", idempotency_key);
+            .header("Idempotency-Key", &*idempotency_key);
 
         let val = self.client.execute(req).await?;
         let sub: Subscription = serde_json::from_value(val)?;
@@ -216,21 +208,14 @@ impl<'a> SubscriptionsResource<'a> {
         );
         let form_data = to_form_params(params)?;
 
-        let generated_key;
-        let idempotency_key = match params.idempotency_key.as_deref() {
-            Some(k) if !k.trim().is_empty() => k,
-            _ => {
-                generated_key = generate_uuid_v4();
-                &generated_key
-            }
-        };
+        let idempotency_key = super::resolve_idempotency_key(params.idempotency_key.as_deref());
 
         let req = self
             .client
             .http
             .post(&url)
             .form(&form_data)
-            .header("Idempotency-Key", idempotency_key);
+            .header("Idempotency-Key", &*idempotency_key);
 
         let val = self.client.execute(req).await?;
         let sub: Subscription = serde_json::from_value(val)?;
@@ -275,21 +260,15 @@ impl<'a> SubscriptionsResource<'a> {
             Vec::new()
         };
 
-        let generated_key;
-        let idempotency_key = match params.and_then(|p| p.idempotency_key.as_deref()) {
-            Some(k) if !k.trim().is_empty() => k,
-            _ => {
-                generated_key = generate_uuid_v4();
-                &generated_key
-            }
-        };
+        let idempotency_key =
+            super::resolve_idempotency_key(params.and_then(|p| p.idempotency_key.as_deref()));
 
         let req = self
             .client
             .http
             .delete(&url)
             .form(&form_data)
-            .header("Idempotency-Key", idempotency_key);
+            .header("Idempotency-Key", &*idempotency_key);
 
         let val = self.client.execute(req).await?;
         let sub: Subscription = serde_json::from_value(val)?;
@@ -334,21 +313,15 @@ impl<'a> SubscriptionsResource<'a> {
             Vec::new()
         };
 
-        let generated_key;
-        let idempotency_key = match params.and_then(|p| p.idempotency_key.as_deref()) {
-            Some(k) if !k.trim().is_empty() => k,
-            _ => {
-                generated_key = generate_uuid_v4();
-                &generated_key
-            }
-        };
+        let idempotency_key =
+            super::resolve_idempotency_key(params.and_then(|p| p.idempotency_key.as_deref()));
 
         let req = self
             .client
             .http
             .post(&url)
             .form(&form_data)
-            .header("Idempotency-Key", idempotency_key);
+            .header("Idempotency-Key", &*idempotency_key);
 
         let val = self.client.execute(req).await?;
         let sub: Subscription = serde_json::from_value(val)?;
@@ -601,13 +574,13 @@ impl<'a> SubscriptionsResource<'a> {
             ));
         }
 
-        let idempotency_key = generate_uuid_v4();
+        let idempotency_key = super::resolve_idempotency_key(None);
         let req = self
             .client
             .http
             .post(&url)
             .form(&form_data)
-            .header("Idempotency-Key", idempotency_key);
+            .header("Idempotency-Key", &*idempotency_key);
 
         let val = self.client.execute(req).await?;
         let sub: Subscription = serde_json::from_value(val)?;
@@ -645,13 +618,13 @@ impl<'a> SubscriptionsResource<'a> {
         );
         let form_data = vec![("pause_collection".to_string(), "".to_string())];
 
-        let idempotency_key = generate_uuid_v4();
+        let idempotency_key = super::resolve_idempotency_key(None);
         let req = self
             .client
             .http
             .post(&url)
             .form(&form_data)
-            .header("Idempotency-Key", idempotency_key);
+            .header("Idempotency-Key", &*idempotency_key);
 
         let val = self.client.execute(req).await?;
         let sub: Subscription = serde_json::from_value(val)?;

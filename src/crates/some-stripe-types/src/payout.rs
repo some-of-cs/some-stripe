@@ -347,7 +347,7 @@ pub struct CreatePayoutParams {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub statement_descriptor: Option<String>,
     /// Optional idempotency key for safe request retries.
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(skip)]
     pub idempotency_key: Option<String>,
 }
 
@@ -392,6 +392,28 @@ pub struct UpdatePayoutParams {
     /// Set of key-value pairs that you can attach to an object.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<HashMap<String, String>>,
+    /// Optional idempotency key for safe request retries.
+    #[serde(skip)]
+    pub idempotency_key: Option<String>,
+}
+
+impl UpdatePayoutParams {
+    /// Creates a new default parameter block for updating a payout.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets the metadata for this payout.
+    pub fn with_metadata(mut self, metadata: HashMap<String, String>) -> Self {
+        self.metadata = Some(metadata);
+        self
+    }
+
+    /// Sets the idempotency key for this payout update request.
+    pub fn with_idempotency_key(mut self, key: impl Into<String>) -> Self {
+        self.idempotency_key = Some(key.into());
+        self
+    }
 }
 
 /// Parameters for listing payouts.

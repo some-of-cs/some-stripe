@@ -14,6 +14,8 @@
 //!   individual signature strings.
 //! - **Secret Rollover Support**: Collects all `v1=` signature instances, enabling seamless key rotation
 //!   where webhooks are signed simultaneously with old and newly rotated secrets.
+//! - **DoS Mitigation Limits (Gate G2)**: Enforces [`MAX_SIGNATURE_HEADER_BYTES`] (4096 bytes) and
+//!   [`MAX_V1_SIGNATURES`] (16 signatures) to reject oversized or adversarial headers.
 //! - **Strict Timestamp Validation (Gate G2)**: Extracts the Unix timestamp integer from `t=`. Rejects
 //!   missing, non-numeric, or malformed timestamps with [`StripeWebhookError::InvalidTimestamp`].
 //! - **Header Integrity (Gate G2)**: Rejects empty or whitespace-only headers with
@@ -21,6 +23,18 @@
 //!   [`StripeWebhookError::MissingSignature`].
 
 use some_stripe_core::error::StripeWebhookError;
+
+/// Maximum allowable byte length for incoming `Stripe-Signature` headers (4096 bytes / 4 KB).
+///
+/// Defends against unbounded memory consumption and denial-of-service (DoS) attacks
+/// via oversized signature headers.
+pub const MAX_SIGNATURE_HEADER_BYTES: usize = 4096;
+
+/// Maximum number of `v1` signatures parsed from a single `Stripe-Signature` header.
+///
+/// Defends against computational denial-of-service (DoS) attacks caused by excessive
+/// constant-time HMAC comparison iterations.
+pub const MAX_V1_SIGNATURES: usize = 16;
 
 /// Parsed representation of a `Stripe-Signature` HTTP header.
 ///
@@ -73,6 +87,8 @@ impl<'a> StripeSignatureHeader<'a> {
 ///
 /// # Errors
 ///
+/// - [`StripeWebhookError::InvalidHeader`]: If `header` exceeds [`MAX_SIGNATURE_HEADER_BYTES`] (4096 bytes)
+///   or contains more than [`MAX_V1_SIGNATURES`] (16) signatures.
 /// - [`StripeWebhookError::MissingSignatureHeader`]: If `header` is empty or consists solely of whitespace.
 /// - [`StripeWebhookError::InvalidTimestamp`]: If `t=` is absent or cannot be parsed as a 64-bit signed integer.
 /// - [`StripeWebhookError::MissingSignature`]: If no valid, non-empty `v1` signature tokens exist in the header.
@@ -105,6 +121,12 @@ impl<'a> StripeSignatureHeader<'a> {
 pub fn parse_signature_header<'a>(
     header: &'a str,
 ) -> Result<StripeSignatureHeader<'a>, StripeWebhookError> {
+    if header.len() > MAX_SIGNATURE_HEADER_BYTES {
+        return Err(StripeWebhookError::InvalidHeader(
+            "header exceeds maximum allowed length",
+        ));
+    }
+
     if header.trim().is_empty() {
         return Err(StripeWebhookError::MissingSignatureHeader);
     }
@@ -131,6 +153,9 @@ pub fn parse_signature_header<'a>(
         } else if let Some(sig_val) = token.strip_prefix("v1=") {
             let sig = sig_val.trim();
             if !sig.is_empty() {
+                if signatures.len() >= MAX_V1_SIGNATURES {
+                    return Err(StripeWebhookError::InvalidHeader("too many v1 signatures"));
+                }
                 signatures.push(sig);
             }
         }
@@ -266,5 +291,74 @@ mod tests {
         let raw = "t=1728345600,v1=valid_v1_sig,t=1728345700";
         let err = parse_signature_header(raw).expect_err("must reject duplicate t= tokens");
         assert_eq!(err, StripeWebhookError::InvalidTimestamp);
+    }
+
+    #[test]
+    fn test_rejects_header_exceeding_max_bytes() {
+        let padding = "a".repeat(MAX_SIGNATURE_HEADER_BYTES);
+        let raw = format!("t=1728345600,v1=sig,{padding}");
+        assert!(raw.len() > MAX_SIGNATURE_HEADER_BYTES);
+        let err = parse_signature_header(&raw).expect_err("oversized header must be rejected");
+        assert_eq!(
+            err,
+            StripeWebhookError::InvalidHeader("header exceeds maximum allowed length")
+        );
+    }
+
+    #[test]
+    fn test_exact_max_size_header_boundary() {
+        // Construct a valid header whose total byte length is exactly MAX_SIGNATURE_HEADER_BYTES (4096)
+        let prefix = "t=1728345600,v1=sig,";
+        let filler_key = "v2=";
+        let needed = MAX_SIGNATURE_HEADER_BYTES - prefix.len() - filler_key.len();
+        let filler = "x".repeat(needed);
+        let raw = format!("{prefix}{filler_key}{filler}");
+        assert_eq!(raw.len(), MAX_SIGNATURE_HEADER_BYTES);
+        let parsed =
+            parse_signature_header(&raw).expect("header at exact limit should be accepted");
+        assert_eq!(parsed.timestamp, 1728345600);
+        assert_eq!(parsed.signatures, vec!["sig"]);
+
+        // Now add 1 byte to exceed limit
+        let raw_over = format!("{raw}y");
+        assert_eq!(raw_over.len(), MAX_SIGNATURE_HEADER_BYTES + 1);
+        let err = parse_signature_header(&raw_over)
+            .expect_err("header exceeding limit by 1 byte must be rejected");
+        assert_eq!(
+            err,
+            StripeWebhookError::InvalidHeader("header exceeds maximum allowed length")
+        );
+    }
+
+    #[test]
+    fn test_accepts_up_to_max_v1_signatures() {
+        let mut tokens = vec!["t=1728345600".to_string()];
+        for i in 0..MAX_V1_SIGNATURES {
+            tokens.push(format!("v1=sig_{i}"));
+        }
+        let raw = tokens.join(",");
+        let parsed =
+            parse_signature_header(&raw).expect("up to MAX_V1_SIGNATURES must be accepted");
+        assert_eq!(parsed.signatures.len(), MAX_V1_SIGNATURES);
+        assert_eq!(parsed.signatures[0], "sig_0");
+        assert_eq!(
+            parsed.signatures[MAX_V1_SIGNATURES - 1],
+            format!("sig_{}", MAX_V1_SIGNATURES - 1)
+        );
+    }
+
+    #[test]
+    fn test_rejects_header_exceeding_max_v1_signatures() {
+        let mut tokens = vec!["t=1728345600".to_string()];
+        for i in 0..=MAX_V1_SIGNATURES {
+            tokens.push(format!("v1=sig_{i}"));
+        }
+        let raw = tokens.join(",");
+        let err =
+            parse_signature_header(&raw).expect_err("exceeding MAX_V1_SIGNATURES must be rejected");
+        assert_eq!(
+            err,
+            StripeWebhookError::InvalidHeader("too many v1 signatures")
+        );
     }
 }

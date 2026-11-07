@@ -130,7 +130,7 @@ pub struct CreateFeeRefundParams {
     pub amount: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<HashMap<String, String>>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(skip)]
     pub idempotency_key: Option<String>,
 }
 
