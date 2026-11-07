@@ -75,8 +75,14 @@ impl<'a> ApplicationFeesResource<'a> {
             None => to_form_params(&CreateFeeRefundParams::default())?,
         };
 
-        let generated_key = crate::resources::generate_uuid_v4();
-        let idempotency_key = generated_key.as_str();
+        let generated_key;
+        let idempotency_key = match params.and_then(|p| p.idempotency_key.as_deref()) {
+            Some(k) if !k.trim().is_empty() => k,
+            _ => {
+                generated_key = crate::resources::generate_uuid_v4();
+                &generated_key
+            }
+        };
 
         let req = self
             .client
