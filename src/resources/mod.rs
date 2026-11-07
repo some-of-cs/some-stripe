@@ -36,6 +36,7 @@ pub mod transfers;
 pub mod treasury;
 pub mod treasury_financial_accounts;
 pub mod treasury_transfers;
+pub mod v2_accounts;
 pub mod webhooks;
 
 pub use account_links::AccountLinksResource;
@@ -83,6 +84,7 @@ pub use treasury_transfers::{
     OutboundPaymentsResource, OutboundTransfersResource, ReceivedCreditsResource,
     TreasuryTransfersResource,
 };
+pub use v2_accounts::V2AccountsResource;
 pub use webhooks::WebhooksResource;
 
 /// Resolves an idempotency key for state-mutating requests.

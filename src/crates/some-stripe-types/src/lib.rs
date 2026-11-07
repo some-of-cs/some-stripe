@@ -139,6 +139,8 @@ pub mod treasury_transfer;
 pub use treasury_transfer::*;
 pub mod terminal;
 pub use terminal::*;
+pub mod v2_account;
+pub use v2_account::*;
 
 /// Strongly typed Stripe Connect Account ID (`acct_...`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -867,6 +869,10 @@ pub enum EventObject {
     /// Stripe Terminal ConnectionToken payload (`object = "terminal.connection_token"`).
     #[serde(rename = "terminal.connection_token")]
     TerminalConnectionToken(ConnectionToken),
+
+    /// Stripe V2 Core Account payload (`object = "v2.core.account"`).
+    #[serde(rename = "v2.core.account")]
+    V2CoreAccount(V2Account),
 
     /// Unrecognized, custom, or unsupported event object types.
     #[serde(other)]
