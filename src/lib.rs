@@ -90,8 +90,9 @@ pub use resources::{
     IssuingResource, IssuingTransactionsResource, PaymentIntentsResource, PaymentLinksResource,
     PayoutsResource, PersonsResource, QuotesResource, RedirectError, RefundsResource,
     SessionsResource, SubscriptionItemsResource, SubscriptionSchedulesResource,
-    SubscriptionsResource, TransfersResource, WebhooksResource, credit_note_id, generate_uuid_v4,
-    is_fulfillment_ready, is_valid_uuid_v4, quote_id, validate_redirect_url,
+    SubscriptionsResource, TransfersResource, TreasuryFinancialAccountsResource, WebhooksResource,
+    credit_note_id, generate_uuid_v4, is_fulfillment_ready, is_valid_uuid_v4, quote_id,
+    validate_redirect_url,
 };
 
 /// The main Stripe client used to interact with the Stripe API, modeled after `stripe-node`.
@@ -253,6 +254,11 @@ impl StripeClient {
     /// Access the Issuing Transactions resource namespace (`stripe.issuing_transactions`).
     pub fn issuing_transactions(&self) -> IssuingTransactionsResource<'_> {
         IssuingTransactionsResource::new(&self.0)
+    }
+
+    /// Access the Treasury Financial Accounts resource namespace (`stripe.treasury_financial_accounts`).
+    pub fn treasury_financial_accounts(&self) -> TreasuryFinancialAccountsResource<'_> {
+        TreasuryFinancialAccountsResource::new(&self.0)
     }
 }
 

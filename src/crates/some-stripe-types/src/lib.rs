@@ -122,6 +122,8 @@ pub mod issuing_authorization;
 pub use issuing_authorization::*;
 pub mod issuing_transaction;
 pub use issuing_transaction::*;
+pub mod treasury_financial_account;
+pub use treasury_financial_account::*;
 
 /// Strongly typed Stripe Connect Account ID (`acct_...`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -810,6 +812,10 @@ pub enum EventObject {
     /// Stripe Issuing Transaction payload (`object = "issuing.transaction"`).
     #[serde(rename = "issuing.transaction")]
     IssuingTransaction(IssuingTransaction),
+
+    /// Stripe Treasury FinancialAccount payload (`object = "treasury.financial_account"`).
+    #[serde(rename = "treasury.financial_account")]
+    TreasuryFinancialAccount(FinancialAccount),
 
     /// Unrecognized, custom, or unsupported event object types.
     #[serde(other)]
@@ -1536,6 +1542,43 @@ mod tests {
                 );
             }
             other => panic!("Expected PortalConfiguration variant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_event_object_treasury_financial_account() {
+        let json = serde_json::json!({
+            "id": "fa_test_999",
+            "object": "treasury.financial_account",
+            "active_features": ["deposit_insurance", "financial_addresses.aba"],
+            "balance": {
+                "cash": {"usd": 5000000},
+                "inbound_pending": {"usd": 100000},
+                "outbound_pending": {"usd": 50000}
+            },
+            "country": "US",
+            "created": 1728345600,
+            "financial_addresses": [],
+            "livemode": false,
+            "pending_features": [],
+            "restricted_features": [],
+            "status": "open",
+            "supported_currencies": ["usd"]
+        });
+
+        let data = EventData { object: json };
+        let obj = data
+            .deserialize_object()
+            .expect("Failed to deserialize treasury.financial_account event");
+
+        match obj {
+            EventObject::TreasuryFinancialAccount(fa) => {
+                assert_eq!(fa.id, "fa_test_999");
+                assert_eq!(fa.object, "treasury.financial_account");
+                assert!(fa.is_open());
+                assert_eq!(fa.balance.cash_amount("usd"), 5000000);
+            }
+            other => panic!("Expected TreasuryFinancialAccount variant, got {other:?}"),
         }
     }
 }
