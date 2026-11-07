@@ -2,6 +2,7 @@
 
 pub mod accounts;
 pub mod balance;
+pub mod billing_portal;
 pub mod checkout;
 pub mod credit_notes;
 pub mod disputes;
@@ -14,6 +15,7 @@ pub mod webhooks;
 
 pub use accounts::AccountsResource;
 pub use balance::{BalanceResource, BalanceTransactionsResource};
+pub use billing_portal::BillingPortalResource;
 pub use checkout::{
     CheckoutResource, CheckoutSessionExt, RedirectError, SessionsResource, is_fulfillment_ready,
     validate_and_encode_id, validate_redirect_url,
