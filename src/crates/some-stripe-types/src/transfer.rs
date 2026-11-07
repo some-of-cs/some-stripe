@@ -156,6 +156,7 @@ pub struct Transfer {
     pub balance_transaction: Option<String>,
 
     /// Time that this record was created (UNIX epoch seconds).
+    #[serde(default)]
     pub created: i64,
 
     /// Three-letter ISO currency code, in lowercase. Must be a supported currency.
@@ -269,6 +270,7 @@ pub struct TransferReversal {
     pub balance_transaction: Option<String>,
 
     /// Time that this record was created (UNIX epoch seconds).
+    #[serde(default)]
     pub created: i64,
 
     /// Three-letter ISO currency code, in lowercase. Must be a supported currency.

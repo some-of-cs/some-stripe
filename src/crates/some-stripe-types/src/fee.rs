@@ -61,10 +61,19 @@ impl std::fmt::Display for FeeRefundId {
     }
 }
 
+fn default_fee_refund_object() -> String {
+    "fee_refund".into()
+}
+
+fn default_application_fee_object() -> String {
+    "application_fee".into()
+}
+
 /// A refund of an application fee (`fee_refund`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FeeRefund {
     pub id: String,
+    #[serde(default = "default_fee_refund_object")]
     pub object: String, // "fee_refund"
     pub amount: i64,
     pub balance_transaction: Option<String>,
@@ -88,6 +97,7 @@ pub struct FeeRefundList {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ApplicationFee {
     pub id: String,
+    #[serde(default = "default_application_fee_object")]
     pub object: String, // "application_fee"
     pub account: String,
     pub amount: i64,
@@ -120,6 +130,27 @@ pub struct CreateFeeRefundParams {
     pub amount: Option<i64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<HashMap<String, String>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub idempotency_key: Option<String>,
+}
+
+impl CreateFeeRefundParams {
+    /// Creates a new default parameter block for fee refunds.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets the refund amount.
+    pub fn with_amount(mut self, amount: i64) -> Self {
+        self.amount = Some(amount);
+        self
+    }
+
+    /// Sets the idempotency key for safe request retries.
+    pub fn with_idempotency_key(mut self, key: impl Into<String>) -> Self {
+        self.idempotency_key = Some(key.into());
+        self
+    }
 }
 
 /// Parameters for listing application fees (`ListApplicationFeesParams`).

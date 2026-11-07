@@ -8,8 +8,8 @@
 
 use some_stripe_types::{
     CreateTransferParams, CreateTransferReversalParams, ListTransferReversalsParams,
-    ListTransfersParams, Transfer, TransferId, TransferList, TransferReversal, TransferReversalId,
-    TransferReversalList, UpdateTransferParams,
+    ListTransfersParams, Transfer, TransferList, TransferReversal, TransferReversalList,
+    UpdateTransferParams,
 };
 
 #[test]

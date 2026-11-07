@@ -5,7 +5,7 @@
 //!
 //! ## Overview
 //!
-//! - **Domain Entities**: [`PaymentIntent`], [`PaymentIntentStatus`], [`CaptureMethod`], [`PaymentMethodOptions`], [`CheckoutSession`], [`LineItem`], [`LineItemList`], [`Account`], [`Invoice`], [`Dispute`], [`Refund`], [`Balance`], [`BalanceTransaction`], [`PaymentLink`], [`PaymentLinkStatus`].
+//! - **Domain Entities**: [`PaymentIntent`], [`PaymentIntentStatus`], [`CaptureMethod`], [`PaymentMethodOptions`], [`CheckoutSession`], [`LineItem`], [`LineItemList`], [`Account`], [`AccountLink`], [`AccountSession`], [`Invoice`], [`Dispute`], [`Refund`], [`Balance`], [`BalanceTransaction`], [`PaymentLink`], [`PaymentLinkStatus`].
 //! - **ISO 4217 Integer Arithmetic (Gate G-Law)**: [`currency`] module provides zero-float exact integer arithmetic across non-decimal, 2-decimal, and 3-decimal currencies.
 //! - **Event Pipeline**: [`Event`], [`EventData`], [`EventObject`].
 //! - **Statutory Legal Compliance**: [`is_statutory_withdrawal_compliant`] enforces EU Directive 2011/83/EU Article 13.
@@ -102,10 +102,18 @@ pub mod fee_params;
 pub use fee_params::*;
 pub mod nullable;
 pub use nullable::*;
+pub mod account_link;
+pub use account_link::*;
+pub mod account_session;
+pub use account_session::*;
+pub mod person;
+pub use person::*;
 pub mod transfer;
 pub use transfer::*;
 pub mod transfer_params;
 pub use transfer_params::*;
+pub mod settlement;
+pub use settlement::*;
 
 /// Strongly typed Stripe Connect Account ID (`acct_...`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -676,32 +684,8 @@ fn default_payment_intent_object() -> String {
 pub mod params;
 pub use params::*;
 
-/// Represents a Stripe Account object (merchant profile).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Account {
-    /// Unique identifier for the account (`acct_...`).
-    pub id: String,
-
-    /// Object type, always `account`.
-    #[serde(default = "default_account_object")]
-    pub object: String,
-
-    /// Whether the account can create live charges.
-    pub charges_enabled: Option<bool>,
-
-    /// Whether Stripe can send payouts to this account.
-    pub payouts_enabled: Option<bool>,
-
-    /// Country of the account.
-    pub country: Option<String>,
-
-    /// Default currency code for the account.
-    pub default_currency: Option<String>,
-}
-
-fn default_account_object() -> String {
-    "account".into()
-}
+pub mod account;
+pub use account::*;
 
 pub mod invoice;
 pub use invoice::*;
@@ -713,6 +697,8 @@ pub mod quote;
 pub use quote::*;
 pub mod quote_params;
 pub use quote_params::*;
+pub mod connect_compliance;
+pub use connect_compliance::*;
 pub mod payout;
 pub use payout::*;
 
@@ -781,6 +767,9 @@ pub enum EventObject {
 
     /// Stripe Customer payload (`object = "customer"`).
     Customer(Customer),
+
+    /// Stripe Account payload (`object = "account"`).
+    Account(Account),
 
     /// Stripe Transfer payload (`object = "transfer"`).
     Transfer(Transfer),

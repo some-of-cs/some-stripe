@@ -18,7 +18,9 @@ pub enum SettlementSplitError {
     #[error("Total charge amount ({0}) cannot be negative")]
     NegativeTotalChargeAmount(i64),
 
-    #[error("Split sum (transfer {transfer} + fee {fee} = {sum}) exceeds total charge amount ({total})")]
+    #[error(
+        "Split sum (transfer {transfer} + fee {fee} = {sum}) exceeds total charge amount ({total})"
+    )]
     SplitExceedsTotal {
         transfer: i64,
         fee: i64,
@@ -53,13 +55,19 @@ pub fn validate_settlement_split(
     total_charge_amount: i64,
 ) -> Result<(), SettlementSplitError> {
     if transfer_amount < 0 {
-        return Err(SettlementSplitError::NegativeTransferAmount(transfer_amount));
+        return Err(SettlementSplitError::NegativeTransferAmount(
+            transfer_amount,
+        ));
     }
     if application_fee_amount < 0 {
-        return Err(SettlementSplitError::NegativeApplicationFeeAmount(application_fee_amount));
+        return Err(SettlementSplitError::NegativeApplicationFeeAmount(
+            application_fee_amount,
+        ));
     }
     if total_charge_amount < 0 {
-        return Err(SettlementSplitError::NegativeTotalChargeAmount(total_charge_amount));
+        return Err(SettlementSplitError::NegativeTotalChargeAmount(
+            total_charge_amount,
+        ));
     }
 
     let sum = transfer_amount
@@ -96,7 +104,9 @@ pub struct P2BFeeSchedule {
 /// Errors arising from EU P2B compliance verification.
 #[derive(Debug, Error, Clone, PartialEq, Eq)]
 pub enum P2BComplianceError {
-    #[error("EU P2B Violation: Commercial seller fees must be explicitly disclosed (Regulation (EU) 2019/1150 Art. 3)")]
+    #[error(
+        "EU P2B Violation: Commercial seller fees must be explicitly disclosed (Regulation (EU) 2019/1150 Art. 3)"
+    )]
     MissingSellerFeeDisclosure,
 
     #[error("EU P2B Violation: Dispute and chargeback cost allocations must be clearly defined")]
@@ -106,7 +116,10 @@ pub enum P2BComplianceError {
     SettlementTimeframeTooLong { days: u32 },
 
     #[error("EU P2B Violation: Fee change notice period must be at least 15 days (Art. 3(2))")]
-    NoticePeriodTooShort { provided_days: u32, required_minimum: u32 },
+    NoticePeriodTooShort {
+        provided_days: u32,
+        required_minimum: u32,
+    },
 }
 
 /// Validates EU Platform-to-Business (P2B) Regulation (EU) 2019/1150 transparency disclosure requirements.

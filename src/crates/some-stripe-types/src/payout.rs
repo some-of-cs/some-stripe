@@ -64,6 +64,30 @@ impl FromStr for PayoutStatus {
     }
 }
 
+impl PartialEq<str> for PayoutStatus {
+    fn eq(&self, other: &str) -> bool {
+        self.as_str() == other
+    }
+}
+
+impl PartialEq<&str> for PayoutStatus {
+    fn eq(&self, other: &&str) -> bool {
+        self.as_str() == *other
+    }
+}
+
+impl PartialEq<PayoutStatus> for str {
+    fn eq(&self, other: &PayoutStatus) -> bool {
+        self == other.as_str()
+    }
+}
+
+impl PartialEq<PayoutStatus> for &str {
+    fn eq(&self, other: &PayoutStatus) -> bool {
+        *self == other.as_str()
+    }
+}
+
 /// Error returned when parsing an unrecognized payout status string.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParsePayoutStatusError(pub String);
@@ -322,6 +346,9 @@ pub struct CreatePayoutParams {
     /// Extra information to display on the user's bank statement.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub statement_descriptor: Option<String>,
+    /// Optional idempotency key for safe request retries.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub idempotency_key: Option<String>,
 }
 
 impl CreatePayoutParams {
@@ -336,6 +363,7 @@ impl CreatePayoutParams {
             method: None,
             source_type: None,
             statement_descriptor: None,
+            idempotency_key: None,
         }
     }
 
@@ -348,6 +376,12 @@ impl CreatePayoutParams {
     /// Sets the statement descriptor for this payout.
     pub fn with_statement_descriptor(mut self, desc: impl Into<String>) -> Self {
         self.statement_descriptor = Some(desc.into());
+        self
+    }
+
+    /// Sets the idempotency key for this payout request.
+    pub fn with_idempotency_key(mut self, key: impl Into<String>) -> Self {
+        self.idempotency_key = Some(key.into());
         self
     }
 }
