@@ -114,6 +114,10 @@ pub mod transfer_params;
 pub use transfer_params::*;
 pub mod settlement;
 pub use settlement::*;
+pub mod issuing_authorization;
+pub use issuing_authorization::*;
+pub mod issuing_transaction;
+pub use issuing_transaction::*;
 
 /// Strongly typed Stripe Connect Account ID (`acct_...`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -786,6 +790,14 @@ pub enum EventObject {
 
     /// Stripe Payout payload (`object = "payout"`).
     Payout(Payout),
+
+    /// Stripe Issuing Authorization payload (`object = "issuing.authorization"`).
+    #[serde(rename = "issuing.authorization")]
+    IssuingAuthorization(IssuingAuthorization),
+
+    /// Stripe Issuing Transaction payload (`object = "issuing.transaction"`).
+    #[serde(rename = "issuing.transaction")]
+    IssuingTransaction(IssuingTransaction),
 
     /// Unrecognized, custom, or unsupported event object types.
     #[serde(other)]
