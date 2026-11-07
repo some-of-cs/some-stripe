@@ -143,11 +143,14 @@ pub mod v2_account;
 pub use v2_account::*;
 pub mod v2_destination;
 pub use v2_destination::*;
+pub mod v2_list;
+pub use v2_list::*;
 
 pub mod v2 {
     pub mod core {
         pub use crate::v2_account::*;
         pub use crate::v2_destination::*;
+        pub use crate::v2_list::*;
     }
 }
 
