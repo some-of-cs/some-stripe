@@ -18,6 +18,7 @@ Every quality gate is explicitly owned and executed by a specialized subagent pe
 | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Gate G0** | Syntax, Fmt & Clippy Hygiene | **Rust Refactoring Specialist** | `engineering-rust-refactoring-specialist.md` | `upgrade-stripe` | `cargo check`, `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` (0 warnings). Safe compiler remediation without shortcuts. |
 | **Gate G-Borrow** | Zero-Clone Discipline | **Rust Refactoring Specialist** | `engineering-rust-refactoring-specialist.md` | `upgrade-stripe` | Enforce Rust 2024 zero-clone borrowing (`&T`, `'a`, `bytes::Bytes`). Zero deep `.clone()` calls on domain entities/models; `Arc::clone` permitted only. |
+| **Gate G-Complexity** | Cyclomatic Complexity Minimization | **Rust Refactoring Specialist**<br>**Code Reviewer** | `engineering-rust-refactoring-specialist.md`<br>`engineering-code-reviewer.md` | `cyclomatic-complexity` | Measure and minimize branching complexity ($CC = 1 + \sum \text{branches}$). Ideal target $CC \le 6$, maximum allowable $CC \le 10$, mandatory decomposition for $CC > 10$. Any function with $CC > 15$ strictly blocks PR merge. Maximum nesting $\le 2$ levels. |
 | **Gate G2** | Security & Cryptography | **Application Security Engineer** | `security-appsec-engineer.md` | `security-audit`<br>`stripe-best-practices` | Constant-time HMAC-SHA256 (`safe_constant_time_eq`), 300s drift guard, `ZeroizeOnDrop`, `Debug` redaction (`[REDACTED]`), 1MB payload limits, CSPRNG idempotency keys. |
 | **Gate G-Law** | Global Statutory Compliance | **Application Security Engineer** | `security-appsec-engineer.md` | `security-audit`<br>`stripe-best-practices` | PCI-DSS 4.0 (zero raw PAN in application memory), PSD2 SCA 3DS2 redirect URLs, GDPR Art 15/17 rights, ISO 4217 minor currency units (zero float rounding), EU Directive 2011/83/EU 14-day restitution, EU Omnibus Directive 2019/2161 price transparency. |
 | **Gate G1** | Acceptance Test Coverage | **API Tester** | `testing-api-tester.md` | `stripe-docs`<br>`stripe-best-practices` | Comprehensive acceptance test suite. Verify >=90% line and >=85% branch coverage in affected modules. Boundary tests, error paths, HTTP status mapping, idempotency deduplication. |
@@ -44,22 +45,24 @@ Every quality gate is explicitly owned and executed by a specialized subagent pe
 The Supervising Leader or Main Agent Supervisor invokes the designated specialized subagents, each activating their specialized skills:
 
 1. **For Level 3 Micro-Unit PRs**:
-   - `Rust Refactoring Specialist` (Skill: `upgrade-stripe`): Evaluates **Gate G0** & **Gate G-Borrow**.
+   - `Rust Refactoring Specialist` (Skills: `upgrade-stripe`, `cyclomatic-complexity`): Evaluates **Gate G0**, **Gate G-Borrow**, and **Gate G-Complexity** ($CC \le 6$ ideal, hard cap $\le 10$, no functions $> 15$).
    - `Application Security Engineer` (Skills: `security-audit`, `stripe-best-practices`): Evaluates **Gate G2** & **Gate G-Law**.
    - `API Tester` (Skills: `stripe-docs`, `stripe-best-practices`): Evaluates **Gate G1**.
-   - `Code Reviewer` (Skills: `security-audit`, `stripe-best-practices`): Performs comprehensive diff review, audits panic safety, edge cases, aggregates all gate findings, and posts the formal Gate G-Review approval comment.
+   - `Code Reviewer` (Skills: `security-audit`, `cyclomatic-complexity`, `stripe-best-practices`): Performs comprehensive diff review, audits panic safety, edge cases, verifies branching complexity metrics, aggregates all gate findings, and posts the formal Gate G-Review approval comment.
 
 2. **For Level 2 User Story PRs**:
+   - `Rust Refactoring Specialist` (Skill: `cyclomatic-complexity`): Audits whole-story branching complexity and nesting depth.
    - `API Tester` (Skills: `stripe-docs`, `stripe-best-practices`): Evaluates **Gate G1** & **Gate G4** (story integration and wire mock suite).
    - `microkernel-architect` (Skills: `stripe-docs`, `stripe-best-practices`): Evaluates **Gate G3** (microkernel modularity, crate isolation, Cargo feature flags).
    - `Technical Writer` (Skill: `stripe-docs`): Evaluates **Gate G-Docs** (`cargo test --doc`, crate documentation).
-   - `Code Reviewer` (Skills: `security-audit`, `stripe-best-practices`): Performs story-wide diff review, verifies unit merge integrity, and posts formal Gate G-Review approval comment.
+   - `Code Reviewer` (Skills: `security-audit`, `cyclomatic-complexity`, `stripe-best-practices`): Performs story-wide diff review, verifies unit merge integrity and Gate G-Complexity compliance, and posts formal Gate G-Review approval comment.
 
 3. **For Level 1 Module PRs**:
    - Full Federated Gatekeeper Council executes workspace-wide validation:
      - `cargo test --workspace`
      - `cargo clippy --workspace --all-targets -- -D warnings`
      - `cargo test --doc`
+     - Whole-codebase cyclomatic complexity audit (0 functions with $CC > 15$).
      - End-to-end integration and wire contract tests.
    - `Code Reviewer` posts the final Module Release Gate G-Review sign-off comment.
 
@@ -83,6 +86,7 @@ The independent `Code Reviewer` subagent MUST post the following structured sign
 | :--- | :--- | :--- | :---: | :--- |
 | **Gate G0** (Syntax & Clippy) | Rust Refactoring Specialist | `upgrade-stripe` | ✅ PASS | 0 clippy warnings, clean `cargo fmt --check` |
 | **Gate G-Borrow** (Zero-Clone) | Rust Refactoring Specialist | `upgrade-stripe` | ✅ PASS | 0 unauthorized `.clone()`, explicit lifetimes `'a`, zero-copy `Bytes` |
+| **Gate G-Complexity** (Complexity Minimization) | Rust Refactoring Specialist<br>Code Reviewer | `cyclomatic-complexity` | ✅ PASS | All refactored/new functions score CC <= 6; 0 functions with CC > 10; nesting depth <= 2 |
 | **Gate G2** (Security & Crypto) | Application Security Engineer | `security-audit`<br>`stripe-best-practices` | ✅ PASS | Constant-time HMAC, 300s drift guard, secret zeroization, `[REDACTED]` debug |
 | **Gate G-Law** (Statutory & PCI) | Application Security Engineer | `security-audit`<br>`stripe-best-practices` | ✅ PASS | Zero PAN memory, ISO 4217 integer currency, EU 14-day restitution / price rules |
 | **Gate G1** (Acceptance Tests) | API Tester | `stripe-docs`<br>`stripe-best-practices` | ✅ PASS | All acceptance criteria verified, line cov >=90%, branch cov >=85% |
@@ -97,14 +101,14 @@ The independent `Code Reviewer` subagent MUST post the following structured sign
 
 ## 4. Mandatory 3-Tier Code Review & Self-Correction Loop (Never Terminate Until Clean)
 
-To ensure zero defects and comprehensive verification, every tier of implementation operates in an iterative code review and self-correction loop with mandatory security auditing (`.agents/skills/security-audit`):
+To ensure zero defects and comprehensive verification, every tier of implementation operates in an iterative code review and self-correction loop with mandatory security auditing (`.agents/skills/security-audit`) and cyclomatic complexity verification (`.agents/skills/cyclomatic-complexity`):
 
 ```mermaid
 flowchart TD
-    Start[Implementation Completed] --> InvokeReviewer[Invoke Distinct Code Reviewer Subagent with security-audit]
-    InvokeReviewer --> Audit[Audit: Code Quality, Invariants, Security & Tests]
-    Audit --> HasIssues{Issues Found?}
-    HasIssues -- Yes --> Remediate[Implementer Remediates & Fixes Issues]
+    Start[Implementation Completed] --> InvokeReviewer[Invoke Distinct Code Reviewer Subagent with security-audit & cyclomatic-complexity]
+    InvokeReviewer --> Audit[Audit: Code Quality, Invariants, Security, Complexity & Tests]
+    Audit --> HasIssues{Issues or High CC Found?}
+    HasIssues -- Yes --> Remediate[Implementer Remediates & Decomposes Complex Logic]
     Remediate --> PostPRFinding[Post Review Finding & Fix Summary to PR]
     PostPRFinding --> InvokeReviewer
     HasIssues -- No --> CleanSignOff[Post Final Clean Sign-Off on GitHub PR]
@@ -113,18 +117,18 @@ flowchart TD
 
 ### 4.1 Non-Termination Invariant at All 3 Tiers
 1. **Level 3 Micro-Unit Level**:
-   - Upon completing implementation, the Unit Implementer MUST invoke a distinct `Code Reviewer` subagent paired with `.agents/skills/security-audit`.
-   - The Code Reviewer evaluates code quality, panic safety, borrowing discipline, and security vulnerabilities.
-   - If ANY issues are found, the Unit Implementer MUST fix them and re-invoke the Code Reviewer.
+   - Upon completing implementation, the Unit Implementer MUST invoke a distinct `Code Reviewer` subagent paired with `.agents/skills/security-audit` and `.agents/skills/cyclomatic-complexity`.
+   - The Code Reviewer evaluates code quality, panic safety, borrowing discipline, security vulnerabilities, and verifies Gate G-Complexity ($CC \le 6$ ideal, hard cap $\le 10$, zero $> 15$).
+   - If ANY issues or excessive complexity are found, the Unit Implementer MUST fix/decompose them and re-invoke the Code Reviewer.
    - **MANDATORY INVARIANT**: The Unit Implementer is **NEVER terminated** and cannot consider its task complete until the subagent Code Reviewer issues a clean sign-off (`0 issues found`).
 2. **Level 2 User Story Level**:
-   - After all 5 micro-units are merged into the User Story branch, the Story Leader MUST invoke a distinct `Code Reviewer` subagent paired with `.agents/skills/security-audit`.
+   - After all 5 micro-units are merged into the User Story branch, the Story Leader MUST invoke a distinct `Code Reviewer` subagent paired with `.agents/skills/security-audit` and `.agents/skills/cyclomatic-complexity`.
    - The reviewer audits combined integration integrity, wire mock tests, and cross-unit cohesion.
    - If issues or regressions exist, the Story Leader must remediate them and re-invoke the Code Reviewer.
    - **MANDATORY INVARIANT**: The Story Leader is **NEVER terminated** until the subagent Code Reviewer confirms everything is clean.
 3. **Level 1 Module Level**:
-   - After all User Stories are merged into the Module branch, the Module Leader MUST invoke a distinct `Code Reviewer` subagent paired with `.agents/skills/security-audit`.
-   - The reviewer audits full workspace coherence, crate modularity, feature flag isolation, and end-to-end acceptance.
+   - After all User Stories are merged into the Module branch, the Module Leader MUST invoke a distinct `Code Reviewer` subagent paired with `.agents/skills/security-audit` and `.agents/skills/cyclomatic-complexity`.
+   - The reviewer audits full workspace coherence, crate modularity, feature flag isolation, end-to-end acceptance, and verifies that zero functions with CC > 15 exist across the module.
    - If any regressions or issues arise, the Module Leader resolves them and re-invokes the Code Reviewer.
    - **MANDATORY INVARIANT**: The Module Leader is **NEVER terminated** until the subagent Code Reviewer issues a 100% clean sign-off.
 

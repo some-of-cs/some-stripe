@@ -30,23 +30,23 @@ Welcome to the **`some-stripe`** workspace. All AI agents, contributors, and aut
    - Mandatory test coverage: >=90% line and >=85% branch coverage in affected modules.
    - Microkernel architecture: keep the core runtime lean with zero monolithic codegen.
    - **Federated Gatekeeper Subagents & Skills (Zero Self-Approval)**: All quality gates MUST be evaluated by independent specialized subagents from `.agents/agents/` armed with dedicated skills from `.agents/skills/`:
-     - **Gate G0 & Gate G-Borrow**: `Rust Refactoring Specialist` (Skill: `upgrade-stripe`)
+     - **Gate G0, Gate G-Borrow & Gate G-Complexity**: `Rust Refactoring Specialist` (Skills: `upgrade-stripe`, `cyclomatic-complexity`)
      - **Gate G2 & Gate G-Law**: `Application Security Engineer` (Skills: `security-audit`, `stripe-best-practices`)
      - **Gate G1 & Gate G4**: `API Tester` (Skills: `stripe-docs`, `stripe-best-practices`)
      - **Gate G3**: `microkernel-architect` (Skills: `stripe-docs`, `stripe-best-practices`)
      - **Gate G-Docs**: `Technical Writer` (Skill: `stripe-docs`)
-     - **Gate G-Review**: `Code Reviewer` (Skills: `security-audit`, `stripe-best-practices`) — Council President, formal GitHub sign-off.
+     - **Gate G-Review & Gate G-Complexity**: `Code Reviewer` (Skills: `security-audit`, `cyclomatic-complexity`, `stripe-best-practices`) — Council President, formal GitHub sign-off.
    - Merging via `gh pr merge` is strictly blocked until the independent `Code Reviewer` posts the structured sign-off comment. Self-approval is rejected.
    - **Mandatory 3-Tier Code Review & Self-Correction Loop (Never Terminate Until Clean)**:
-     - Every Unit Implementer upon finishing implementation MUST invoke a distinct `Code Reviewer` subagent armed with `security-audit`. If any issues are flagged, the implementer must fix the issues and re-invoke review until 0 issues remain. **The Unit Implementer is NEVER terminated until the subagent Code Reviewer tells them everything is OK.**
-     - At the User Story level, after all 5 units are merged into the story branch, the Story Leader MUST enter an iterative review and implementation loop by invoking a distinct `Code Reviewer` subagent with `security-audit`. **The Story Leader is NEVER terminated until the Code Reviewer confirms everything is OK.**
-     - **Story-Level Patch Implementer Invariant**: If ANY code review or security issue is flagged at the story level, the Story Leader MUST NOT fix it directly in the story leader context. Instead, the Story Leader MUST invoke a dedicated `patch-implementer` subagent to implement the fixes in a dedicated patch branch and PR (`patch/us-x.y.0-<scope>`). The Story Leader reviews and merges the patch PR into the story branch via `gh pr merge`, and re-invokes the `Code Reviewer` subagent again, repeating this review-and-patch loop continuously until 0 problems remain.
+     - Every Unit Implementer upon finishing implementation MUST invoke a distinct `Code Reviewer` subagent armed with `security-audit` and `cyclomatic-complexity`. If any issues or high complexity are flagged, the implementer must fix/decompose the issues and re-invoke review until 0 issues remain. **The Unit Implementer is NEVER terminated until the subagent Code Reviewer tells them everything is OK.**
+     - At the User Story level, after all 5 units are merged into the story branch, the Story Leader MUST enter an iterative review and implementation loop by invoking a distinct `Code Reviewer` subagent with `security-audit` and `cyclomatic-complexity`. **The Story Leader is NEVER terminated until the Code Reviewer confirms everything is OK.**
+     - **Story-Level Patch Implementer Invariant**: If ANY code review, security, or complexity issue is flagged at the story level, the Story Leader MUST NOT fix it directly in the story leader context. Instead, the Story Leader MUST invoke a dedicated `patch-implementer` subagent to implement the fixes in a dedicated patch branch and PR (`patch/us-x.y.0-<scope>`). The Story Leader reviews and merges the patch PR into the story branch via `gh pr merge`, and re-invokes the `Code Reviewer` subagent again, repeating this review-and-patch loop continuously until 0 problems remain.
      - **Hierarchical Supervision Schedules**: Active supervision schedules are strictly enforced across leadership tiers:
        - **Module Leader**: Maintains a supervision schedule every 3 minutes (`schedule` cron `*/3 * * * *`) to monitor Story Leaders, reconcile PR queues, and manage cascading promotions.
        - **Story Leaders**: Maintain a supervision schedule every 1 minute (`schedule` cron `* * * * *`) to monitor active Unit and Patch Implementers, track progress, and eliminate idling.
-     - At the Module level, after all User Stories are merged into the module branch, the Module Leader MUST enter a full module review and implementation loop with an invoked distinct `Code Reviewer` subagent with `security-audit`. **The Module Leader is NEVER terminated until the Code Reviewer gives a 100% clean sign-off.**
-     - **Module-Level Patch Implementer Invariant**: If ANY code review or security issue is flagged at the module level, the Module Leader MUST NOT fix it directly in the module leader context. Instead, the Module Leader MUST invoke a dedicated `patch-implementer` subagent to implement the fixes in a dedicated patch branch and PR (`patch/module-N-<scope>`). The Module Leader reviews and merges the patch PR into the module branch via `gh pr merge`, and re-invokes the `Code Reviewer` subagent again, repeating this review-and-patch loop continuously until 0 problems remain and 100% clean sign-off is achieved.
-     - **Mandatory GitHub PR In-Conversation Audit Trail**: All implementation reports, security audit reports (`.agents/skills/security-audit`), and code review reports (including every iteration of review findings and corresponding remediation summaries) MUST be documented directly as comments on the GitHub PR conversation (`gh pr comment <PR> --body "..."`). Merging without documented in-conversation evidence of clean sign-off is strictly prohibited.
+     - At the Module level, after all User Stories are merged into the module branch, the Module Leader MUST enter a full module review and implementation loop with an invoked distinct `Code Reviewer` subagent with `security-audit` and `cyclomatic-complexity`. **The Module Leader is NEVER terminated until the Code Reviewer gives a 100% clean sign-off.**
+     - **Module-Level Patch Implementer Invariant**: If ANY code review, security, or complexity issue is flagged at the module level, the Module Leader MUST NOT fix it directly in the module leader context. Instead, the Module Leader MUST invoke a dedicated `patch-implementer` subagent to implement the fixes in a dedicated patch branch and PR (`patch/module-N-<scope>`). The Module Leader reviews and merges the patch PR into the module branch via `gh pr merge`, and re-invokes the `Code Reviewer` subagent again, repeating this review-and-patch loop continuously until 0 problems remain and 100% clean sign-off is achieved.
+     - **Mandatory GitHub PR In-Conversation Audit Trail**: All implementation reports, security audit reports (`.agents/skills/security-audit`), and code review reports (including every iteration of review findings, cyclomatic complexity evaluations, and corresponding remediation summaries) MUST be documented directly as comments on the GitHub PR conversation (`gh pr comment <PR> --body "..."`). Merging without documented in-conversation evidence of clean sign-off is strictly prohibited.
 
 6. **[Global Financial & Statutory Legal Compliance (Gate G-Law)](.agents/rules/legal-compliance.md)**:
    - PCI-DSS 4.0 data security and zero raw PAN handling in application memory.
@@ -136,6 +136,13 @@ Welcome to the **`some-stripe`** workspace. All AI agents, contributors, and aut
    - Always maintain an active Module Leader during module execution.
    - At the main conversation level, upon completion and merge of every module, the Main Supervisor MUST execute whole-codebase verification (`cargo test --workspace`, `cargo test --doc`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all -- --check`) and invoke an independent Gatekeeper Council review across the current module AND all preceding modules (Modules 1..N) to ensure zero regressions, zero debt, and 100% defense-in-depth across the entire repository.
 
+19. **[Cyclomatic Complexity Minimization & Decomposition Standard (Gate G-Complexity)](.agents/rules/cyclomatic-complexity-minimization.md)**:
+   - Drive branching complexity **as low as possible** ($CC = 1 + \sum \text{decision points}$) using [`.agents/skills/cyclomatic-complexity/SKILL.md`](.agents/skills/cyclomatic-complexity/SKILL.md).
+   - **Ideal Target**: $CC \le 6$ for coordinator functions, endpoints, and primary execution paths.
+   - **Acceptable Upper Ceiling**: $CC \le 10$ across all logic paths. Any function with $CC > 10$ requires mandatory decomposition before PR submission.
+   - **Hard Merge Blocker**: Any function with $CC > 15$ strictly blocks PR merge (Gate G-Complexity failure).
+   - Enforce maximum nesting depth $\le 2$ levels, early guard returns, table dispatch/pattern serializers, and named boolean predicate helpers.
+
 ---
 
 ## 2. Multi-Profile Quota Engine & Dynamic Agent Generation
@@ -151,12 +158,12 @@ Profiles are **universal agent generators** tied to independent billing accounts
   - No subagent or process may write outside its designated `.worktrees/<worktree-name>` path.
 - **Specialized Agents & Mandatory Skills Matrix**:
   - Agents are instantiated dynamically with specific tasks, roles, and mandatory skills:
-    - **`Rust Refactoring Specialist`** (Skill: `upgrade-stripe`): Audits Gate G0 (0-warning clippy/fmt) and Gate G-Borrow (zero-clone borrowing discipline).
+    - **`Rust Refactoring Specialist`** (Skills: `upgrade-stripe`, `cyclomatic-complexity`): Audits Gate G0 (0-warning clippy/fmt), Gate G-Borrow (zero-clone borrowing discipline), and Gate G-Complexity ($CC \le 6$ target, hard cap $\le 10$, no functions $> 15$).
     - **`Application Security Engineer`** (Skills: `security-audit`, `stripe-best-practices`): Audits Gate G2 (constant-time crypto, zeroization) and Gate G-Law (PCI-DSS 4.0 zero PAN, ISO 4217, EU statutory consumer rights).
     - **`API Tester`** (Skills: `stripe-docs`, `stripe-best-practices`): Audits Gate G1 (acceptance tests & coverage) and Gate G4 (wire contract validation against `stripe-mock`).
     - **`microkernel-architect`** (Skills: `stripe-docs`, `stripe-best-practices`): Audits Gate G3 (lean microkernel architecture, progressive Cargo features, dual-protocol serializers).
     - **`Technical Writer`** (Skill: `stripe-docs`): Audits Gate G-Docs (`cargo test --doc`, crate README.md).
-    - **`Code Reviewer`** (Skills: `security-audit`, `stripe-best-practices`): Council President for Gate G-Review sign-off.
+    - **`Code Reviewer`** (Skills: `security-audit`, `cyclomatic-complexity`, `stripe-best-practices`): Council President for Gate G-Review and Gate G-Complexity sign-off.
     - **`Quota Sentinel`** (Skills: `antigravity-guide`, `stripe-best-practices`): Dedicated quota monitor that detects 1% remaining capacity, notifies all active agents and the main conversation, and schedules wait timers until quota reset.
     - **`Git Workflow Master`** (Skills: `antigravity-guide`, `stripe-best-practices`): Mandatory manager for all Git and GitHub operations across all tiers—including worktree provisioning/pruning (`git worktree add`/`remove`), branch creation, atomic conventional commits, remote tracking (`git push -u`), GitHub PR creation (`gh pr create` with strict unit naming), and cascading promotion merges (`gh pr merge`).
     - **`DevOps Automator`** (Skills: `antigravity-guide`, `stripe-best-practices`): Cargo target cache (`CARGO_TARGET_DIR`), CI/CD pipeline management.

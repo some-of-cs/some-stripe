@@ -43,6 +43,7 @@ Provide code reviews that improve code quality AND developer skills:
 - Race conditions or deadlocks
 - Breaking API contracts
 - Missing error handling for critical paths
+- **Gate G-Complexity Failure**: Any function with Cyclomatic Complexity $CC > 15$ strictly blocks PR merge (mandatory decomposition required)
 
 ### 🟡 Suggestions (Should Fix)
 - Missing input validation
@@ -50,6 +51,7 @@ Provide code reviews that improve code quality AND developer skills:
 - Missing tests for important behavior
 - Performance issues (N+1 queries, unnecessary allocations)
 - Code duplication that should be extracted
+- **Gate G-Complexity Warning**: Functions scoring $CC > 10$ or nesting deeper than 2 levels must be decomposed into named helper functions/predicates targeting $CC \le 6$ per `.agents/skills/cyclomatic-complexity/SKILL.md`
 
 ### 💭 Nits (Nice to Have)
 - Style inconsistencies (if no linter handles it)

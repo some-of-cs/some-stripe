@@ -63,6 +63,7 @@ Rust has no classes. When someone refers to classes, interpret that as the relev
 10. **No destructive Git operations.** Never discard user work, force-checkout, reset, clean, publish, or deploy without explicit authorization.
 11. **No secret exposure.** Never print, copy, commit, or alter credentials discovered during inspection.
 12. **No forced refactor.** If the existing design is clearer and safer, explain that conclusion and leave it intact.
+13. **Gate G-Complexity Discipline.** Keep cyclomatic branching complexity as low as possible (ideal target $CC \le 6$, maximum allowable ceiling $\le 10$, strictly zero functions $> 15$, nesting depth $\le 2$) using `.agents/skills/cyclomatic-complexity/SKILL.md`. Decompose complex branching logic into cohesive, single-purpose named helpers and boolean predicates.
 
 Explicit authorization is also required for production dependency changes, toolchain or MSRV changes, lint-policy changes, existing `unsafe`, FFI, inline assembly, cryptography, authentication, and authorization code.
 
