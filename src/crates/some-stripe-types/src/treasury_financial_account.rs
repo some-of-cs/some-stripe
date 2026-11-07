@@ -1138,7 +1138,7 @@ mod tests {
     #[test]
     fn test_fdic_insurance_balance_calculations() {
         let mut cash = HashMap::new();
-        cash.insert("usd".to_string(), 350_000_00); // $350k
+        cash.insert("usd".to_string(), 35_000_000); // $350k
 
         let balance = FinancialAccountBalance {
             cash,
@@ -1146,19 +1146,19 @@ mod tests {
             outbound_pending: HashMap::new(),
         };
 
-        assert_eq!(balance.cash_amount("usd"), 350_000_00);
-        assert_eq!(balance.fdic_insured_balance("usd"), 250_000_00);
-        assert_eq!(balance.fdic_excess_balance("usd"), 100_000_00);
+        assert_eq!(balance.cash_amount("usd"), 35_000_000);
+        assert_eq!(balance.fdic_insured_balance("usd"), 25_000_000);
+        assert_eq!(balance.fdic_excess_balance("usd"), 10_000_000);
         assert!(!balance.is_within_fdic_limit("usd"));
 
         let mut within_cash = HashMap::new();
-        within_cash.insert("usd".to_string(), 200_000_00); // $200k
+        within_cash.insert("usd".to_string(), 20_000_000); // $200k
         let within_bal = FinancialAccountBalance {
             cash: within_cash,
             inbound_pending: HashMap::new(),
             outbound_pending: HashMap::new(),
         };
-        assert_eq!(within_bal.fdic_insured_balance("usd"), 200_000_00);
+        assert_eq!(within_bal.fdic_insured_balance("usd"), 20_000_000);
         assert_eq!(within_bal.fdic_excess_balance("usd"), 0);
         assert!(within_bal.is_within_fdic_limit("usd"));
     }

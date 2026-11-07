@@ -124,6 +124,8 @@ pub mod issuing_transaction;
 pub use issuing_transaction::*;
 pub mod treasury_financial_account;
 pub use treasury_financial_account::*;
+pub mod treasury_transfer;
+pub use treasury_transfer::*;
 
 /// Strongly typed Stripe Connect Account ID (`acct_...`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -816,6 +818,18 @@ pub enum EventObject {
     /// Stripe Treasury FinancialAccount payload (`object = "treasury.financial_account"`).
     #[serde(rename = "treasury.financial_account")]
     TreasuryFinancialAccount(FinancialAccount),
+
+    /// Stripe Treasury OutboundTransfer payload (`object = "treasury.outbound_transfer"`).
+    #[serde(rename = "treasury.outbound_transfer")]
+    TreasuryOutboundTransfer(OutboundTransfer),
+
+    /// Stripe Treasury OutboundPayment payload (`object = "treasury.outbound_payment"`).
+    #[serde(rename = "treasury.outbound_payment")]
+    TreasuryOutboundPayment(OutboundPayment),
+
+    /// Stripe Treasury ReceivedCredit payload (`object = "treasury.received_credit"`).
+    #[serde(rename = "treasury.received_credit")]
+    TreasuryReceivedCredit(ReceivedCredit),
 
     /// Unrecognized, custom, or unsupported event object types.
     #[serde(other)]
