@@ -1,16 +1,117 @@
 {
   "module": "module-5-customers-and-billing",
-  "status": "ready",
-  "current_state": "spawning[🤖 Subagent Creating]",
-  "active_stories": [
+  "status": "completed",
+  "current_state": "done[✅ Done / Merged to main]",
+  "active_stories": [],
+  "merged_stories": [
     "US-5.1.0",
     "US-5.2.0"
   ],
-  "merged_stories": [],
-  "module_pr": null,
-  "user_story_prs": [],
-  "micro_unit_prs": [],
+  "module_pr": {
+    "pr_number": 84,
+    "title": "feat(module-5): customers, subscriptions, invoices, and billing portal",
+    "branch": "feat/module-5-customers-and-billing",
+    "target_branch": "main",
+    "status": "merged",
+    "merge_commit": "1139295bb758f34af183cdda116f79c90fd53588",
+    "merged_at": "2026-11-07T01:00:55Z"
+  },
+  "user_story_prs": [
+    {
+      "pr_number": 83,
+      "title": "feat(us-5.1.0): customer vaulting, recurring subscriptions & multi-phase schedules (Units 1..5 Promotion)",
+      "branch": "feat/us-5.1.0-customer-vaulting-and-subscriptions",
+      "target_branch": "feat/module-5-customers-and-billing",
+      "status": "merged"
+    },
+    {
+      "pr_number": 82,
+      "title": "feat(us-5.2.0): invoices, credit notes, and billing portal (Units 1..5 Promotion)",
+      "branch": "feat/us-5.2.0-invoices-credit-notes-and-portal",
+      "target_branch": "feat/module-5-customers-and-billing",
+      "status": "merged"
+    }
+  ],
+  "micro_unit_prs": [
+    {
+      "pr_number": 71,
+      "title": "feat(us-5.1.0/unit-1): customer, subscription, and schedule domain entities",
+      "branch": "feat/us-5.1.0/unit-1-customer-subscription-entities",
+      "target_branch": "feat/us-5.1.0-customer-vaulting-and-subscriptions",
+      "status": "merged"
+    },
+    {
+      "pr_number": 72,
+      "title": "feat(us-5.2.0/unit-1): draft and finalized invoices core lifecycle",
+      "branch": "feat/us-5.2.0/unit-1-invoice-credit-note-quote-entities",
+      "target_branch": "feat/us-5.2.0-invoices-credit-notes-and-portal",
+      "status": "merged"
+    },
+    {
+      "pr_number": 73,
+      "title": "feat(us-5.1.0/unit-2): core recurring subscriptions lifecycle and state machine",
+      "branch": "feat/us-5.1.0/unit-2-multi-item-subscription-params-serde",
+      "target_branch": "feat/us-5.1.0-customer-vaulting-and-subscriptions",
+      "status": "merged"
+    },
+    {
+      "pr_number": 75,
+      "title": "feat(us-5.2.0/unit-2): invoice line items, adjustments, and upcoming previews",
+      "branch": "feat/us-5.2.0/unit-2-invoice-credit-note-params-serde",
+      "target_branch": "feat/us-5.2.0-invoices-credit-notes-and-portal",
+      "status": "merged"
+    },
+    {
+      "pr_number": 76,
+      "title": "feat(us-5.1.0/unit-1): customer vaulting, cash balance, and tax ids",
+      "branch": "feat/us-5.1.0/unit-1-customer-subscription-entities",
+      "target_branch": "feat/us-5.1.0-customer-vaulting-and-subscriptions",
+      "status": "merged"
+    },
+    {
+      "pr_number": 77,
+      "title": "feat(us-5.1.0/unit-3): multi-item subscriptions and indexed bracket serde",
+      "branch": "feat/us-5.1.0/unit-3-customers-subscriptions-resources",
+      "target_branch": "feat/us-5.1.0-customer-vaulting-and-subscriptions",
+      "status": "merged"
+    },
+    {
+      "pr_number": 78,
+      "title": "feat(us-5.1.0/unit-4): subscription schedules and multi-phase transitions",
+      "branch": "feat/us-5.1.0/unit-4-proration-trials-mock-test",
+      "target_branch": "feat/us-5.1.0-customer-vaulting-and-subscriptions",
+      "status": "merged"
+    },
+    {
+      "pr_number": 74,
+      "title": "feat(us-5.1.0/unit-5): in-flight plan prorations, trials, and pause collection",
+      "branch": "feat/us-5.1.0/unit-5-borrow-audit-doctests-gates",
+      "target_branch": "feat/us-5.1.0-customer-vaulting-and-subscriptions",
+      "status": "merged"
+    },
+    {
+      "pr_number": 79,
+      "title": "feat(us-5.2.0/unit-3): credit notes lifecycle and invoice balance deductions",
+      "branch": "feat/us-5.2.0/unit-3-invoices-credit-notes-portal-resources",
+      "target_branch": "feat/us-5.2.0-invoices-credit-notes-and-portal",
+      "status": "merged"
+    },
+    {
+      "pr_number": 80,
+      "title": "feat(us-5.2.0/unit-4): quotes lifecycle and zero-copy binary pdf streaming",
+      "branch": "feat/us-5.2.0/unit-4-invoice-portal-mock-wire-test",
+      "target_branch": "feat/us-5.2.0-invoices-credit-notes-and-portal",
+      "status": "merged"
+    },
+    {
+      "pr_number": 81,
+      "title": "feat(us-5.2.0/unit-5): customer billing portal configuration and self-serve sessions",
+      "branch": "feat/us-5.2.0/unit-5-borrow-audit-doctests-gates",
+      "target_branch": "feat/us-5.2.0-invoices-credit-notes-and-portal",
+      "status": "merged"
+    }
+  ],
   "profile": "agent-c",
-  "timestamp": "2026-11-06T14:23:00Z",
-  "details": "Module 5 divide-and-conquer implementation plan initialized. Ready for worktree provisioning and subagent spawning across 3 profiles."
+  "timestamp": "2026-11-07T01:02:00Z",
+  "details": "Module 5: Customers & Billing is 100% complete and fully merged into main via PR #84 (commit 1139295bb758f34af183cdda116f79c90fd53588). All 10 micro-units, 2 user stories, and master module promotion passed all quality gates (G0, G-Borrow, G2, G-Law, G1, G4, G-Docs, G-Review) with 100% clean Council sign-offs."
 }
