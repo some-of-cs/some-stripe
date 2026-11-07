@@ -101,6 +101,8 @@ pub mod account_link;
 pub use account_link::*;
 pub mod account_session;
 pub use account_session::*;
+pub mod person;
+pub use person::*;
 
 /// Strongly typed Stripe Connect Account ID (`acct_...`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
