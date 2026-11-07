@@ -4,7 +4,7 @@
 //! and stream PDF documents for Quotes, adhering to RFC 4122 UUID v4 idempotency
 //! and zero-copy binary streaming (`bytes::Bytes`).
 
-use some_stripe_core::patterns::Paginator;
+use some_stripe_core::patterns::{Paginator, encode_form_pairs, to_form_params};
 use some_stripe_core::{StripeClient, StripeError, validate_and_encode_id};
 use some_stripe_types::{
     AcceptQuoteParams, CancelQuoteParams, CreateQuoteParams, FinalizeQuoteParams, ListQuotesParams,
@@ -36,49 +36,7 @@ impl<'a> QuotesResource<'a> {
     /// Creates a new quote in draft mode (`POST /v1/quotes`).
     pub async fn create(&self, params: &CreateQuoteParams) -> Result<Quote, StripeError> {
         let url = format!("{}/v1/quotes", self.client.config.api_base);
-        let mut form_data = Vec::new();
-
-        if let Some(ref c) = params.customer {
-            form_data.push(("customer", c.as_str()));
-        }
-        if let Some(ref d) = params.description {
-            form_data.push(("description", d.as_str()));
-        }
-        let exp_str = params.expires_at.map(|e| e.to_string());
-        if let Some(ref e) = exp_str {
-            form_data.push(("expires_at", e.as_str()));
-        }
-        if let Some(ref f) = params.footer {
-            form_data.push(("footer", f.as_str()));
-        }
-        if let Some(ref h) = params.header {
-            form_data.push(("header", h.as_str()));
-        }
-
-        let mut metadata_entries = Vec::new();
-        if let Some(ref meta) = params.metadata {
-            for (k, v) in meta {
-                metadata_entries.push((format!("metadata[{k}]"), v.as_str()));
-            }
-        }
-        for (k, v) in &metadata_entries {
-            form_data.push((k.as_str(), *v));
-        }
-
-        let mut line_entries = Vec::new();
-        if let Some(ref lines) = params.line_items {
-            for (i, line) in lines.iter().enumerate() {
-                if let Some(ref p) = line.price {
-                    line_entries.push((format!("line_items[{i}][price]"), p.clone()));
-                }
-                if let Some(qty) = line.quantity {
-                    line_entries.push((format!("line_items[{i}][quantity]"), qty.to_string()));
-                }
-            }
-        }
-        for (k, v) in &line_entries {
-            form_data.push((k.as_str(), v.as_str()));
-        }
+        let form_data = to_form_params(params)?;
 
         let idempotency_key = super::resolve_idempotency_key(params.idempotency_key.as_deref());
 
@@ -113,46 +71,7 @@ impl<'a> QuotesResource<'a> {
     ) -> Result<Quote, StripeError> {
         let safe_id = validate_and_encode_id(quote_id)?;
         let url = format!("{}/v1/quotes/{}", self.client.config.api_base, safe_id);
-        let mut form_data = Vec::new();
-
-        if let Some(ref d) = params.description {
-            form_data.push(("description", d.as_str()));
-        }
-        let exp_str = params.expires_at.map(|e| e.to_string());
-        if let Some(ref e) = exp_str {
-            form_data.push(("expires_at", e.as_str()));
-        }
-        if let Some(ref f) = params.footer {
-            form_data.push(("footer", f.as_str()));
-        }
-        if let Some(ref h) = params.header {
-            form_data.push(("header", h.as_str()));
-        }
-
-        let mut metadata_entries = Vec::new();
-        if let Some(ref meta) = params.metadata {
-            for (k, v) in meta {
-                metadata_entries.push((format!("metadata[{k}]"), v.as_str()));
-            }
-        }
-        for (k, v) in &metadata_entries {
-            form_data.push((k.as_str(), *v));
-        }
-
-        let mut line_entries = Vec::new();
-        if let Some(ref lines) = params.line_items {
-            for (i, line) in lines.iter().enumerate() {
-                if let Some(ref p) = line.price {
-                    line_entries.push((format!("line_items[{i}][price]"), p.clone()));
-                }
-                if let Some(qty) = line.quantity {
-                    line_entries.push((format!("line_items[{i}][quantity]"), qty.to_string()));
-                }
-            }
-        }
-        for (k, v) in &line_entries {
-            form_data.push((k.as_str(), v.as_str()));
-        }
+        let form_data = to_form_params(params)?;
 
         let idempotency_key = super::resolve_idempotency_key(params.idempotency_key.as_deref());
 
@@ -270,36 +189,18 @@ impl<'a> QuotesResource<'a> {
 
     /// Lists quotes (`GET /v1/quotes`).
     pub async fn list(&self, params: Option<&ListQuotesParams>) -> Result<QuoteList, StripeError> {
-        let mut url = format!("{}/v1/quotes", self.client.config.api_base);
-        let mut query_params = Vec::new();
-        let limit_str = params.and_then(|p| p.limit).map(|l| l.to_string());
-
-        if let Some(p) = params {
-            if let Some(ref c) = p.customer {
-                query_params.push(("customer", c.as_str()));
+        let url = match params {
+            Some(p) => {
+                let query_data = to_form_params(p)?;
+                if query_data.is_empty() {
+                    format!("{}/v1/quotes", self.client.config.api_base)
+                } else {
+                    let query_str = encode_form_pairs(&query_data);
+                    format!("{}/v1/quotes?{query_str}", self.client.config.api_base)
+                }
             }
-            if let Some(s) = p.status {
-                query_params.push(("status", s.as_str()));
-            }
-            if let Some(ref l) = limit_str {
-                query_params.push(("limit", l.as_str()));
-            }
-            if let Some(ref a) = p.starting_after {
-                query_params.push(("starting_after", a.as_str()));
-            }
-            if let Some(ref b) = p.ending_before {
-                query_params.push(("ending_before", b.as_str()));
-            }
-        }
-
-        if !query_params.is_empty() {
-            let encoded: Vec<String> = query_params
-                .iter()
-                .map(|(k, v)| format!("{k}={v}"))
-                .collect();
-            url.push('?');
-            url.push_str(&encoded.join("&"));
-        }
+            None => format!("{}/v1/quotes", self.client.config.api_base),
+        };
 
         let req = self.client.http.get(&url);
         let val = self.client.execute(req).await?;

@@ -214,6 +214,79 @@ impl fmt::Display for CurrencyParseError {
 
 impl std::error::Error for CurrencyParseError {}
 
+fn parse_ascii_digits_u64(s: &str) -> Result<u64, CurrencyParseError> {
+    if s.is_empty() || !s.chars().all(|c| c.is_ascii_digit()) {
+        return Err(CurrencyParseError::InvalidFormat(format!(
+            "invalid character in digits: '{s}'"
+        )));
+    }
+    s.parse::<u64>()
+        .map_err(|e| CurrencyParseError::InvalidFormat(e.to_string()))
+}
+
+fn apply_sign_and_bounds(minor_u64: u64, is_negative: bool) -> Result<i64, CurrencyParseError> {
+    if is_negative {
+        if minor_u64 > (i64::MAX as u64) + 1 {
+            return Err(CurrencyParseError::Overflow);
+        }
+        if minor_u64 == (i64::MAX as u64) + 1 {
+            Ok(i64::MIN)
+        } else {
+            Ok(-(minor_u64 as i64))
+        }
+    } else {
+        if minor_u64 > i64::MAX as u64 {
+            return Err(CurrencyParseError::Overflow);
+        }
+        Ok(minor_u64 as i64)
+    }
+}
+
+fn parse_decimal_parts(
+    int_str: &str,
+    frac_str: &str,
+    decimals: u32,
+    factor: u64,
+) -> Result<u64, CurrencyParseError> {
+    if decimals == 0 {
+        return Err(CurrencyParseError::TooManyDecimalPlaces {
+            found: frac_str.len() as u32,
+            max_allowed: 0,
+        });
+    }
+
+    if frac_str.len() as u32 > decimals {
+        return Err(CurrencyParseError::TooManyDecimalPlaces {
+            found: frac_str.len() as u32,
+            max_allowed: decimals,
+        });
+    }
+
+    let int_part = if int_str.is_empty() {
+        0u64
+    } else {
+        parse_ascii_digits_u64(int_str)?
+    };
+
+    let mut padded_frac = frac_str.to_string();
+    while (padded_frac.len() as u32) < decimals {
+        padded_frac.push('0');
+    }
+
+    let frac_part = if padded_frac.is_empty() {
+        0u64
+    } else {
+        parse_ascii_digits_u64(&padded_frac)?
+    };
+
+    let major_minor = int_part
+        .checked_mul(factor)
+        .ok_or(CurrencyParseError::Overflow)?;
+    major_minor
+        .checked_add(frac_part)
+        .ok_or(CurrencyParseError::Overflow)
+}
+
 /// Parses a human-readable major currency decimal string (e.g. `"10.50"`, `"500"`, `"5.250"`)
 /// into integer minor units strictly using integer arithmetic (zero floating-point operations).
 ///
@@ -270,114 +343,29 @@ pub fn parse_to_minor_units(major_str: &str, currency: &str) -> Result<i64, Curr
     }
 
     let decimals = decimal_places(currency);
+    let factor = match decimals {
+        0 => 1u64,
+        3 => 1000u64,
+        _ => 100u64,
+    };
+
     let parts: Vec<&str> = rest.split('.').collect();
-
-    match parts.len() {
+    let total_minor = match parts.len() {
         1 => {
-            // Whole integer without decimal point
-            let int_part = parts[0]
-                .parse::<u64>()
-                .map_err(|e| CurrencyParseError::InvalidFormat(e.to_string()))?;
-
-            let factor = match decimals {
-                0 => 1u64,
-                3 => 1000u64,
-                _ => 100u64,
-            };
-
-            let minor_u64 = int_part
+            let int_part = parse_ascii_digits_u64(parts[0])?;
+            int_part
                 .checked_mul(factor)
-                .ok_or(CurrencyParseError::Overflow)?;
-
-            if is_negative {
-                if minor_u64 > (i64::MAX as u64) + 1 {
-                    return Err(CurrencyParseError::Overflow);
-                }
-                if minor_u64 == (i64::MAX as u64) + 1 {
-                    Ok(i64::MIN)
-                } else {
-                    Ok(-(minor_u64 as i64))
-                }
-            } else {
-                if minor_u64 > i64::MAX as u64 {
-                    return Err(CurrencyParseError::Overflow);
-                }
-                Ok(minor_u64 as i64)
-            }
+                .ok_or(CurrencyParseError::Overflow)?
         }
-        2 => {
-            // Decimal point present
-            if decimals == 0 {
-                return Err(CurrencyParseError::TooManyDecimalPlaces {
-                    found: parts[1].len() as u32,
-                    max_allowed: 0,
-                });
-            }
-
-            let int_str = parts[0];
-            let frac_str = parts[1];
-
-            if frac_str.len() as u32 > decimals {
-                return Err(CurrencyParseError::TooManyDecimalPlaces {
-                    found: frac_str.len() as u32,
-                    max_allowed: decimals,
-                });
-            }
-
-            let int_part = if int_str.is_empty() {
-                0u64
-            } else {
-                int_str
-                    .parse::<u64>()
-                    .map_err(|e| CurrencyParseError::InvalidFormat(e.to_string()))?
-            };
-
-            // Parse fractional part with zero-padding to target decimal places
-            let mut padded_frac = frac_str.to_string();
-            while (padded_frac.len() as u32) < decimals {
-                padded_frac.push('0');
-            }
-
-            let frac_part = if padded_frac.is_empty() {
-                0u64
-            } else {
-                padded_frac
-                    .parse::<u64>()
-                    .map_err(|e| CurrencyParseError::InvalidFormat(e.to_string()))?
-            };
-
-            let factor = match decimals {
-                3 => 1000u64,
-                _ => 100u64,
-            };
-
-            let major_minor = int_part
-                .checked_mul(factor)
-                .ok_or(CurrencyParseError::Overflow)?;
-            let total_minor = major_minor
-                .checked_add(frac_part)
-                .ok_or(CurrencyParseError::Overflow)?;
-
-            if is_negative {
-                if total_minor > (i64::MAX as u64) + 1 {
-                    return Err(CurrencyParseError::Overflow);
-                }
-                if total_minor == (i64::MAX as u64) + 1 {
-                    Ok(i64::MIN)
-                } else {
-                    Ok(-(total_minor as i64))
-                }
-            } else {
-                if total_minor > i64::MAX as u64 {
-                    return Err(CurrencyParseError::Overflow);
-                }
-                Ok(total_minor as i64)
-            }
+        2 => parse_decimal_parts(parts[0], parts[1], decimals, factor)?,
+        _ => {
+            return Err(CurrencyParseError::InvalidFormat(
+                "multiple decimal points encountered".into(),
+            ));
         }
-        _ => Err(CurrencyParseError::InvalidFormat(
-            "multiple decimal points encountered".into(),
-        )),
-    }
+    };
+
+    apply_sign_and_bounds(total_minor, is_negative)
 }
 
 #[cfg(test)]
@@ -478,6 +466,22 @@ mod tests {
                 found: 1,
                 max_allowed: 0
             })
+        ));
+        assert!(matches!(
+            parse_to_minor_units("-+5", "usd"),
+            Err(CurrencyParseError::InvalidFormat(_))
+        ));
+        assert!(matches!(
+            parse_to_minor_units("+-5", "usd"),
+            Err(CurrencyParseError::InvalidFormat(_))
+        ));
+        assert!(matches!(
+            parse_to_minor_units("--5", "usd"),
+            Err(CurrencyParseError::InvalidFormat(_))
+        ));
+        assert!(matches!(
+            parse_to_minor_units("++5", "usd"),
+            Err(CurrencyParseError::InvalidFormat(_))
         ));
     }
 }

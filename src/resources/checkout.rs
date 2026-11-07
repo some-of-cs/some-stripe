@@ -324,54 +324,8 @@ impl<'a> SessionsResource<'a> {
     }
 }
 
-/// Validates and percent-encodes an entity ID for safe inclusion in URL paths.
-///
-/// Ensures the ID is non-empty, contains no path traversal sequences (`/`, `\`, `..`),
-/// query/fragment injection (`?`, `#`), control characters, or non-ASCII characters.
-///
-/// # Errors
-/// Returns [`StripeError::InvalidRequest`] if the ID is empty, contains whitespace only, or has illegal characters.
-///
-/// # Example
-/// ```
-/// use some_stripe::validate_and_encode_id;
-///
-/// // Valid checkout session ID passes and is safely returned
-/// assert_eq!(
-///     validate_and_encode_id("cs_test_a1b2c3").unwrap(),
-///     "cs_test_a1b2c3"
-/// );
-///
-/// // Path traversal sequences are strictly rejected
-/// assert!(validate_and_encode_id("../evil/path").is_err());
-/// assert!(validate_and_encode_id("cs/123").is_err());
-/// assert!(validate_and_encode_id("").is_err());
-/// assert!(validate_and_encode_id("   ").is_err());
-/// ```
-pub fn validate_and_encode_id(id: &str) -> Result<String, StripeError> {
-    let trimmed = id.trim();
-    if trimmed.is_empty() {
-        return Err(StripeError::InvalidRequest(
-            "Session ID cannot be empty or whitespace".to_string(),
-        ));
-    }
-
-    if trimmed.contains('/')
-        || trimmed.contains('\\')
-        || trimmed.contains("..")
-        || trimmed.contains('?')
-        || trimmed.contains('#')
-        || trimmed.chars().any(|c| c.is_ascii_control())
-    {
-        return Err(StripeError::InvalidRequest(format!(
-            "Session ID contains invalid path characters or traversal sequence: '{id}'"
-        )));
-    }
-
-    Ok(some_stripe_core::patterns::serializer::percent_encode(
-        trimmed,
-    ))
-}
+#[doc(inline)]
+pub use some_stripe_core::patterns::crud::validate_and_encode_id;
 
 /// Checks if a Checkout Session has succeeded and is ready for order fulfillment.
 ///
@@ -440,18 +394,7 @@ pub fn is_fulfillment_ready(session: &CheckoutSession) -> bool {
 /// assert!(validate_redirect_url("https://user:pass@myshop.com/", &allowed).is_err());
 /// ```
 pub fn validate_redirect_url(url: &str, allowed_domains: &[&str]) -> Result<(), RedirectError> {
-    let parsed = reqwest::Url::parse(url).map_err(|e| {
-        if e.to_string().to_ascii_lowercase().contains("empty host") {
-            RedirectError::MissingHost {
-                url: url.to_string(),
-            }
-        } else {
-            RedirectError::InvalidUrl {
-                url: url.to_string(),
-                reason: e.to_string(),
-            }
-        }
-    })?;
+    let parsed = parse_redirect_url(url)?;
 
     let scheme = parsed.scheme();
     if scheme != "https" && scheme != "http" {
@@ -485,34 +428,56 @@ pub fn validate_redirect_url(url: &str, allowed_domains: &[&str]) -> Result<(), 
         });
     }
 
-    if !allowed_domains.is_empty() {
-        let is_allowed = is_localhost
-            || allowed_domains.iter().any(|allowed| {
-                let clean = allowed
-                    .trim()
-                    .strip_prefix("*.")
-                    .or_else(|| allowed.trim().strip_prefix('.'))
-                    .unwrap_or_else(|| allowed.trim());
-
-                if clean.is_empty() {
-                    return false;
-                }
-
-                host.eq_ignore_ascii_case(clean)
-                    || host
-                        .to_ascii_lowercase()
-                        .ends_with(&format!(".{}", clean.to_ascii_lowercase()))
-            });
-
-        if !is_allowed {
-            return Err(RedirectError::DisallowedDomain {
-                host: host.to_string(),
-                allowed_domains: allowed_domains.iter().map(|s| s.to_string()).collect(),
-            });
-        }
+    if !is_domain_allowed(host, is_localhost, allowed_domains) {
+        return Err(RedirectError::DisallowedDomain {
+            host: host.to_string(),
+            allowed_domains: allowed_domains.iter().map(|s| s.to_string()).collect(),
+        });
     }
 
     Ok(())
+}
+
+fn parse_redirect_url(url: &str) -> Result<reqwest::Url, RedirectError> {
+    reqwest::Url::parse(url).map_err(|e| {
+        if e.to_string().to_ascii_lowercase().contains("empty host") {
+            RedirectError::MissingHost {
+                url: url.to_string(),
+            }
+        } else {
+            RedirectError::InvalidUrl {
+                url: url.to_string(),
+                reason: e.to_string(),
+            }
+        }
+    })
+}
+
+fn matches_domain_pattern(host: &str, pattern: &str) -> bool {
+    let clean = pattern
+        .trim()
+        .strip_prefix("*.")
+        .or_else(|| pattern.trim().strip_prefix('.'))
+        .unwrap_or_else(|| pattern.trim());
+
+    if clean.is_empty() {
+        return false;
+    }
+
+    host.eq_ignore_ascii_case(clean)
+        || host
+            .to_ascii_lowercase()
+            .ends_with(&format!(".{}", clean.to_ascii_lowercase()))
+}
+
+fn is_domain_allowed(host: &str, is_localhost: bool, allowed_domains: &[&str]) -> bool {
+    if allowed_domains.is_empty() {
+        return true;
+    }
+    is_localhost
+        || allowed_domains
+            .iter()
+            .any(|allowed| matches_domain_pattern(host, allowed))
 }
 
 fn is_localhost_host(host: &str) -> bool {

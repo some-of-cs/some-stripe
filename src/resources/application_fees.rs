@@ -1,6 +1,6 @@
 //! Stripe Application Fees resource implementations.
 
-use some_stripe_core::patterns::serializer::to_form_params;
+use some_stripe_core::patterns::{encode_form_pairs, to_form_params};
 use some_stripe_core::{StripeClient, StripeError, validate_and_encode_id};
 use some_stripe_types::{
     ApplicationFee, ApplicationFeeList, CreateFeeRefundParams, FeeRefund, FeeRefundList,
@@ -38,33 +38,21 @@ impl<'a> ApplicationFeesResource<'a> {
         &self,
         params: Option<&ListApplicationFeesParams>,
     ) -> Result<ApplicationFeeList, StripeError> {
-        let mut url = format!("{}/v1/application_fees", self.client.config.api_base);
-        let mut query_params = Vec::new();
-        let limit_str = params.and_then(|p| p.limit).map(|l| l.to_string());
-
-        if let Some(p) = params {
-            if let Some(ref ch) = p.charge {
-                query_params.push(("charge", ch.as_str()));
+        let url = match params {
+            Some(p) => {
+                let query_data = to_form_params(p)?;
+                if query_data.is_empty() {
+                    format!("{}/v1/application_fees", self.client.config.api_base)
+                } else {
+                    let query_str = encode_form_pairs(&query_data);
+                    format!(
+                        "{}/v1/application_fees?{query_str}",
+                        self.client.config.api_base
+                    )
+                }
             }
-            if let Some(ref l) = limit_str {
-                query_params.push(("limit", l.as_str()));
-            }
-            if let Some(ref a) = p.starting_after {
-                query_params.push(("starting_after", a.as_str()));
-            }
-            if let Some(ref b) = p.ending_before {
-                query_params.push(("ending_before", b.as_str()));
-            }
-        }
-
-        if !query_params.is_empty() {
-            let encoded: Vec<String> = query_params
-                .iter()
-                .map(|(k, v)| format!("{k}={v}"))
-                .collect();
-            url.push('?');
-            url.push_str(&encoded.join("&"));
-        }
+            None => format!("{}/v1/application_fees", self.client.config.api_base),
+        };
 
         let req = self.client.http.get(&url);
         let val = self.client.execute(req).await?;
@@ -125,33 +113,27 @@ impl<'a> ApplicationFeesResource<'a> {
         params: Option<&ListFeeRefundsParams>,
     ) -> Result<FeeRefundList, StripeError> {
         let encoded_fee = validate_and_encode_id(fee_id)?;
-        let mut url = format!(
-            "{}/v1/application_fees/{encoded_fee}/refunds",
-            self.client.config.api_base
-        );
-        let mut query_params = Vec::new();
-        let limit_str = params.and_then(|p| p.limit).map(|l| l.to_string());
-
-        if let Some(p) = params {
-            if let Some(ref l) = limit_str {
-                query_params.push(("limit", l.as_str()));
+        let url = match params {
+            Some(p) => {
+                let query_data = to_form_params(p)?;
+                if query_data.is_empty() {
+                    format!(
+                        "{}/v1/application_fees/{encoded_fee}/refunds",
+                        self.client.config.api_base
+                    )
+                } else {
+                    let query_str = encode_form_pairs(&query_data);
+                    format!(
+                        "{}/v1/application_fees/{encoded_fee}/refunds?{query_str}",
+                        self.client.config.api_base
+                    )
+                }
             }
-            if let Some(ref a) = p.starting_after {
-                query_params.push(("starting_after", a.as_str()));
-            }
-            if let Some(ref b) = p.ending_before {
-                query_params.push(("ending_before", b.as_str()));
-            }
-        }
-
-        if !query_params.is_empty() {
-            let encoded: Vec<String> = query_params
-                .iter()
-                .map(|(k, v)| format!("{k}={v}"))
-                .collect();
-            url.push('?');
-            url.push_str(&encoded.join("&"));
-        }
+            None => format!(
+                "{}/v1/application_fees/{encoded_fee}/refunds",
+                self.client.config.api_base
+            ),
+        };
 
         let req = self.client.http.get(&url);
         let val = self.client.execute(req).await?;

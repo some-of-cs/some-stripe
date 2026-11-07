@@ -682,6 +682,85 @@ impl Person {
     ///
     /// assert!(person.validate_fincen_cdd_compliance().is_ok());
     /// ```
+    fn validate_legal_name(
+        &self,
+        first_name_reason: &'static str,
+        last_name_reason: &'static str,
+    ) -> Result<(), KycComplianceError> {
+        if self.first_name.as_deref().unwrap_or("").trim().is_empty() {
+            return Err(KycComplianceError::MissingField {
+                field: "first_name",
+                reason: first_name_reason,
+            });
+        }
+        if self.last_name.as_deref().unwrap_or("").trim().is_empty() {
+            return Err(KycComplianceError::MissingField {
+                field: "last_name",
+                reason: last_name_reason,
+            });
+        }
+        Ok(())
+    }
+
+    fn validate_dob_present(
+        &self,
+        invalid_reason: &'static str,
+        missing_reason: &'static str,
+    ) -> Result<(), KycComplianceError> {
+        match &self.dob {
+            Some(dob) if dob.is_valid() => Ok(()),
+            Some(_) => Err(KycComplianceError::InvalidDateOfBirth {
+                reason: invalid_reason,
+            }),
+            None => Err(KycComplianceError::MissingField {
+                field: "dob",
+                reason: missing_reason,
+            }),
+        }
+    }
+
+    fn validate_address_fields(
+        &self,
+        missing_address_reason: &'static str,
+        missing_country_reason: &'static str,
+        missing_line1_reason: Option<&'static str>,
+    ) -> Result<(), KycComplianceError> {
+        match &self.address {
+            Some(addr) => {
+                if addr.country.as_deref().unwrap_or("").trim().is_empty() {
+                    return Err(KycComplianceError::MissingField {
+                        field: "address.country",
+                        reason: missing_country_reason,
+                    });
+                }
+                if let Some(line1_reason) = missing_line1_reason
+                    && addr.line1.as_deref().unwrap_or("").trim().is_empty()
+                {
+                    return Err(KycComplianceError::MissingField {
+                        field: "address.line1",
+                        reason: line1_reason,
+                    });
+                }
+                Ok(())
+            }
+            None => Err(KycComplianceError::MissingField {
+                field: "address",
+                reason: missing_address_reason,
+            }),
+        }
+    }
+
+    fn has_government_id(&self, allow_ssn_last_4: bool) -> bool {
+        self.id_number_provided.unwrap_or(false)
+            || self.id_number.is_some()
+            || (allow_ssn_last_4
+                && (self.ssn_last_4_provided.unwrap_or(false) || self.ssn_last_4.is_some()))
+            || self
+                .verification
+                .as_ref()
+                .is_some_and(|v| v.document.is_some())
+    }
+
     pub fn validate_fincen_cdd_compliance(&self) -> Result<(), KycComplianceError> {
         let is_owner = self
             .relationship
@@ -707,71 +786,23 @@ impl Person {
             });
         }
 
-        // 1. Legal Name
-        if self.first_name.as_deref().unwrap_or("").trim().is_empty() {
-            return Err(KycComplianceError::MissingField {
-                field: "first_name",
-                reason: "FinCEN CDD requires full legal first name for beneficial owners and control persons",
-            });
-        }
-        if self.last_name.as_deref().unwrap_or("").trim().is_empty() {
-            return Err(KycComplianceError::MissingField {
-                field: "last_name",
-                reason: "FinCEN CDD requires full legal last name for beneficial owners and control persons",
-            });
-        }
+        self.validate_legal_name(
+            "FinCEN CDD requires full legal first name for beneficial owners and control persons",
+            "FinCEN CDD requires full legal last name for beneficial owners and control persons",
+        )?;
 
-        // 2. Date of Birth
-        match &self.dob {
-            Some(dob) if dob.is_valid() => (),
-            Some(_) => {
-                return Err(KycComplianceError::InvalidDateOfBirth {
-                    reason: "FinCEN CDD requires a valid date of birth (day, month, year)",
-                });
-            }
-            None => {
-                return Err(KycComplianceError::MissingField {
-                    field: "dob",
-                    reason: "FinCEN CDD requires date of birth for beneficial owners and control persons",
-                });
-            }
-        }
+        self.validate_dob_present(
+            "FinCEN CDD requires a valid date of birth (day, month, year)",
+            "FinCEN CDD requires date of birth for beneficial owners and control persons",
+        )?;
 
-        // 3. Residential Address
-        match &self.address {
-            Some(addr) => {
-                if addr.country.as_deref().unwrap_or("").trim().is_empty() {
-                    return Err(KycComplianceError::MissingField {
-                        field: "address.country",
-                        reason: "FinCEN CDD requires country in residential address",
-                    });
-                }
-                if addr.line1.as_deref().unwrap_or("").trim().is_empty() {
-                    return Err(KycComplianceError::MissingField {
-                        field: "address.line1",
-                        reason: "FinCEN CDD requires street address in residential address",
-                    });
-                }
-            }
-            None => {
-                return Err(KycComplianceError::MissingField {
-                    field: "address",
-                    reason: "FinCEN CDD requires physical residential address for beneficial owners and control persons",
-                });
-            }
-        }
+        self.validate_address_fields(
+            "FinCEN CDD requires physical residential address for beneficial owners and control persons",
+            "FinCEN CDD requires country in residential address",
+            Some("FinCEN CDD requires street address in residential address"),
+        )?;
 
-        // 4. Identification Number
-        let has_id = self.id_number_provided.unwrap_or(false)
-            || self.ssn_last_4_provided.unwrap_or(false)
-            || self.id_number.is_some()
-            || self.ssn_last_4.is_some()
-            || self
-                .verification
-                .as_ref()
-                .is_some_and(|v| v.document.is_some());
-
-        if !has_id {
+        if !self.has_government_id(true) {
             return Err(KycComplianceError::MissingIdentification {
                 reason: "FinCEN CDD requires government identification number (SSN, passport, or national ID)",
             });
@@ -813,63 +844,23 @@ impl Person {
     /// assert!(person.validate_dac7_compliance().is_ok());
     /// ```
     pub fn validate_dac7_compliance(&self) -> Result<(), KycComplianceError> {
-        // 1. Legal Name
-        if self.first_name.as_deref().unwrap_or("").trim().is_empty() {
-            return Err(KycComplianceError::MissingField {
-                field: "first_name",
-                reason: "EU DAC7 requires first name for reportable natural persons",
-            });
-        }
-        if self.last_name.as_deref().unwrap_or("").trim().is_empty() {
-            return Err(KycComplianceError::MissingField {
-                field: "last_name",
-                reason: "EU DAC7 requires last name for reportable natural persons",
-            });
-        }
+        self.validate_legal_name(
+            "EU DAC7 requires first name for reportable natural persons",
+            "EU DAC7 requires last name for reportable natural persons",
+        )?;
 
-        // 2. Date of birth
-        match &self.dob {
-            Some(dob) if dob.is_valid() => (),
-            Some(_) => {
-                return Err(KycComplianceError::InvalidDateOfBirth {
-                    reason: "EU DAC7 requires a valid date of birth (day, month, year)",
-                });
-            }
-            None => {
-                return Err(KycComplianceError::MissingField {
-                    field: "dob",
-                    reason: "EU DAC7 requires date of birth for natural person sellers",
-                });
-            }
-        }
+        self.validate_dob_present(
+            "EU DAC7 requires a valid date of birth (day, month, year)",
+            "EU DAC7 requires date of birth for natural person sellers",
+        )?;
 
-        // 3. Primary Address
-        match &self.address {
-            Some(addr) => {
-                if addr.country.as_deref().unwrap_or("").trim().is_empty() {
-                    return Err(KycComplianceError::MissingField {
-                        field: "address.country",
-                        reason: "EU DAC7 requires country code in primary address",
-                    });
-                }
-            }
-            None => {
-                return Err(KycComplianceError::MissingField {
-                    field: "address",
-                    reason: "EU DAC7 requires primary address for reportable sellers",
-                });
-            }
-        }
+        self.validate_address_fields(
+            "EU DAC7 requires primary address for reportable sellers",
+            "EU DAC7 requires country code in primary address",
+            None,
+        )?;
 
-        // 4. Tax or National Identification
-        let has_id = self.id_number_provided.unwrap_or(false)
-            || self.id_number.is_some()
-            || self
-                .verification
-                .as_ref()
-                .is_some_and(|v| v.document.is_some());
-
-        if !has_id {
+        if !self.has_government_id(false) {
             return Err(KycComplianceError::MissingIdentification {
                 reason: "EU DAC7 requires Tax Identification Number (TIN) or national identification",
             });

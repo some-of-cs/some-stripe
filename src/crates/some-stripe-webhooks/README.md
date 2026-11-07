@@ -20,9 +20,11 @@ Cryptographic Webhook Signature Verification, Replay Guards & Edge Runtime Inges
 - **Timestamp Replay Protection (Gate G2 Invariant 2)**:
   - Default 300-second drift tolerance window (`DEFAULT_TOLERANCE_SECONDS = 300`).
   - Strict 60-second future drift limit (`MAX_FUTURE_DRIFT_SECONDS = 60`) preventing pre-dated signature replay.
-- **Memory Exhaustion DoS Defense (Gate G2 Invariant 4)**:
+- **Memory & Computational DoS Defense (Gate G2 Invariant 4)**:
   - Strict 1 MB maximum payload ceiling (`MAX_WEBHOOK_PAYLOAD_BYTES = 1_048_576`).
-  - Rejects oversized requests prior to parsing or signature computation.
+  - Strict 4 KB maximum header length (`MAX_SIGNATURE_HEADER_BYTES = 4096`).
+  - Strict 16 signature count cap (`MAX_V1_SIGNATURES = 16`) preventing CPU exhaustion in constant-time comparison iterations.
+  - Rejects oversized requests and adversarial headers prior to parsing or signature computation.
 - **Zero-Allocation Ingestion Wrapper (`StripeWebhookWrapper`)**:
   - Direct pointer parsing for high-throughput webhook handling (`order_id`, `customer_id`, `payment_intent_id`, `amount_total`).
   - Helper predicates `is_checkout_completed()` (supporting `paid`, `unpaid`, and `no_payment_required`) and `is_checkout_fulfillment_ready()` (enforcing payment guarantee prior to order fulfillment).
