@@ -726,6 +726,8 @@ pub mod connect_compliance;
 pub use connect_compliance::*;
 pub mod payout;
 pub use payout::*;
+pub mod v2_events;
+pub use v2_events::*;
 
 /// Strongly typed, discriminated union of Stripe event payload objects.
 ///
