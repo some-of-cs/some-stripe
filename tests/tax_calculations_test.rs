@@ -357,7 +357,7 @@ async fn test_create_tax_calculation_mock_wire() {
         }"#;
 
         let response = format!(
-            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
             body.len(),
             body
         );
@@ -428,7 +428,7 @@ async fn test_retrieve_tax_calculation_mock_wire() {
         }"#;
 
         let response = format!(
-            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
             body.len(),
             body
         );
@@ -489,7 +489,7 @@ async fn test_list_tax_calculation_line_items_page_mock_wire() {
         }"#;
 
         let response = format!(
-            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
             body.len(),
             body
         );
@@ -548,7 +548,7 @@ async fn test_list_tax_calculation_line_items_paginator_stream() {
             "url": "/v1/tax/calculations/taxcalc_pag_test/line_items"
         }"#;
         let resp1 = format!(
-            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
             page1.len(),
             page1
         );
@@ -576,7 +576,7 @@ async fn test_list_tax_calculation_line_items_paginator_stream() {
             "url": "/v1/tax/calculations/taxcalc_pag_test/line_items"
         }"#;
         let resp2 = format!(
-            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
             page2.len(),
             page2
         );
