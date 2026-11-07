@@ -410,6 +410,16 @@ impl StripeClient {
             };
 
             let status = response.status();
+            let retry_after_delay = if status.as_u16() == 429 {
+                response
+                    .headers()
+                    .get(reqwest::header::RETRY_AFTER)
+                    .and_then(|h| h.to_str().ok())
+                    .and_then(|s| s.parse::<u64>().ok())
+                    .map(Duration::from_secs)
+            } else {
+                None
+            };
             let body_bytes = response.bytes().await?;
 
             if !status.is_success() {
@@ -448,7 +458,8 @@ impl StripeClient {
                 if action == ErrorAction::Retry
                     && let Some(next) = next_req
                 {
-                    let delay = compute_backoff_delay(retries_taken, 50, 5000);
+                    let delay = retry_after_delay
+                        .unwrap_or_else(|| compute_backoff_delay(retries_taken, 50, 5000));
                     tokio::time::sleep(delay).await;
                     retries_taken += 1;
                     req = next;
@@ -554,6 +565,16 @@ impl StripeClient {
             };
 
             let status = response.status();
+            let retry_after_delay = if status.as_u16() == 429 {
+                response
+                    .headers()
+                    .get(reqwest::header::RETRY_AFTER)
+                    .and_then(|h| h.to_str().ok())
+                    .and_then(|s| s.parse::<u64>().ok())
+                    .map(Duration::from_secs)
+            } else {
+                None
+            };
             let body_bytes = response.bytes().await?;
 
             if !status.is_success() {
@@ -591,7 +612,8 @@ impl StripeClient {
                 if action == ErrorAction::Retry
                     && let Some(next) = next_req
                 {
-                    let delay = compute_backoff_delay(retries_taken, 50, 5000);
+                    let delay = retry_after_delay
+                        .unwrap_or_else(|| compute_backoff_delay(retries_taken, 50, 5000));
                     tokio::time::sleep(delay).await;
                     retries_taken += 1;
                     req = next;
@@ -751,5 +773,50 @@ mod tests {
             1,
             "max_retries(1) must yield exactly 1 retry after initial attempt"
         );
+    }
+
+    #[tokio::test]
+    async fn test_http_429_retry_after_header_adherence() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            // First attempt: 429 Too Many Requests with Retry-After: 0
+            let (mut socket1, _) = listener.accept().await.unwrap();
+            let mut buf1 = vec![0; 1024];
+            let _ = socket1.read(&mut buf1).await.unwrap();
+            let resp1 = "HTTP/1.1 429 Too Many Requests\r\nRetry-After: 0\r\nContent-Type: application/json\r\nContent-Length: 46\r\n\r\n{\"error\":{\"code\":\"rate_limit\",\"type\":\"api_error\"}}";
+            socket1.write_all(resp1.as_bytes()).await.unwrap();
+            drop(socket1);
+
+            // Second attempt: 200 OK
+            let (mut socket2, _) = listener.accept().await.unwrap();
+            let mut buf2 = vec![0; 1024];
+            let _ = socket2.read(&mut buf2).await.unwrap();
+            let body = "{\"id\":\"test_ok\"}";
+            let resp2 = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            socket2.write_all(resp2.as_bytes()).await.unwrap();
+            drop(socket2);
+        });
+
+        let config = StripeConfig::new("sk_test_123")
+            .with_api_base(format!("http://{addr}"))
+            .with_max_retries(1);
+        let client = StripeClient::with_config(config);
+
+        let req = client.http.get(format!("http://{addr}/v1/test_rate_limit"));
+        let val = client
+            .execute(req)
+            .await
+            .expect("Request should succeed after 429 retry");
+        assert_eq!(val.get("id").and_then(|v| v.as_str()), Some("test_ok"));
+
+        server.await.unwrap();
     }
 }
