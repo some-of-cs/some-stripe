@@ -20,6 +20,8 @@ pub mod refunds;
 pub mod subscription_items;
 pub mod subscription_schedules;
 pub mod subscriptions;
+pub mod tax_registrations;
+pub mod tax_settings;
 pub mod transfers;
 pub mod webhooks;
 
@@ -46,6 +48,8 @@ pub use refunds::RefundsResource;
 pub use subscription_items::SubscriptionItemsResource;
 pub use subscription_schedules::SubscriptionSchedulesResource;
 pub use subscriptions::SubscriptionsResource;
+pub use tax_registrations::{TaxRegistrationsResource, tax_registration_id};
+pub use tax_settings::TaxSettingsResource;
 pub use transfers::TransfersResource;
 pub use webhooks::WebhooksResource;
 

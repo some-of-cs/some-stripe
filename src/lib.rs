@@ -88,9 +88,9 @@ pub use resources::{
     CheckoutSessionExt, CreditNotesResource, CustomersResource, DisputesResource, InvoicesResource,
     PaymentIntentsResource, PaymentLinksResource, PayoutsResource, PersonsResource, QuotesResource,
     RedirectError, RefundsResource, SessionsResource, SubscriptionItemsResource,
-    SubscriptionSchedulesResource, SubscriptionsResource, TransfersResource, WebhooksResource,
-    credit_note_id, generate_uuid_v4, is_fulfillment_ready, is_valid_uuid_v4, quote_id,
-    validate_redirect_url,
+    SubscriptionSchedulesResource, SubscriptionsResource, TaxRegistrationsResource,
+    TaxSettingsResource, TransfersResource, WebhooksResource, credit_note_id, generate_uuid_v4,
+    is_fulfillment_ready, is_valid_uuid_v4, quote_id, tax_registration_id, validate_redirect_url,
 };
 
 /// The main Stripe client used to interact with the Stripe API, modeled after `stripe-node`.
