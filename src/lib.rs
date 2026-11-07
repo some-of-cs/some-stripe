@@ -93,10 +93,10 @@ pub use resources::{
     SubscriptionSchedulesResource, SubscriptionsResource, TaxRegistrationsResource, TaxResource,
     TaxSettingsResource, TerminalConnectionTokensResource, TerminalLocationsResource,
     TerminalReadersResource, TerminalResource, TransactionsResource, TransfersResource,
-    TreasuryFinancialAccountsResource, TreasuryResource, TreasuryTransfersResource, V2EventsResource,
-    VerificationReportsResource, VerificationSessionsResource, WebhooksResource, credit_note_id,
-    generate_uuid_v4, is_fulfillment_ready, is_valid_uuid_v4, quote_id, tax_registration_id,
-    validate_redirect_url,
+    TreasuryFinancialAccountsResource, TreasuryResource, TreasuryTransfersResource, V2AccountsResource,
+    V2EventsResource, VerificationReportsResource, VerificationSessionsResource, WebhooksResource,
+    credit_note_id, generate_uuid_v4, is_fulfillment_ready, is_valid_uuid_v4, quote_id,
+    tax_registration_id, validate_redirect_url,
 };
 
 /// The main Stripe client used to interact with the Stripe API, modeled after `stripe-node`.
@@ -300,6 +300,11 @@ impl StripeClient {
         TerminalResource::new(&self.0)
     }
 
+    /// Access the Stripe API v2 Core Accounts resource (`stripe.v2_accounts`).
+    pub fn v2_accounts(&self) -> V2AccountsResource<'_> {
+        V2AccountsResource::new(&self.0)
+    }
+
     /// Access the V2 Event Destinations resource namespace (`stripe.event_destinations`).
     pub fn event_destinations(&self) -> EventDestinationsResource<'_> {
         EventDestinationsResource::new(&self.0)
@@ -308,7 +313,6 @@ impl StripeClient {
     /// Access the Stripe API v2 Core Events resource (`stripe.v2_events()`).
     pub fn v2_events(&self) -> V2EventsResource<'_> {
         V2EventsResource::new(&self.0)
-    }
     }
 }
 
@@ -400,6 +404,9 @@ pub trait StripeClientExt {
 
     /// Access the Tax Transactions resource namespace (`stripe.tax_transactions`).
     fn tax_transactions(&self) -> TransactionsResource<'_>;
+
+    /// Access the Stripe API v2 Core Accounts resource (`stripe.v2_accounts`).
+    fn v2_accounts(&self) -> V2AccountsResource<'_>;
 }
 
 impl StripeClientExt for some_stripe_core::StripeClient {
@@ -469,6 +476,10 @@ impl StripeClientExt for some_stripe_core::StripeClient {
 
     fn tax_transactions(&self) -> TransactionsResource<'_> {
         TransactionsResource::new(self)
+    }
+
+    fn v2_accounts(&self) -> V2AccountsResource<'_> {
+        V2AccountsResource::new(self)
     }
 }
 

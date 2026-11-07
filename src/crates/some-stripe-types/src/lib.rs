@@ -139,11 +139,14 @@ pub mod treasury_transfer;
 pub use treasury_transfer::*;
 pub mod terminal;
 pub use terminal::*;
+pub mod v2_account;
+pub use v2_account::*;
 pub mod v2_destination;
 pub use v2_destination::*;
 
 pub mod v2 {
     pub mod core {
+        pub use crate::v2_account::*;
         pub use crate::v2_destination::*;
     }
 }
@@ -877,6 +880,10 @@ pub enum EventObject {
     /// Stripe Terminal ConnectionToken payload (`object = "terminal.connection_token"`).
     #[serde(rename = "terminal.connection_token")]
     TerminalConnectionToken(ConnectionToken),
+
+    /// Stripe V2 Core Account payload (`object = "v2.core.account"`).
+    #[serde(rename = "v2.core.account")]
+    V2CoreAccount(V2Account),
 
     /// Unrecognized, custom, or unsupported event object types.
     #[serde(other)]
