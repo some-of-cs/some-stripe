@@ -162,12 +162,11 @@ impl<'a> PersonsResource<'a> {
     /// ```no_run
     /// use some_stripe::StripeClient;
     /// use some_stripe_types::person::UpdatePersonParams;
-    /// use some_stripe_types::Nullable;
     ///
     /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = StripeClient::new("sk_test_123");
     /// let params = UpdatePersonParams::new()
-    ///     .first_name(Nullable::Value("Janet".into()));
+    ///     .first_name("Janet");
     ///
     /// let person = client.persons().update("acct_1032D82eZvKYlo2C", "person_1032D82eZvKYlo2C", &params).await?;
     /// # Ok(())
