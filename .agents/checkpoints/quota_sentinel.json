@@ -1,0 +1,161 @@
+{
+  "status": "ACTIVE",
+  "quota_health": "OK",
+  "disk_health": "OK",
+  "disk_available": "5.6GB",
+  "profile": "agent-c",
+  "current_module": "module-7",
+  "completed_modules": [
+    "module-1",
+    "module-2",
+    "module-3",
+    "module-4",
+    "module-5",
+    "module-6"
+  ],
+  "defense_patches_status": "ALL_MERGED",
+  "last_checked": "2026-11-07T13:55:15Z",
+  "check_iteration": 313,
+  "consecutive_success_checks": 313,
+  "rate_limit_events": [],
+  "paused_agents": [],
+  "module_6_merged_at": "2026-11-07T06:18:50Z",
+  "module_6_merge_commit": "dc014dc",
+  "module_6_final_docs_merged_at": "2026-11-07T06:28:40Z",
+  "module_6_final_commit": "e9640c8",
+  "module_7_detected_at": "2026-11-07T06:44:56Z",
+  "module_7_launched_at": "2026-11-07T09:56:50Z",
+  "module_7_all_prs_opened_at": "2026-11-07T11:19:16Z",
+  "module_7_all_units_merged_at": "2026-11-07T13:39:40Z",
+  "module_7_merged_units": [
+    {
+      "pr_number": 116,
+      "title": "feat(us-7.2.0/unit-1): issuing cards and cardholders domain entities and client resource",
+      "merged_at": "2026-11-07T11:14:08Z",
+      "commit": "d31fe2c"
+    },
+    {
+      "pr_number": 112,
+      "title": "feat(us-7.1.0/unit-1): tax calculations domain models and resource endpoints",
+      "merged_at": "2026-11-07T11:15:49Z"
+    },
+    {
+      "pr_number": 111,
+      "title": "feat(us-7.1.0/unit-2): tax transactions domain models and ledger endpoints",
+      "merged_at": "2026-11-07T11:19:28Z",
+      "commit": "71e7a31"
+    },
+    {
+      "pr_number": 119,
+      "title": "feat(us-7.1.0/unit-3): tax settings and registrations resource implementation",
+      "merged_at": "2026-11-07T11:23:53Z",
+      "commit": "db25c27"
+    },
+    {
+      "pr_number": 113,
+      "title": "feat(us-7.2.0/unit-2): issuing authorizations & transactions",
+      "merged_at": "2026-11-07T11:25:15Z",
+      "commit": "6689a01"
+    },
+    {
+      "pr_number": 115,
+      "title": "feat(us-7.1.0/unit-4): identity verification sessions",
+      "merged_at": "2026-11-07T11:26:40Z",
+      "commit": "38bfc11"
+    },
+    {
+      "pr_number": 118,
+      "title": "feat(us-7.2.0/unit-3): treasury financial accounts and balances domain entities and client resource",
+      "merged_at": "2026-11-07T11:51:31Z",
+      "commit": "81663fa"
+    },
+    {
+      "pr_number": 117,
+      "title": "feat(us-7.2.0/unit-4): treasury outbound transfers and outbound payments domain entities and client resource",
+      "merged_at": "2026-11-07T12:59:29Z",
+      "commit": "25bb8ea"
+    },
+    {
+      "pr_number": 120,
+      "title": "feat(us-7.2.0/unit-5): terminal readers locations connection tokens and product namespace facades",
+      "merged_at": "2026-11-07T13:21:48Z",
+      "commit": "15b90c8"
+    },
+    {
+      "pr_number": 114,
+      "title": "feat(us-7.1.0/unit-5): identity verification reports and product namespaces mounting",
+      "merged_at": "2026-11-07T13:39:40Z",
+      "commit": "737bddf"
+    }
+  ],
+  "module_7_story_promotions": [
+    {
+      "story_id": "us-7.2.0",
+      "pr_number": 121,
+      "title": "feat(us-7.2.0): Stripe Issuing, Treasury Financial Accounts & Terminal POS (Units 1..5 Promotion)",
+      "status": "MERGED",
+      "merged_at": "2026-11-07T13:40:51Z",
+      "commit": "01900eb"
+    },
+    {
+      "story_id": "us-7.1.0",
+      "pr_number": 122,
+      "title": "feat(us-7.1.0): Stripe Tax Compliance Engine & Stripe Identity Verification (Units 1..5 Promotion)",
+      "status": "APPROVED",
+      "mergeable": "CONCLUDING_MERGE"
+    }
+  ],
+  "module_7_active_units": {
+    "us_7_1_0": {
+      "leader": "302cd5e0-3d9b-4746-a52b-ab8cdb1be4f0",
+      "units": {
+        "unit_1": "fd746a74-47de-4231-b82d-740d338df1b4",
+        "unit_2": "0e675b12-da20-48cc-acc4-83fd93b2584d",
+        "unit_3": "4f54af90-bb28-4bcb-9776-1939f5bbfd46",
+        "unit_4": "0f5b9929-bf91-4c3c-a93a-d8a2b1022ca6",
+        "unit_5": "bc4a023d-42d4-496e-9dd7-dfea9680891b"
+      }
+    },
+    "us_7_2_0": {
+      "leader": "f959d7fb-eff3-4cfd-a251-853e96b3e79a",
+      "units": {
+        "unit_1": "270cf183-9b67-47fa-9063-20cc802f11b2",
+        "unit_2": "4eee5c8c-342a-49f8-8eb0-fc5df1107576",
+        "unit_3": "deb8b132-2eb8-4c6e-b496-0216f613e8b8",
+        "unit_4": "9a6bef9d-8400-4146-81a5-71e048f0afaa",
+        "unit_5": "dfcb3b5b-4828-465a-9c31-ded239fa2bf8"
+      }
+    }
+  },
+  "server_restart_recovered_at": "2026-11-07T03:33:00Z",
+  "disk_pruning_events": [
+    {
+      "timestamp": "2026-11-07T07:10:00Z",
+      "target": "target/debug/incremental",
+      "freed_gb": 3.0
+    },
+    {
+      "timestamp": "2026-11-07T08:44:16Z",
+      "target": "target/debug/incremental",
+      "freed_gb": 14.0,
+      "disk_after_prune": "15GB"
+    },
+    {
+      "timestamp": "2026-11-07T12:59:13Z",
+      "target": "target/debug/incremental and target/debug/deps older test executables",
+      "freed_gb": 6.8,
+      "disk_after_prune": "7.2GB"
+    },
+    {
+      "timestamp": "2026-11-07T13:35:50Z",
+      "target": "target/debug/incremental",
+      "freed_gb": 3.8,
+      "disk_after_prune": "7.2GB"
+    }
+  ],
+  "metadata": {
+    "supervisor_id": "71029e38-451d-45e4-8f68-ffe92f5f1cbb",
+    "threshold_warning_percent": 1.0,
+    "monitoring_interval_cron": "*/2 * * * *"
+  }
+}
