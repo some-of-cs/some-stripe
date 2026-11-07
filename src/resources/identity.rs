@@ -16,43 +16,14 @@
 //!
 //! let client = StripeClient::new("sk_test_123");
 //! let identity = client.identity();
-//! let sessions = identity.verification_sessions();
-//! let reports = identity.verification_reports();
+//! let _sessions = identity.verification_sessions();
+//! let _reports = identity.verification_reports();
 //! ```
 
-use crate::resources::identity_reports::VerificationReportsResource;
 use some_stripe_core::StripeClient;
 
-/// Verification sessions sub-resource facade for Stripe Identity (`stripe.identity().verification_sessions()`).
-///
-/// Orchestrates biometric verification sessions and user redirects.
-///
-/// # Example
-/// ```no_run
-/// use some_stripe::StripeClient;
-///
-/// let client = StripeClient::new("sk_test_123");
-/// let sessions = client.identity().verification_sessions();
-/// assert_eq!(sessions.client().config.api_base, "https://api.stripe.com");
-/// ```
-#[derive(Clone, Copy)]
-pub struct VerificationSessionsResource<'a> {
-    client: &'a StripeClient,
-}
-
-impl<'a> VerificationSessionsResource<'a> {
-    /// Creates a new `VerificationSessionsResource` bound to the client.
-    #[must_use]
-    pub fn new(client: &'a StripeClient) -> Self {
-        Self { client }
-    }
-
-    /// Access reference to the underlying [`StripeClient`].
-    #[must_use]
-    pub fn client(&self) -> &'a StripeClient {
-        self.client
-    }
-}
+pub use crate::resources::identity_reports::VerificationReportsResource;
+pub use crate::resources::identity_sessions::VerificationSessionsResource;
 
 /// Root resource namespace for Stripe Identity operations (`stripe.identity()`).
 ///

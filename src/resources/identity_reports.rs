@@ -11,8 +11,7 @@
 //!
 //! # Quickstart
 //! ```no_run
-//! use some_stripe::StripeClient;
-//! use some_stripe_types::ListVerificationReportsParams;
+//! use some_stripe::{ListVerificationReportsParams, StripeClient};
 //!
 //! # async fn run() -> Result<(), Box<dyn std::error::Error>> {
 //! let client = StripeClient::new("sk_test_123");
@@ -97,8 +96,7 @@ impl<'a> VerificationReportsResource<'a> {
     ///
     /// # Example
     /// ```no_run
-    /// use some_stripe::StripeClient;
-    /// use some_stripe_types::ListVerificationReportsParams;
+    /// use some_stripe::{ListVerificationReportsParams, StripeClient};
     ///
     /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = StripeClient::new("sk_test_123");

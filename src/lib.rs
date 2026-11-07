@@ -84,13 +84,15 @@ pub use some_stripe_webhooks::{
 pub mod resources;
 pub use resources::{
     AccountLinksResource, AccountSessionsResource, AccountsResource, ApplicationFeesResource,
-    BalanceResource, BalanceTransactionsResource, BillingPortalResource, CheckoutResource,
-    CheckoutSessionExt, CreditNotesResource, CustomersResource, DisputesResource, IdentityResource,
-    InvoicesResource, PaymentIntentsResource, PaymentLinksResource, PayoutsResource,
-    PersonsResource, QuotesResource, RedirectError, RefundsResource, SessionsResource,
-    SubscriptionItemsResource, SubscriptionSchedulesResource, SubscriptionsResource, TaxResource,
-    TransfersResource, VerificationReportsResource, WebhooksResource, credit_note_id,
-    generate_uuid_v4, is_fulfillment_ready, is_valid_uuid_v4, quote_id, validate_redirect_url,
+    BalanceResource, BalanceTransactionsResource, BillingPortalResource, CalculationsResource,
+    CheckoutResource, CheckoutSessionExt, CreditNotesResource, CustomersResource, DisputesResource,
+    IdentityResource, InvoicesResource, PaymentIntentsResource, PaymentLinksResource,
+    PayoutsResource, PersonsResource, QuotesResource, RedirectError, RefundsResource,
+    SessionsResource, SubscriptionItemsResource, SubscriptionSchedulesResource,
+    SubscriptionsResource, TaxRegistrationsResource, TaxResource, TaxSettingsResource,
+    TransactionsResource, TransfersResource, VerificationReportsResource,
+    VerificationSessionsResource, WebhooksResource, credit_note_id, generate_uuid_v4,
+    is_fulfillment_ready, is_valid_uuid_v4, quote_id, tax_registration_id, validate_redirect_url,
 };
 
 /// The main Stripe client used to interact with the Stripe API, modeled after `stripe-node`.
@@ -142,6 +144,11 @@ impl StripeClient {
     /// Access the AccountSessions resource namespace (`stripe.account_sessions`).
     pub fn account_sessions(&self) -> AccountSessionsResource<'_> {
         AccountSessionsResource::new(&self.0)
+    }
+
+    /// Access the Identity Verification Sessions resource namespace (`stripe.identity_sessions`).
+    pub fn identity_sessions(&self) -> VerificationSessionsResource<'_> {
+        VerificationSessionsResource::new(&self.0)
     }
 
     /// Access the Persons resource namespace (`stripe.accounts.persons`).
@@ -238,6 +245,11 @@ impl StripeClient {
     pub fn identity(&self) -> IdentityResource<'_> {
         IdentityResource::new(&self.0)
     }
+
+    /// Access the Tax Transactions resource namespace (`stripe.tax_transactions`).
+    pub fn tax_transactions(&self) -> TransactionsResource<'_> {
+        TransactionsResource::new(&self.0)
+    }
 }
 
 /// Validates compliance with EU Omnibus Directive 2019/2161 Article 6a regarding price reductions.
@@ -325,6 +337,9 @@ pub trait StripeClientExt {
 
     /// Access the BillingPortal resource namespace (`stripe.billing_portal`).
     fn billing_portal(&self) -> BillingPortalResource<'_>;
+
+    /// Access the Tax Transactions resource namespace (`stripe.tax_transactions`).
+    fn tax_transactions(&self) -> TransactionsResource<'_>;
 }
 
 impl StripeClientExt for some_stripe_core::StripeClient {
@@ -390,6 +405,10 @@ impl StripeClientExt for some_stripe_core::StripeClient {
 
     fn billing_portal(&self) -> BillingPortalResource<'_> {
         BillingPortalResource::new(self)
+    }
+
+    fn tax_transactions(&self) -> TransactionsResource<'_> {
+        TransactionsResource::new(self)
     }
 }
 

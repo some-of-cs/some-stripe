@@ -114,6 +114,17 @@ pub mod transfer_params;
 pub use transfer_params::*;
 pub mod settlement;
 pub use settlement::*;
+pub mod identity_session;
+pub use identity_session::*;
+pub mod identity_report;
+pub use identity_report::*;
+pub mod tax_calculation;
+pub use tax_calculation::*;
+pub mod tax_settings;
+pub use tax_settings::*;
+pub mod tax_transaction;
+pub use tax_calculation::TaxShippingCost;
+pub use tax_transaction::*;
 
 /// Strongly typed Stripe Connect Account ID (`acct_...`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -701,8 +712,6 @@ pub mod connect_compliance;
 pub use connect_compliance::*;
 pub mod payout;
 pub use payout::*;
-pub mod identity_report;
-pub use identity_report::*;
 
 /// Strongly typed, discriminated union of Stripe event payload objects.
 ///
@@ -792,6 +801,14 @@ pub enum EventObject {
     /// Stripe Identity VerificationReport payload (`object = "identity.verification_report"`).
     #[serde(rename = "identity.verification_report")]
     VerificationReport(VerificationReport),
+
+    /// Stripe TaxCalculation payload (`object = "tax.calculation"`).
+    #[serde(rename = "tax.calculation")]
+    TaxCalculation(TaxCalculation),
+
+    /// Stripe TaxTransaction payload (`object = "tax.transaction"`).
+    #[serde(rename = "tax.transaction")]
+    TaxTransaction(TaxTransaction),
 
     /// Unrecognized, custom, or unsupported event object types.
     #[serde(other)]
@@ -1518,6 +1535,101 @@ mod tests {
                 );
             }
             other => panic!("Expected PortalConfiguration variant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_event_object_tax_transaction() {
+        let json = serde_json::json!({
+            "id": "tax_tx_evt_606",
+            "object": "tax.transaction",
+            "created": 1735689600,
+            "currency": "usd",
+            "livemode": false,
+            "posted_at": 1735689600,
+            "reference": "order_evt_606",
+            "tax_date": 1735689600,
+            "type": "transaction"
+        });
+
+        let data = EventData { object: json };
+        let obj = data
+            .deserialize_object()
+            .expect("Failed to deserialize tax.transaction event");
+
+        match obj {
+            EventObject::TaxTransaction(tx) => {
+                assert_eq!(tx.id, "tax_tx_evt_606");
+                assert_eq!(tx.object, "tax.transaction");
+                assert_eq!(tx.currency, "usd");
+                assert_eq!(tx.reference, "order_evt_606");
+                assert!(tx.is_standard_transaction());
+            }
+            other => panic!("Expected TaxTransaction variant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_event_object_tax_calculation() {
+        let json = serde_json::json!({
+            "id": "tax_calc_evt_707",
+            "object": "tax.calculation",
+            "amount_total": 10500,
+            "currency": "usd",
+            "customer": null,
+            "customer_details": {
+                "address": {
+                    "country": "US",
+                    "postal_code": "94103",
+                    "state": "CA"
+                },
+                "address_source": "shipping"
+            },
+            "livemode": false,
+            "tax_amount_exclusive": 500,
+            "tax_amount_inclusive": 0,
+            "tax_date": 1735689600
+        });
+
+        let data = EventData { object: json };
+        let obj = data
+            .deserialize_object()
+            .expect("Failed to deserialize tax.calculation event");
+
+        match obj {
+            EventObject::TaxCalculation(calc) => {
+                assert_eq!(calc.id, "tax_calc_evt_707");
+                assert_eq!(calc.object, "tax.calculation");
+                assert_eq!(calc.amount_total, 10500);
+            }
+            other => panic!("Expected TaxCalculation variant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_event_object_verification_report() {
+        let json = serde_json::json!({
+            "id": "vr_test_808",
+            "object": "identity.verification_report",
+            "created": 1735689600,
+            "livemode": false,
+            "type": "document",
+            "status": "verified"
+        });
+
+        let data = EventData { object: json };
+        let obj = data
+            .deserialize_object()
+            .expect("Failed to deserialize identity.verification_report event");
+
+        match obj {
+            EventObject::VerificationReport(report) => {
+                assert_eq!(report.id, "vr_test_808");
+                assert_eq!(report.object, "identity.verification_report");
+                assert_eq!(report.report_type, VerificationReportType::Document);
+                assert_eq!(report.status, VerificationReportStatus::Verified);
+            }
+            other => panic!("Expected VerificationReport variant, got {other:?}"),
         }
     }
 }

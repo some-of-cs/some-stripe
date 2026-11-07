@@ -18,137 +18,18 @@
 //!
 //! let client = StripeClient::new("sk_test_123");
 //! let tax = client.tax();
-//! let calculations = tax.calculations();
-//! let transactions = tax.transactions();
-//! let settings = tax.settings();
-//! let registrations = tax.registrations();
+//! let _calculations = tax.calculations();
+//! let _transactions = tax.transactions();
+//! let _settings = tax.settings();
+//! let _registrations = tax.registrations();
 //! ```
 
 use some_stripe_core::StripeClient;
 
-/// Calculations sub-resource facade for Stripe Tax calculations (`stripe.tax().calculations()`).
-///
-/// Handles real-time tax calculation for line items based on customer addresses and product tax codes.
-///
-/// # Example
-/// ```no_run
-/// use some_stripe::StripeClient;
-///
-/// let client = StripeClient::new("sk_test_123");
-/// let calcs = client.tax().calculations();
-/// assert_eq!(calcs.client().config.api_base, "https://api.stripe.com");
-/// ```
-#[derive(Clone, Copy)]
-pub struct CalculationsResource<'a> {
-    client: &'a StripeClient,
-}
-
-impl<'a> CalculationsResource<'a> {
-    /// Creates a new `CalculationsResource` bound to the client.
-    #[must_use]
-    pub fn new(client: &'a StripeClient) -> Self {
-        Self { client }
-    }
-
-    /// Access reference to the underlying [`StripeClient`].
-    #[must_use]
-    pub fn client(&self) -> &'a StripeClient {
-        self.client
-    }
-}
-
-/// Transactions sub-resource facade for Stripe Tax ledger transactions (`stripe.tax().transactions()`).
-///
-/// Commits calculations to official tax reporting ledgers and creates tax transaction reversals.
-///
-/// # Example
-/// ```no_run
-/// use some_stripe::StripeClient;
-///
-/// let client = StripeClient::new("sk_test_123");
-/// let txs = client.tax().transactions();
-/// assert_eq!(txs.client().config.api_base, "https://api.stripe.com");
-/// ```
-#[derive(Clone, Copy)]
-pub struct TransactionsResource<'a> {
-    client: &'a StripeClient,
-}
-
-impl<'a> TransactionsResource<'a> {
-    /// Creates a new `TransactionsResource` bound to the client.
-    #[must_use]
-    pub fn new(client: &'a StripeClient) -> Self {
-        Self { client }
-    }
-
-    /// Access reference to the underlying [`StripeClient`].
-    #[must_use]
-    pub fn client(&self) -> &'a StripeClient {
-        self.client
-    }
-}
-
-/// Settings sub-resource facade for Stripe Tax account settings (`stripe.tax().settings()`).
-///
-/// Configures head office locations, default tax codes, and calculation statuses.
-///
-/// # Example
-/// ```no_run
-/// use some_stripe::StripeClient;
-///
-/// let client = StripeClient::new("sk_test_123");
-/// let settings = client.tax().settings();
-/// assert_eq!(settings.client().config.api_base, "https://api.stripe.com");
-/// ```
-#[derive(Clone, Copy)]
-pub struct TaxSettingsResource<'a> {
-    client: &'a StripeClient,
-}
-
-impl<'a> TaxSettingsResource<'a> {
-    /// Creates a new `TaxSettingsResource` bound to the client.
-    #[must_use]
-    pub fn new(client: &'a StripeClient) -> Self {
-        Self { client }
-    }
-
-    /// Access reference to the underlying [`StripeClient`].
-    #[must_use]
-    pub fn client(&self) -> &'a StripeClient {
-        self.client
-    }
-}
-
-/// Registrations sub-resource facade for jurisdictional tax nexus registrations (`stripe.tax().registrations()`).
-///
-/// Manages state, country, and local tax registrations and collection thresholds.
-///
-/// # Example
-/// ```no_run
-/// use some_stripe::StripeClient;
-///
-/// let client = StripeClient::new("sk_test_123");
-/// let reg = client.tax().registrations();
-/// assert_eq!(reg.client().config.api_base, "https://api.stripe.com");
-/// ```
-#[derive(Clone, Copy)]
-pub struct TaxRegistrationsResource<'a> {
-    client: &'a StripeClient,
-}
-
-impl<'a> TaxRegistrationsResource<'a> {
-    /// Creates a new `TaxRegistrationsResource` bound to the client.
-    #[must_use]
-    pub fn new(client: &'a StripeClient) -> Self {
-        Self { client }
-    }
-
-    /// Access reference to the underlying [`StripeClient`].
-    #[must_use]
-    pub fn client(&self) -> &'a StripeClient {
-        self.client
-    }
-}
+pub use crate::resources::tax_calculations::CalculationsResource;
+pub use crate::resources::tax_registrations::{TaxRegistrationsResource, tax_registration_id};
+pub use crate::resources::tax_settings::TaxSettingsResource;
+pub use crate::resources::tax_transactions::TransactionsResource;
 
 /// Root resource namespace for Stripe Tax operations (`stripe.tax()`).
 ///
