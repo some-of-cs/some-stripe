@@ -691,6 +691,10 @@ pub mod invoice_params;
 pub use invoice_params::*;
 pub mod credit_note;
 pub use credit_note::*;
+pub mod quote;
+pub use quote::*;
+pub mod quote_params;
+pub use quote_params::*;
 
 /// Strongly typed, discriminated union of Stripe event payload objects.
 ///
@@ -742,6 +746,10 @@ pub enum EventObject {
     /// Stripe CreditNote payload (`object = "credit_note"`).
     #[serde(rename = "credit_note")]
     CreditNote(CreditNote),
+
+    /// Stripe Quote payload (`object = "quote"`).
+    #[serde(rename = "quote")]
+    Quote(Quote),
 
     /// Unrecognized, custom, or unsupported event object types.
     #[serde(other)]
@@ -1376,6 +1384,38 @@ mod tests {
                 assert!(!cn.is_void());
             }
             other => panic!("Expected CreditNote variant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_event_object_quote() {
+        let json = serde_json::json!({
+            "id": "qt_evt_test_303",
+            "object": "quote",
+            "amount_subtotal": 5000,
+            "amount_total": 5000,
+            "currency": "usd",
+            "customer": "cus_quote_cust",
+            "expires_at": 1735689600,
+            "status": "open"
+        });
+
+        let data = EventData { object: json };
+        let obj = data
+            .deserialize_object()
+            .expect("Failed to deserialize quote event");
+
+        match obj {
+            EventObject::Quote(qt) => {
+                assert_eq!(qt.id, "qt_evt_test_303");
+                assert_eq!(qt.object, "quote");
+                assert_eq!(qt.amount_total, 5000);
+                assert_eq!(qt.currency, "usd");
+                assert_eq!(qt.customer.as_deref(), Some("cus_quote_cust"));
+                assert!(qt.is_open());
+                assert!(!qt.is_accepted());
+            }
+            other => panic!("Expected Quote variant, got {other:?}"),
         }
     }
 }

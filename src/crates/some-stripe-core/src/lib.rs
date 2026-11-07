@@ -80,6 +80,7 @@ pub mod error;
 pub mod patterns;
 pub mod workflow;
 
+pub use bytes::Bytes;
 pub use client::{
     ClientInner, RequestOptions, SecretKey, StripeClient, StripeConfig, StripeHeaderExt,
 };
