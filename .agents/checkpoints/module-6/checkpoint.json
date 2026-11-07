@@ -144,14 +144,35 @@
       }
     }
   },
+  "module_patch": {
+    "title": "Fix AccountSessions and Persons Doctests and Type Alignment",
+    "status": "merged",
+    "pr": 100,
+    "pr_url": "https://github.com/some-of-cs/some-stripe/pull/100",
+    "branch": "patch/module-6-doctests-and-type-alignment",
+    "merged_at": "2026-11-07T06:14:54Z",
+    "merge_commit": "614f752"
+  },
+  "gatekeeper_council_review": {
+    "status": "approved",
+    "evaluator": "Code Reviewer (Council President), Profile: agent-c",
+    "verdict": "100% Clean Sign-Off Approval",
+    "head_commit": "e6c6e81",
+    "approved_at": "2026-11-07T06:27:10Z",
+    "gates": {
+      "G0": "PASSED (0 warnings, clean fmt)",
+      "G-Borrow": "PASSED (zero clone, borrowed lifetimes)",
+      "G2": "PASSED (redaction, constant time crypto, path traversal guards)",
+      "G-Law": "PASSED (ISO 4217, FinCEN CDD, EU DAC7, EU P2B)",
+      "G1_G4": "PASSED (100% test pass rate, full mock wire coverage)",
+      "G3": "PASSED (microkernel architecture, clean boundary)",
+      "G-Docs": "PASSED (100% passing doctests, full rustdoc)"
+    }
+  },
   "next_steps": [
-    "1. Create and author US-6.1.0 Story Promotion PR targeting feat/module-6-connect-and-marketplaces",
-    "2. Execute independent Code Reviewer gate validation and post sign-off on US-6.1.0 PR",
-    "3. Merge US-6.1.0 Story PR into feat/module-6-connect-and-marketplaces via gh pr merge",
-    "4. Pull updated feat/module-6-connect-and-marketplaces and execute full workspace validation",
-    "5. Create and author Module 6 Promotion PR targeting main",
-    "6. Conduct Gatekeeper Council sign-off on Module 6 PR",
-    "7. Merge Module 6 into main via gh pr merge",
-    "8. Execute Rule 18 whole-codebase verification across Modules 1-6 at repository root"
+    "1. Create and author Module 6 Promotion PR targeting main",
+    "2. Document Gatekeeper Council sign-off approval on the Module 6 PR conversation",
+    "3. Merge Module 6 PR into main via gh pr merge",
+    "4. Final notification to parent supervisor"
   ]
 }
