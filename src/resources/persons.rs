@@ -319,11 +319,10 @@ impl<'a> PersonsResource<'a> {
     ) -> Result<Paginator<'a, Person>, StripeError> {
         let encoded_account = validate_and_encode_id(account_id)?;
         let path = format!("v1/accounts/{encoded_account}/persons");
-        Ok(Paginator::new(
-            self.client,
-            path,
-            limit.unwrap_or(10),
-            person_id,
-        ))
+        let mut paginator = Paginator::new(self.client, path, limit.unwrap_or(10), person_id);
+        if let Some(account) = self.account {
+            paginator = paginator.with_account(account);
+        }
+        Ok(paginator)
     }
 }

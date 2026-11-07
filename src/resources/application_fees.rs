@@ -11,15 +11,28 @@ use some_stripe_types::{
 #[derive(Clone, Copy)]
 pub struct ApplicationFeesResource<'a> {
     client: &'a StripeClient,
+    account: Option<&'a str>,
 }
 
 impl<'a> ApplicationFeesResource<'a> {
     pub fn new(client: &'a StripeClient) -> Self {
-        Self { client }
+        Self {
+            client,
+            account: None,
+        }
     }
 
     pub fn client(&self) -> &'a StripeClient {
         self.client
+    }
+
+    /// Scopes this resource to operate on behalf of a specific connected account
+    /// by attaching the `Stripe-Account` tenant header to all outbound requests.
+    pub fn with_account(&self, account: &'a str) -> Self {
+        Self {
+            client: self.client,
+            account: Some(account),
+        }
     }
 
     pub async fn retrieve(&self, id: &str) -> Result<ApplicationFee, StripeError> {
@@ -28,7 +41,10 @@ impl<'a> ApplicationFeesResource<'a> {
             "{}/v1/application_fees/{encoded}",
             self.client.config.api_base
         );
-        let req = self.client.http.get(&url);
+        let mut req = self.client.http.get(&url);
+        if let Some(acct) = self.account {
+            req = req.header("Stripe-Account", acct);
+        }
         let val = self.client.execute(req).await?;
         let fee: ApplicationFee = serde_json::from_value(val)?;
         Ok(fee)
@@ -54,7 +70,10 @@ impl<'a> ApplicationFeesResource<'a> {
             None => format!("{}/v1/application_fees", self.client.config.api_base),
         };
 
-        let req = self.client.http.get(&url);
+        let mut req = self.client.http.get(&url);
+        if let Some(acct) = self.account {
+            req = req.header("Stripe-Account", acct);
+        }
         let val = self.client.execute(req).await?;
         let list: ApplicationFeeList = serde_json::from_value(val)?;
         Ok(list)
@@ -78,12 +97,16 @@ impl<'a> ApplicationFeesResource<'a> {
         let idempotency_key =
             super::resolve_idempotency_key(params.and_then(|p| p.idempotency_key.as_deref()));
 
-        let req = self
+        let mut req = self
             .client
             .http
             .post(&url)
             .form(&form_data)
             .header("Idempotency-Key", &*idempotency_key);
+
+        if let Some(acct) = self.account {
+            req = req.header("Stripe-Account", acct);
+        }
 
         let val = self.client.execute(req).await?;
         let refund: FeeRefund = serde_json::from_value(val)?;
@@ -101,7 +124,10 @@ impl<'a> ApplicationFeesResource<'a> {
             "{}/v1/application_fees/{encoded_fee}/refunds/{encoded_refund}",
             self.client.config.api_base
         );
-        let req = self.client.http.get(&url);
+        let mut req = self.client.http.get(&url);
+        if let Some(acct) = self.account {
+            req = req.header("Stripe-Account", acct);
+        }
         let val = self.client.execute(req).await?;
         let refund: FeeRefund = serde_json::from_value(val)?;
         Ok(refund)
@@ -135,7 +161,10 @@ impl<'a> ApplicationFeesResource<'a> {
             ),
         };
 
-        let req = self.client.http.get(&url);
+        let mut req = self.client.http.get(&url);
+        if let Some(acct) = self.account {
+            req = req.header("Stripe-Account", acct);
+        }
         let val = self.client.execute(req).await?;
         let list: FeeRefundList = serde_json::from_value(val)?;
         Ok(list)

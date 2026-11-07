@@ -385,6 +385,11 @@ impl<'a> AccountsResource<'a> {
     /// # }
     /// ```
     pub fn paginate(&self, limit: Option<u32>) -> Paginator<'a, Account> {
-        Paginator::new(self.client, "v1/accounts", limit.unwrap_or(10), account_id)
+        let mut paginator =
+            Paginator::new(self.client, "v1/accounts", limit.unwrap_or(10), account_id);
+        if let Some(account) = self.account {
+            paginator = paginator.with_account(account);
+        }
+        paginator
     }
 }
