@@ -397,19 +397,20 @@ async fn test_list_tax_transaction_line_items_pagination() {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
 
-    let server =
-        tokio::spawn(async move {
-            // Page 1
-            let (mut socket, _) = listener.accept().await.unwrap();
-            let mut buf = vec![0; 4096];
-            let n = socket.read(&mut buf).await.unwrap();
-            let req_str = String::from_utf8_lossy(&buf[..n]);
+    let server = tokio::spawn(async move {
+        // Page 1
+        let (mut socket, _) = listener.accept().await.unwrap();
+        let mut buf = vec![0; 4096];
+        let n = socket.read(&mut buf).await.unwrap();
+        let req_str = String::from_utf8_lossy(&buf[..n]);
 
-            assert!(req_str.starts_with(
+        assert!(
+            req_str.starts_with(
                 "GET /v1/tax/transactions/tax_tx_paged_404/line_items?limit=2 HTTP/1.1"
-            ));
+            )
+        );
 
-            let body1 = r#"{
+        let body1 = r#"{
             "object": "list",
             "data": [
                 {
@@ -434,22 +435,22 @@ async fn test_list_tax_transaction_line_items_pagination() {
             "has_more": true
         }"#;
 
-            let response = format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-                body1.len(),
-                body1
-            );
-            socket.write_all(response.as_bytes()).await.unwrap();
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            body1.len(),
+            body1
+        );
+        socket.write_all(response.as_bytes()).await.unwrap();
 
-            // Page 2
-            let (mut socket2, _) = listener.accept().await.unwrap();
-            let mut buf2 = vec![0; 4096];
-            let n2 = socket2.read(&mut buf2).await.unwrap();
-            let req_str2 = String::from_utf8_lossy(&buf2[..n2]);
+        // Page 2
+        let (mut socket2, _) = listener.accept().await.unwrap();
+        let mut buf2 = vec![0; 4096];
+        let n2 = socket2.read(&mut buf2).await.unwrap();
+        let req_str2 = String::from_utf8_lossy(&buf2[..n2]);
 
-            assert!(req_str2.contains("starting_after=tax_li_p1_item2"));
+        assert!(req_str2.contains("starting_after=tax_li_p1_item2"));
 
-            let body2 = r#"{
+        let body2 = r#"{
             "object": "list",
             "data": [
                 {
@@ -465,13 +466,13 @@ async fn test_list_tax_transaction_line_items_pagination() {
             "has_more": false
         }"#;
 
-            let response2 = format!(
-                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
-                body2.len(),
-                body2
-            );
-            socket2.write_all(response2.as_bytes()).await.unwrap();
-        });
+        let response2 = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            body2.len(),
+            body2
+        );
+        socket2.write_all(response2.as_bytes()).await.unwrap();
+    });
 
     let config =
         StripeConfig::new("sk_test_mock").with_api_base(format!("http://127.0.0.1:{port}"));
