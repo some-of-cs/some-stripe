@@ -95,8 +95,17 @@ pub use customer::*;
 pub mod subscription;
 #[allow(unused_imports)]
 pub use subscription::*;
+pub mod fee;
+pub use fee::*;
+pub mod fee_params;
+#[allow(unused_imports)]
+pub use fee_params::*;
 pub mod nullable;
 pub use nullable::*;
+pub mod transfer;
+pub use transfer::*;
+pub mod transfer_params;
+pub use transfer_params::*;
 
 /// Strongly typed Stripe Connect Account ID (`acct_...`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -704,6 +713,8 @@ pub mod quote;
 pub use quote::*;
 pub mod quote_params;
 pub use quote_params::*;
+pub mod payout;
+pub use payout::*;
 
 /// Strongly typed, discriminated union of Stripe event payload objects.
 ///
@@ -770,6 +781,22 @@ pub enum EventObject {
 
     /// Stripe Customer payload (`object = "customer"`).
     Customer(Customer),
+
+    /// Stripe Transfer payload (`object = "transfer"`).
+    Transfer(Transfer),
+
+    /// Stripe TransferReversal payload (`object = "transfer_reversal"`).
+    #[serde(rename = "transfer_reversal")]
+    TransferReversal(TransferReversal),
+
+    /// Stripe ApplicationFee payload (`object = "application_fee"`).
+    ApplicationFee(ApplicationFee),
+
+    /// Stripe FeeRefund payload (`object = "fee_refund"`).
+    FeeRefund(FeeRefund),
+
+    /// Stripe Payout payload (`object = "payout"`).
+    Payout(Payout),
 
     /// Unrecognized, custom, or unsupported event object types.
     #[serde(other)]

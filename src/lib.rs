@@ -82,11 +82,12 @@ pub use some_stripe_webhooks::{
 
 pub mod resources;
 pub use resources::{
-    AccountsResource, BalanceResource, BalanceTransactionsResource, BillingPortalResource,
-    CheckoutResource, CheckoutSessionExt, CreditNotesResource, CustomersResource, DisputesResource,
-    InvoicesResource, PaymentIntentsResource, PaymentLinksResource, QuotesResource, RedirectError,
-    RefundsResource, SessionsResource, SubscriptionItemsResource, SubscriptionSchedulesResource,
-    SubscriptionsResource, WebhooksResource, credit_note_id, generate_uuid_v4,
+    AccountsResource, ApplicationFeesResource, BalanceResource, BalanceTransactionsResource,
+    BillingPortalResource, CheckoutResource, CheckoutSessionExt, CreditNotesResource,
+    CustomersResource, DisputesResource, InvoicesResource, PaymentIntentsResource,
+    PaymentLinksResource, PayoutsResource, QuotesResource, RedirectError, RefundsResource,
+    SessionsResource, SubscriptionItemsResource, SubscriptionSchedulesResource,
+    SubscriptionsResource, TransfersResource, WebhooksResource, credit_note_id, generate_uuid_v4,
     is_fulfillment_ready, is_valid_uuid_v4, quote_id, validate_redirect_url,
 };
 
@@ -194,6 +195,21 @@ impl StripeClient {
     /// Access the BillingPortal resource namespace (`stripe.billing_portal`).
     pub fn billing_portal(&self) -> BillingPortalResource<'_> {
         BillingPortalResource::new(&self.0)
+    }
+
+    /// Access the Transfers resource namespace (`stripe.transfers`).
+    pub fn transfers(&self) -> TransfersResource<'_> {
+        TransfersResource::new(&self.0)
+    }
+
+    /// Access the ApplicationFees resource namespace (`stripe.application_fees`).
+    pub fn application_fees(&self) -> ApplicationFeesResource<'_> {
+        ApplicationFeesResource::new(&self.0)
+    }
+
+    /// Access the Payouts resource namespace (`stripe.payouts`).
+    pub fn payouts(&self) -> PayoutsResource<'_> {
+        PayoutsResource::new(&self.0)
     }
 }
 
