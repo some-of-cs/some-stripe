@@ -18,15 +18,15 @@ config:
 kanban
   todo[📋 Backlog / Ready]
   spawning[🤖 Subagent Creating]
-    u521[Unit 1: Invoice, CreditNote, Quote & PortalSession Entities]@{ ticket: 'main', assigned: 'agent-c', priority: 'High' }
-    u522[Unit 2: CreateInvoiceParams, CreditNoteParams & Portal Serde]@{ ticket: 'main', assigned: 'agent-a', priority: 'High' }
-    u523[Unit 3: Invoices, CreditNotes, Quotes & Portal Resources]@{ ticket: 'main', assigned: 'agent-b', priority: 'High' }
-    u524[Unit 4: Invoices Lifecycle, PDF Stream & EU VAT Directive Tests]@{ ticket: 'main', assigned: 'agent-c', priority: 'High' }
-    u525[Unit 5: Gate G-Borrow Audit, Doctests & Acceptance Gates]@{ ticket: 'main', assigned: 'agent-a', priority: 'High' }
   in_progress[🔄 Units In Progress]
   review[🔍 PR Open / Gate Review]
-  done[✅ Merged into Story Branch]
     s52_pr[US-5.2.0 Story Promotion PR into Module Branch]@{ ticket: 'main', assigned: 'agent-b', priority: 'Very High' }
+  done[✅ Merged into Story Branch]
+    u521[Unit 1: Draft & Finalized Invoices Core Lifecycle]@{ ticket: '72', assigned: 'agent-c', priority: 'High' }
+    u522[Unit 2: Invoice Line Items, Adjustments & Upcoming Previews]@{ ticket: '75', assigned: 'agent-a', priority: 'High' }
+    u523[Unit 3: Credit Notes Lifecycle & Invoice Balance Deductions]@{ ticket: '79', assigned: 'agent-b', priority: 'High' }
+    u524[Unit 4: Quotes Lifecycle & Zero-Copy Binary PDF Streaming]@{ ticket: '80', assigned: 'agent-c', priority: 'High' }
+    u525[Unit 5: Customer Billing Portal Configuration & Sessions]@{ ticket: '81', assigned: 'agent-a', priority: 'High' }
 ```
 
 ---
