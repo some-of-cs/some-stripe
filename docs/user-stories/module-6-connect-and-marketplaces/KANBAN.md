@@ -29,11 +29,12 @@ kanban
   spawning[🤖 Subagent Creating]
   in_progress[🔄 Stories In Progress]
   review[🔍 Module Review & Gate Sign-off]
-    m6_gates[Module-Wide Quality Gates Audit: G0-G4, G-Borrow, G2, G-Law]@{ ticket: 'main', assigned: 'agent-c', priority: 'Very High' }
   done[✅ Done / Merged to Module Branch]
     m6_setup[Module 6 Architecture & Implementation Tasks Initialized]@{ ticket: 'main', assigned: 'agent-a', priority: 'High' }
     m6_s62_merged[US-6.2.0 Multi-Party Transfers & Fees Merged]@{ ticket: '98', assigned: 'agent-b', priority: 'Very High' }
     m6_s61_merged[US-6.1.0 Connected Accounts & Sessions Merged]@{ ticket: '99', assigned: 'agent-b', priority: 'Very High' }
+    m6_patch_merged[Module 6 Doctests & Schema Alignment Patch Merged]@{ ticket: '100', assigned: 'agent-a', priority: 'Very High' }
+    m6_gates_approved[Module-Wide Quality Gates Audit: G0-G4, G-Borrow, G2, G-Law 100% Clean Sign-off]@{ ticket: 'main', assigned: 'agent-c', priority: 'Very High' }
 ```
 
 ---
