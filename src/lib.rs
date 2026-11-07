@@ -59,6 +59,7 @@ pub use some_stripe_core as core;
 pub use some_stripe_types as types;
 pub use some_stripe_webhooks as webhooks;
 
+pub use some_stripe_core::Bytes;
 pub use some_stripe_core::client::{
     ClientInner, RequestOptions, SecretKey, StripeConfig, StripeHeaderExt,
 };
@@ -81,10 +82,12 @@ pub use some_stripe_webhooks::{
 
 pub mod resources;
 pub use resources::{
-    AccountsResource, BalanceResource, BalanceTransactionsResource, CheckoutResource,
-    CheckoutSessionExt, DisputesResource, PaymentIntentsResource, PaymentLinksResource,
-    RedirectError, RefundsResource, SessionsResource, WebhooksResource, generate_uuid_v4,
-    is_fulfillment_ready, is_valid_uuid_v4, validate_redirect_url,
+    AccountsResource, BalanceResource, BalanceTransactionsResource, BillingPortalResource,
+    CheckoutResource, CheckoutSessionExt, CreditNotesResource, CustomersResource, DisputesResource,
+    InvoicesResource, PaymentIntentsResource, PaymentLinksResource, QuotesResource, RedirectError,
+    RefundsResource, SessionsResource, SubscriptionItemsResource, SubscriptionSchedulesResource,
+    SubscriptionsResource, WebhooksResource, credit_note_id, generate_uuid_v4,
+    is_fulfillment_ready, is_valid_uuid_v4, quote_id, validate_redirect_url,
 };
 
 /// The main Stripe client used to interact with the Stripe API, modeled after `stripe-node`.
@@ -128,6 +131,11 @@ impl StripeClient {
         AccountsResource::new(&self.0)
     }
 
+    /// Access the Customers resource namespace (`stripe.customers`).
+    pub fn customers(&self) -> CustomersResource<'_> {
+        CustomersResource::new(&self.0)
+    }
+
     /// Access the Webhooks helper resource (`stripe.webhooks`).
     pub fn webhooks(&self) -> WebhooksResource {
         WebhooksResource::new()
@@ -156,6 +164,36 @@ impl StripeClient {
     /// Access the PaymentLinks resource namespace (`stripe.payment_links`).
     pub fn payment_links(&self) -> PaymentLinksResource<'_> {
         PaymentLinksResource::new(&self.0)
+    }
+
+    /// Access the Subscriptions resource namespace (`stripe.subscriptions`).
+    pub fn subscriptions(&self) -> SubscriptionsResource<'_> {
+        SubscriptionsResource::new(&self.0)
+    }
+
+    /// Access the SubscriptionSchedules resource namespace (`stripe.subscription_schedules`).
+    pub fn subscription_schedules(&self) -> SubscriptionSchedulesResource<'_> {
+        SubscriptionSchedulesResource::new(&self.0)
+    }
+
+    /// Access the Invoices resource namespace (`stripe.invoices`).
+    pub fn invoices(&self) -> InvoicesResource<'_> {
+        InvoicesResource::new(&self.0)
+    }
+
+    /// Access the CreditNotes resource namespace (`stripe.credit_notes`).
+    pub fn credit_notes(&self) -> CreditNotesResource<'_> {
+        CreditNotesResource::new(&self.0)
+    }
+
+    /// Access the Quotes resource namespace (`stripe.quotes`).
+    pub fn quotes(&self) -> QuotesResource<'_> {
+        QuotesResource::new(&self.0)
+    }
+
+    /// Access the BillingPortal resource namespace (`stripe.billing_portal`).
+    pub fn billing_portal(&self) -> BillingPortalResource<'_> {
+        BillingPortalResource::new(&self.0)
     }
 }
 
@@ -206,6 +244,9 @@ pub trait StripeClientExt {
     /// Access the Accounts resource namespace (`stripe.accounts`).
     fn accounts(&self) -> AccountsResource<'_>;
 
+    /// Access the Customers resource namespace (`stripe.customers`).
+    fn customers(&self) -> CustomersResource<'_>;
+
     /// Access the Webhooks helper resource (`stripe.webhooks`).
     fn webhooks(&self) -> WebhooksResource;
 
@@ -223,6 +264,24 @@ pub trait StripeClientExt {
 
     /// Access the PaymentLinks resource namespace (`stripe.payment_links`).
     fn payment_links(&self) -> PaymentLinksResource<'_>;
+
+    /// Access the Subscriptions resource namespace (`stripe.subscriptions`).
+    fn subscriptions(&self) -> SubscriptionsResource<'_>;
+
+    /// Access the SubscriptionSchedules resource namespace (`stripe.subscription_schedules`).
+    fn subscription_schedules(&self) -> SubscriptionSchedulesResource<'_>;
+
+    /// Access the Invoices resource namespace (`stripe.invoices`).
+    fn invoices(&self) -> InvoicesResource<'_>;
+
+    /// Access the CreditNotes resource namespace (`stripe.credit_notes`).
+    fn credit_notes(&self) -> CreditNotesResource<'_>;
+
+    /// Access the Quotes resource namespace (`stripe.quotes`).
+    fn quotes(&self) -> QuotesResource<'_>;
+
+    /// Access the BillingPortal resource namespace (`stripe.billing_portal`).
+    fn billing_portal(&self) -> BillingPortalResource<'_>;
 }
 
 impl StripeClientExt for some_stripe_core::StripeClient {
@@ -236,6 +295,10 @@ impl StripeClientExt for some_stripe_core::StripeClient {
 
     fn accounts(&self) -> AccountsResource<'_> {
         AccountsResource::new(self)
+    }
+
+    fn customers(&self) -> CustomersResource<'_> {
+        CustomersResource::new(self)
     }
 
     fn webhooks(&self) -> WebhooksResource {
@@ -260,6 +323,30 @@ impl StripeClientExt for some_stripe_core::StripeClient {
 
     fn payment_links(&self) -> PaymentLinksResource<'_> {
         PaymentLinksResource::new(self)
+    }
+
+    fn subscriptions(&self) -> SubscriptionsResource<'_> {
+        SubscriptionsResource::new(self)
+    }
+
+    fn subscription_schedules(&self) -> SubscriptionSchedulesResource<'_> {
+        SubscriptionSchedulesResource::new(self)
+    }
+
+    fn invoices(&self) -> InvoicesResource<'_> {
+        InvoicesResource::new(self)
+    }
+
+    fn credit_notes(&self) -> CreditNotesResource<'_> {
+        CreditNotesResource::new(self)
+    }
+
+    fn quotes(&self) -> QuotesResource<'_> {
+        QuotesResource::new(self)
+    }
+
+    fn billing_portal(&self) -> BillingPortalResource<'_> {
+        BillingPortalResource::new(self)
     }
 }
 

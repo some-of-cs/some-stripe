@@ -88,6 +88,15 @@ pub mod payment_link;
 pub use payment_link::*;
 pub mod omnibus;
 pub use omnibus::*;
+pub mod billing_portal;
+pub use billing_portal::*;
+pub mod customer;
+pub use customer::*;
+pub mod subscription;
+#[allow(unused_imports)]
+pub use subscription::*;
+pub mod nullable;
+pub use nullable::*;
 
 /// Strongly typed Stripe Connect Account ID (`acct_...`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -685,79 +694,16 @@ fn default_account_object() -> String {
     "account".into()
 }
 
-/// Represents a Stripe Invoice object.
-///
-/// Handles `invoice.upcoming` preview events where `id` is `None` (JSON `null`).
-///
-/// # Example
-/// ```
-/// use some_stripe_types::Invoice;
-///
-/// let json = r#"{
-///     "id": null,
-///     "object": "invoice",
-///     "customer": "cus_test_123",
-///     "amount_due": 4500,
-///     "currency": "usd"
-/// }"#;
-/// let invoice: Invoice = serde_json::from_str(json).unwrap();
-/// assert!(invoice.id.is_none());
-/// assert_eq!(invoice.amount_due, Some(4500));
-/// ```
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Invoice {
-    /// Unique identifier for the invoice (`in_...`).
-    ///
-    /// For upcoming invoice preview events (`invoice.upcoming`), `id` is `None` (JSON `null`).
-    pub id: Option<String>,
-
-    /// Object type, always `invoice`.
-    #[serde(default = "default_invoice_object")]
-    pub object: String,
-
-    /// The ID of the customer who will be billed.
-    pub customer: Option<String>,
-
-    /// Final amount due at this time for this invoice in minor currency units (e.g., cents).
-    pub amount_due: Option<i64>,
-
-    /// The amount, in minor currency units, that was paid.
-    pub amount_paid: Option<i64>,
-
-    /// The difference between amount_due and amount_paid, in minor currency units.
-    pub amount_remaining: Option<i64>,
-
-    /// Total after discounts and taxes in minor currency units.
-    pub total: Option<i64>,
-
-    /// Total of all items before discounts and taxes in minor currency units.
-    pub subtotal: Option<i64>,
-
-    /// Three-letter ISO currency code in lowercase.
-    pub currency: Option<String>,
-
-    /// The status of the invoice: `draft`, `open`, `paid`, `uncollectible`, or `void`.
-    pub status: Option<String>,
-
-    /// Whether payment was successfully made for this invoice.
-    pub paid: Option<bool>,
-
-    /// The ID of the subscription that this invoice was prepared for, if any.
-    pub subscription: Option<String>,
-
-    /// Start of the usage period that this invoice covers (UNIX epoch seconds).
-    pub period_start: Option<i64>,
-
-    /// End of the usage period that this invoice covers (UNIX epoch seconds).
-    pub period_end: Option<i64>,
-
-    /// Time at which the object was created (UNIX epoch seconds).
-    pub created: Option<i64>,
-}
-
-fn default_invoice_object() -> String {
-    "invoice".into()
-}
+pub mod invoice;
+pub use invoice::*;
+pub mod invoice_params;
+pub use invoice_params::*;
+pub mod credit_note;
+pub use credit_note::*;
+pub mod quote;
+pub use quote::*;
+pub mod quote_params;
+pub use quote_params::*;
 
 /// Strongly typed, discriminated union of Stripe event payload objects.
 ///
@@ -805,6 +751,25 @@ pub enum EventObject {
     /// Stripe PaymentLink payload (`object = "payment_link"`).
     #[serde(rename = "payment_link")]
     PaymentLink(PaymentLink),
+
+    /// Stripe CreditNote payload (`object = "credit_note"`).
+    #[serde(rename = "credit_note")]
+    CreditNote(CreditNote),
+
+    /// Stripe Quote payload (`object = "quote"`).
+    #[serde(rename = "quote")]
+    Quote(Quote),
+
+    /// Stripe PortalSession payload (`object = "billing_portal.session"`).
+    #[serde(rename = "billing_portal.session")]
+    PortalSession(PortalSession),
+
+    /// Stripe PortalConfiguration payload (`object = "billing_portal.configuration"`).
+    #[serde(rename = "billing_portal.configuration")]
+    PortalConfiguration(PortalConfiguration),
+
+    /// Stripe Customer payload (`object = "customer"`).
+    Customer(Customer),
 
     /// Unrecognized, custom, or unsupported event object types.
     #[serde(other)]
@@ -1407,6 +1372,130 @@ mod tests {
                 assert_eq!(link.livemode, Some(false));
             }
             other => panic!("Expected PaymentLink variant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_event_object_credit_note() {
+        let json = serde_json::json!({
+            "id": "cn_evt_test_202",
+            "object": "credit_note",
+            "amount": 1500,
+            "currency": "usd",
+            "customer": "cus_test_123",
+            "invoice": "in_test_456",
+            "status": "issued"
+        });
+
+        let data = EventData { object: json };
+        let obj = data
+            .deserialize_object()
+            .expect("Failed to deserialize credit_note event");
+
+        match obj {
+            EventObject::CreditNote(cn) => {
+                assert_eq!(cn.id, "cn_evt_test_202");
+                assert_eq!(cn.object, "credit_note");
+                assert_eq!(cn.amount, 1500);
+                assert_eq!(cn.currency, "usd");
+                assert_eq!(cn.customer, "cus_test_123");
+                assert_eq!(cn.invoice, "in_test_456");
+                assert!(cn.is_issued());
+                assert!(!cn.is_void());
+            }
+            other => panic!("Expected CreditNote variant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_event_object_quote() {
+        let json = serde_json::json!({
+            "id": "qt_evt_test_303",
+            "object": "quote",
+            "amount_subtotal": 5000,
+            "amount_total": 5000,
+            "currency": "usd",
+            "customer": "cus_quote_cust",
+            "expires_at": 1735689600,
+            "status": "open"
+        });
+
+        let data = EventData { object: json };
+        let obj = data
+            .deserialize_object()
+            .expect("Failed to deserialize quote event");
+
+        match obj {
+            EventObject::Quote(qt) => {
+                assert_eq!(qt.id, "qt_evt_test_303");
+                assert_eq!(qt.object, "quote");
+                assert_eq!(qt.amount_total, 5000);
+                assert_eq!(qt.currency, "usd");
+                assert_eq!(qt.customer.as_deref(), Some("cus_quote_cust"));
+                assert!(qt.is_open());
+                assert!(!qt.is_accepted());
+            }
+            other => panic!("Expected Quote variant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_event_object_portal_session() {
+        let json = serde_json::json!({
+            "id": "bps_evt_test_404",
+            "object": "billing_portal.session",
+            "configuration": "bpc_test_conf",
+            "created": 1735689600,
+            "customer": "cus_portal_cust",
+            "url": "https://billing.stripe.com/p/session/bps_evt_test_404"
+        });
+
+        let data = EventData { object: json };
+        let obj = data
+            .deserialize_object()
+            .expect("Failed to deserialize billing_portal.session event");
+
+        match obj {
+            EventObject::PortalSession(bps) => {
+                assert_eq!(bps.id, "bps_evt_test_404");
+                assert_eq!(bps.object, "billing_portal.session");
+                assert_eq!(bps.customer, "cus_portal_cust");
+                assert_eq!(bps.configuration.as_deref(), Some("bpc_test_conf"));
+                assert_eq!(
+                    bps.url,
+                    "https://billing.stripe.com/p/session/bps_evt_test_404"
+                );
+            }
+            other => panic!("Expected PortalSession variant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_event_object_portal_configuration() {
+        let json = serde_json::json!({
+            "id": "bpc_evt_test_505",
+            "object": "billing_portal.configuration",
+            "active": true,
+            "created": 1735689600,
+            "default_return_url": "https://example.com/return"
+        });
+
+        let data = EventData { object: json };
+        let obj = data
+            .deserialize_object()
+            .expect("Failed to deserialize billing_portal.configuration event");
+
+        match obj {
+            EventObject::PortalConfiguration(bpc) => {
+                assert_eq!(bpc.id, "bpc_evt_test_505");
+                assert_eq!(bpc.object, "billing_portal.configuration");
+                assert!(bpc.active);
+                assert_eq!(
+                    bpc.default_return_url.as_deref(),
+                    Some("https://example.com/return")
+                );
+            }
+            other => panic!("Expected PortalConfiguration variant, got {other:?}"),
         }
     }
 }
