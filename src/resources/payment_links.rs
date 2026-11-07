@@ -99,21 +99,14 @@ impl<'a> PaymentLinksResource<'a> {
         let url = format!("{}/v1/payment_links", self.client.config.api_base);
         let form_data = to_form_params(params)?;
 
-        let generated_key;
-        let idempotency_key = match params.idempotency_key.as_deref() {
-            Some(k) if !k.trim().is_empty() => k,
-            _ => {
-                generated_key = crate::resources::generate_uuid_v4();
-                &generated_key
-            }
-        };
+        let idempotency_key = super::resolve_idempotency_key(params.idempotency_key.as_deref());
 
         let req = self
             .client
             .http
             .post(&url)
             .form(&form_data)
-            .header("Idempotency-Key", idempotency_key);
+            .header("Idempotency-Key", &*idempotency_key);
 
         let val = self.client.execute(req).await?;
         let link: PaymentLink = serde_json::from_value(val)?;
@@ -176,21 +169,14 @@ impl<'a> PaymentLinksResource<'a> {
         let url = format!("{}/v1/payment_links/{safe_id}", self.client.config.api_base);
         let form_data = to_form_params(params)?;
 
-        let generated_key;
-        let idempotency_key = match params.idempotency_key.as_deref() {
-            Some(k) if !k.trim().is_empty() => k,
-            _ => {
-                generated_key = crate::resources::generate_uuid_v4();
-                &generated_key
-            }
-        };
+        let idempotency_key = super::resolve_idempotency_key(params.idempotency_key.as_deref());
 
         let req = self
             .client
             .http
             .post(&url)
             .form(&form_data)
-            .header("Idempotency-Key", idempotency_key);
+            .header("Idempotency-Key", &*idempotency_key);
 
         let val = self.client.execute(req).await?;
         let link: PaymentLink = serde_json::from_value(val)?;

@@ -162,7 +162,7 @@ fn test_update_and_list_payouts_params() {
     metadata.insert("reviewed".into(), "true".into());
     let update_params = UpdatePayoutParams {
         metadata: Some(metadata),
-        idempotency_key: None,
+        ..Default::default()
     };
     let update_json = serde_json::to_string(&update_params).unwrap();
     assert!(update_json.contains("\"reviewed\":\"true\""));

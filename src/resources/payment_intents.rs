@@ -152,21 +152,14 @@ impl<'a> PaymentIntentsResource<'a> {
         let url = format!("{}/v1/payment_intents", self.client.config.api_base);
         let form_data = to_form_params(params)?;
 
-        let generated_key;
-        let idempotency_key = match params.idempotency_key.as_deref() {
-            Some(k) if !k.trim().is_empty() => k,
-            _ => {
-                generated_key = generate_uuid_v4();
-                &generated_key
-            }
-        };
+        let idempotency_key = super::resolve_idempotency_key(params.idempotency_key.as_deref());
 
         let req = self
             .client
             .http
             .post(&url)
             .form(&form_data)
-            .header("Idempotency-Key", idempotency_key);
+            .header("Idempotency-Key", &*idempotency_key);
 
         let val = self.client.execute(req).await?;
         let intent: PaymentIntent = serde_json::from_value(val)?;
@@ -249,21 +242,15 @@ impl<'a> PaymentIntentsResource<'a> {
             form_data.push(("amount_to_capture", a.as_str()));
         }
 
-        let generated_key;
-        let idempotency_key = match params.and_then(|p| p.idempotency_key.as_deref()) {
-            Some(k) if !k.trim().is_empty() => k,
-            _ => {
-                generated_key = generate_uuid_v4();
-                &generated_key
-            }
-        };
+        let idempotency_key =
+            super::resolve_idempotency_key(params.and_then(|p| p.idempotency_key.as_deref()));
 
         let req = self
             .client
             .http
             .post(&url)
             .form(&form_data)
-            .header("Idempotency-Key", idempotency_key);
+            .header("Idempotency-Key", &*idempotency_key);
 
         let val = self.client.execute(req).await?;
         let intent: PaymentIntent = serde_json::from_value(val)?;
@@ -315,21 +302,15 @@ impl<'a> PaymentIntentsResource<'a> {
             form_data.push(("cancellation_reason", reason));
         }
 
-        let generated_key;
-        let idempotency_key = match params.and_then(|p| p.idempotency_key.as_deref()) {
-            Some(k) if !k.trim().is_empty() => k,
-            _ => {
-                generated_key = generate_uuid_v4();
-                &generated_key
-            }
-        };
+        let idempotency_key =
+            super::resolve_idempotency_key(params.and_then(|p| p.idempotency_key.as_deref()));
 
         let req = self
             .client
             .http
             .post(&url)
             .form(&form_data)
-            .header("Idempotency-Key", idempotency_key);
+            .header("Idempotency-Key", &*idempotency_key);
 
         let val = self.client.execute(req).await?;
         let intent: PaymentIntent = serde_json::from_value(val)?;
@@ -390,21 +371,15 @@ impl<'a> PaymentIntentsResource<'a> {
             form_data.push(("setup_future_usage", sfu));
         }
 
-        let generated_key;
-        let idempotency_key = match params.and_then(|p| p.idempotency_key.as_deref()) {
-            Some(k) if !k.trim().is_empty() => k,
-            _ => {
-                generated_key = generate_uuid_v4();
-                &generated_key
-            }
-        };
+        let idempotency_key =
+            super::resolve_idempotency_key(params.and_then(|p| p.idempotency_key.as_deref()));
 
         let req = self
             .client
             .http
             .post(&url)
             .form(&form_data)
-            .header("Idempotency-Key", idempotency_key);
+            .header("Idempotency-Key", &*idempotency_key);
 
         let val = self.client.execute(req).await?;
         let intent: PaymentIntent = serde_json::from_value(val)?;

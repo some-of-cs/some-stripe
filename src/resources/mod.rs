@@ -48,3 +48,55 @@ pub use subscription_schedules::SubscriptionSchedulesResource;
 pub use subscriptions::SubscriptionsResource;
 pub use transfers::TransfersResource;
 pub use webhooks::WebhooksResource;
+
+/// Resolves an idempotency key for state-mutating requests.
+///
+/// Preserves zero-clone borrowing (`Cow::Borrowed`) when caller provides a non-empty,
+/// trimmed key, and generates an RFC 4122 compliant UUID v4 (`Cow::Owned`) when omitted
+/// or whitespace-only.
+pub(crate) fn resolve_idempotency_key(explicit: Option<&str>) -> std::borrow::Cow<'_, str> {
+    match explicit.map(str::trim).filter(|k| !k.is_empty()) {
+        Some(k) => std::borrow::Cow::Borrowed(k),
+        None => std::borrow::Cow::Owned(generate_uuid_v4()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::borrow::Cow;
+
+    #[test]
+    fn test_resolve_idempotency_key_borrowed_when_explicit() {
+        let explicit = "user_provided_key_123";
+        let resolved = resolve_idempotency_key(Some(explicit));
+        assert!(matches!(resolved, Cow::Borrowed(_)));
+        assert_eq!(resolved.as_ref(), "user_provided_key_123");
+    }
+
+    #[test]
+    fn test_resolve_idempotency_key_trims_whitespace_and_borrows() {
+        let explicit = "   trimmed_key_456   ";
+        let resolved = resolve_idempotency_key(Some(explicit));
+        assert!(matches!(resolved, Cow::Borrowed(_)));
+        assert_eq!(resolved.as_ref(), "trimmed_key_456");
+    }
+
+    #[test]
+    fn test_resolve_idempotency_key_owned_uuid_on_none() {
+        let resolved = resolve_idempotency_key(None);
+        assert!(matches!(resolved, Cow::Owned(_)));
+        assert!(is_valid_uuid_v4(resolved.as_ref()));
+    }
+
+    #[test]
+    fn test_resolve_idempotency_key_owned_uuid_on_empty_or_whitespace() {
+        let empty = resolve_idempotency_key(Some(""));
+        assert!(matches!(empty, Cow::Owned(_)));
+        assert!(is_valid_uuid_v4(empty.as_ref()));
+
+        let whitespace = resolve_idempotency_key(Some("   \t\n  "));
+        assert!(matches!(whitespace, Cow::Owned(_)));
+        assert!(is_valid_uuid_v4(whitespace.as_ref()));
+    }
+}
