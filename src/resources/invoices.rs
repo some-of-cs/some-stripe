@@ -554,4 +554,18 @@ impl<'a> InvoicesResource<'a> {
         };
         self.list_line_items(invoice_id, &params)
     }
+
+    /// Streams raw binary PDF bytes for an invoice (`GET /v1/invoices/{id}/pdf`).
+    ///
+    /// Adheres to Gate G-Borrow by returning zero-copy `bytes::Bytes`.
+    pub async fn pdf(&self, invoice_id: &str) -> Result<bytes::Bytes, StripeError> {
+        let safe_id = validate_and_encode_id(invoice_id)?;
+        let url = format!(
+            "{}/v1/invoices/{}/pdf",
+            self.client.config.api_base, safe_id
+        );
+
+        let req = self.client.http.get(&url);
+        self.client.execute_raw_bytes(req).await
+    }
 }

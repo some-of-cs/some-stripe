@@ -468,6 +468,148 @@ impl StripeClient {
             return Ok(value);
         }
     }
+
+    /// Executes requests and returns the raw response body as zero-copy `bytes::Bytes`.
+    ///
+    /// Ideal for binary downloads such as invoice and quote PDFs.
+    pub async fn execute_raw_bytes(
+        &self,
+        request: reqwest::RequestBuilder,
+    ) -> Result<bytes::Bytes, StripeError> {
+        self.execute_raw_bytes_with_options(request, None).await
+    }
+
+    /// Executes requests with options and returns the raw response body as zero-copy `bytes::Bytes`.
+    pub async fn execute_raw_bytes_with_options(
+        &self,
+        mut request: reqwest::RequestBuilder,
+        options: Option<&RequestOptions>,
+    ) -> Result<bytes::Bytes, StripeError> {
+        if let Some(opts) = options {
+            if let Some(acct) = &opts.stripe_account {
+                request = request.header("Stripe-Account", acct);
+            }
+            if let Some(idemp) = &opts.idempotency_key {
+                request = request.header("Idempotency-Key", idemp);
+            }
+            if let Some(ver) = &opts.stripe_version {
+                request = request.header("Stripe-Version", ver);
+            }
+            if let Some(to) = opts.timeout {
+                request = request.timeout(to);
+            }
+        }
+
+        request = request.basic_auth(self.config.secret_key.expose_secret(), None::<&str>);
+
+        let mut req = request.build().map_err(StripeError::Http)?;
+        let is_idempotent = matches!(
+            *req.method(),
+            reqwest::Method::GET
+                | reqwest::Method::HEAD
+                | reqwest::Method::DELETE
+                | reqwest::Method::OPTIONS
+                | reqwest::Method::PUT
+        );
+        let has_idempotency_key = req.headers().contains_key("idempotency-key");
+        let can_retry_network = is_idempotent || has_idempotency_key;
+
+        let max_retries = self.config.max_retries;
+        let mut retries_taken = 0u32;
+
+        loop {
+            let next_req = if retries_taken < max_retries {
+                req.try_clone()
+            } else {
+                None
+            };
+
+            let response_result = self.http.execute(req).await;
+
+            let response = match response_result {
+                Ok(resp) => resp,
+                Err(err) => {
+                    if can_retry_network && let Some(next) = next_req {
+                        let action = self
+                            .config
+                            .error_workflow
+                            .on_api_error(
+                                503,
+                                "network_error",
+                                &err.to_string(),
+                                retries_taken,
+                                max_retries,
+                            )
+                            .await;
+                        if action == ErrorAction::Retry {
+                            let delay = compute_backoff_delay(retries_taken, 50, 5000);
+                            tokio::time::sleep(delay).await;
+                            retries_taken += 1;
+                            req = next;
+                            continue;
+                        }
+                    }
+                    return Err(StripeError::Http(err));
+                }
+            };
+
+            let status = response.status();
+            let body_bytes = response.bytes().await?;
+
+            if !status.is_success() {
+                let error_json: serde_json::Value =
+                    serde_json::from_slice(&body_bytes).unwrap_or_default();
+                let err_obj = error_json.get("error");
+
+                let status_code = status.as_u16();
+                let code = err_obj
+                    .and_then(|e| e.get("code"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown")
+                    .to_string();
+                let message = err_obj
+                    .and_then(|e| e.get("message"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("Stripe request rejected")
+                    .to_string();
+                let error_type = err_obj
+                    .and_then(|e| e.get("type"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("api_error")
+                    .to_string();
+                let doc_url = err_obj
+                    .and_then(|e| e.get("doc_url"))
+                    .and_then(|v| v.as_str())
+                    .map(str::to_string);
+
+                let action = self
+                    .config
+                    .error_workflow
+                    .on_api_error(status_code, &code, &message, retries_taken, max_retries)
+                    .await;
+
+                if action == ErrorAction::Retry
+                    && let Some(next) = next_req
+                {
+                    let delay = compute_backoff_delay(retries_taken, 50, 5000);
+                    tokio::time::sleep(delay).await;
+                    retries_taken += 1;
+                    req = next;
+                    continue;
+                }
+
+                return Err(StripeError::Api {
+                    status: status_code,
+                    code,
+                    message,
+                    error_type,
+                    doc_url,
+                });
+            }
+
+            return Ok(body_bytes);
+        }
+    }
 }
 
 // Compile-time static assertions ensuring StripeClient and its dependencies implement Send + Sync
