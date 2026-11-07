@@ -51,13 +51,13 @@ config:
 ---
 kanban
   todo[📋 Backlog / Ready]
-    u612[Unit 2: Account Links & Embedded Account Sessions (PR TBD)]@{ ticket: 'main', assigned: 'agent-b', priority: 'High' }
     u613[Unit 3: KYC Person Entities & Beneficial Ownership (PR TBD)]@{ ticket: 'main', assigned: 'agent-c', priority: 'High' }
     u614[Unit 4: Accounts, Links, Sessions & Persons Resources (PR TBD)]@{ ticket: 'main', assigned: 'agent-a', priority: 'High' }
     u615[Unit 5: Borrow Audit, Multi-Tenant Isolation & Gates (PR TBD)]@{ ticket: 'main', assigned: 'agent-b', priority: 'High' }
   spawning[🤖 Subagent Creating]
   in_progress[🔄 Units In Progress]
     u611[Unit 1: Connect Account Domain Entities & Requirements]@{ ticket: 'main', assigned: 'agent-a', priority: 'High' }
+    u612[Unit 2: Account Links & Embedded Account Sessions (PR TBD)]@{ ticket: 'main', assigned: 'agent-b', priority: 'High' }
   review[🔍 PR Open / Gate Review]
   done[✅ Merged into Story Branch]
     s61_pr[US-6.1.0 Story Promotion PR into Module Branch]@{ ticket: 'main', assigned: 'agent-a', priority: 'Very High' }
@@ -98,7 +98,7 @@ kanban
 | **M6-SETUP** | Module | `N/A (Baseline Commit)` | `Supervisor` (`agent-a`) | `antigravity-guide` | `Git Workflow Master` | `stripe-best-practices` | `.worktrees/feat-module-6-connect-and-marketplaces` | `feat/module-6-connect-and-marketplaces` | 🔄 In Progress |
 | **US-6.1.0** | Story | `feat(us-6.1.0): connected accounts, links, sessions and kyc (Units 1..5 Promotion)` | `US-6.1.0 Story Lead` (`agent-a`) | `connect-recommend` | `Code Reviewer`<br>`API Tester` | `security-audit`<br>`stripe-docs` | `.worktrees/feat-us-6.1.0-connected-accounts-and-embedded-sessions` | `feat/us-6.1.0-connected-accounts-and-embedded-sessions` | 📋 Ready |
 | **US-6.1.0/U1** | Unit | `feat(us-6.1.0/unit-1): connect account domain entities and requirements` | `domain-codegen-specialist` (`agent-a`) | `connect-recommend`<br>`stripe-docs` | `Code Reviewer`<br>`AppSec Engineer` | `stripe-best-practices`<br>`security-audit` | `.worktrees/feat-us-6.1.0-unit-1-account-domain-entities` | `feat/us-6.1.0/unit-1-account-domain-entities` | 📋 Ready |
-| **US-6.1.0/U2** | Unit | `feat(us-6.1.0/unit-2): account links and embedded account sessions` | `microkernel-architect` (`agent-b`) | `stripe-docs`<br>`stripe-best-practices` | `Code Reviewer`<br>`Rust Refactoring` | `stripe-best-practices`<br>`upgrade-stripe` | `.worktrees/feat-us-6.1.0-unit-2-account-links-and-sessions` | `feat/us-6.1.0/unit-2-account-links-and-sessions` | 📋 Ready |
+| **US-6.1.0/U2** | Unit | `feat(us-6.1.0/unit-2): account links and embedded account sessions` | `microkernel-architect` (`agent-b`) | `stripe-docs`<br>`stripe-best-practices` | `Code Reviewer`<br>`Rust Refactoring` | `stripe-best-practices`<br>`upgrade-stripe` | `.worktrees/feat-us-6.1.0-unit-2-account-links-and-sessions` | `feat/us-6.1.0/unit-2-account-links-and-sessions` | 🔄 In Progress |
 | **US-6.1.0/U3** | Unit | `feat(us-6.1.0/unit-3): kyc person entities and beneficial ownership` | `domain-codegen-specialist` (`agent-c`) | `connect-required-verification-information` | `Code Reviewer`<br>`AppSec Engineer` | `stripe-best-practices`<br>`security-audit` | `.worktrees/feat-us-6.1.0-unit-3-kyc-persons-entities` | `feat/us-6.1.0/unit-3-kyc-persons-entities` | 📋 Ready |
 | **US-6.1.0/U4** | Unit | `feat(us-6.1.0/unit-4): accounts, links, sessions and persons resources` | `microkernel-architect` (`agent-a`) | `stripe-docs`<br>`stripe-best-practices` | `Code Reviewer`<br>`AppSec Engineer` | `stripe-best-practices`<br>`security-audit` | `.worktrees/feat-us-6.1.0-unit-4-accounts-links-sessions-resources` | `feat/us-6.1.0/unit-4-accounts-links-sessions-resources` | 📋 Ready |
 | **US-6.1.0/U5** | Unit | `feat(us-6.1.0/unit-5): borrow audit, multi-tenant isolation, doctests and gates` | `Rust Refactoring Specialist` (`agent-b`) | `upgrade-stripe`<br>`security-audit` | `Code Reviewer`<br>`Technical Writer` | `stripe-best-practices`<br>`stripe-docs` | `.worktrees/feat-us-6.1.0-unit-5-borrow-audit-doctests-gates` | `feat/us-6.1.0/unit-5-borrow-audit-doctests-gates` | 📋 Ready |
