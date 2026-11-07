@@ -671,32 +671,8 @@ fn default_payment_intent_object() -> String {
 pub mod params;
 pub use params::*;
 
-/// Represents a Stripe Account object (merchant profile).
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Account {
-    /// Unique identifier for the account (`acct_...`).
-    pub id: String,
-
-    /// Object type, always `account`.
-    #[serde(default = "default_account_object")]
-    pub object: String,
-
-    /// Whether the account can create live charges.
-    pub charges_enabled: Option<bool>,
-
-    /// Whether Stripe can send payouts to this account.
-    pub payouts_enabled: Option<bool>,
-
-    /// Country of the account.
-    pub country: Option<String>,
-
-    /// Default currency code for the account.
-    pub default_currency: Option<String>,
-}
-
-fn default_account_object() -> String {
-    "account".into()
-}
+pub mod account;
+pub use account::*;
 
 pub mod invoice;
 pub use invoice::*;
@@ -774,6 +750,9 @@ pub enum EventObject {
 
     /// Stripe Customer payload (`object = "customer"`).
     Customer(Customer),
+
+    /// Stripe Account payload (`object = "account"`).
+    Account(Account),
 
     /// Unrecognized, custom, or unsupported event object types.
     #[serde(other)]
