@@ -84,13 +84,18 @@ pub use some_stripe_webhooks::{
 pub mod resources;
 pub use resources::{
     AccountLinksResource, AccountSessionsResource, AccountsResource, ApplicationFeesResource,
-    BalanceResource, BalanceTransactionsResource, BillingPortalResource, CheckoutResource,
-    CheckoutSessionExt, CreditNotesResource, CustomersResource, DisputesResource, InvoicesResource,
-    PaymentIntentsResource, PaymentLinksResource, PayoutsResource, PersonsResource, QuotesResource,
-    RedirectError, RefundsResource, SessionsResource, SubscriptionItemsResource,
-    SubscriptionSchedulesResource, SubscriptionsResource, TransfersResource, WebhooksResource,
-    credit_note_id, generate_uuid_v4, is_fulfillment_ready, is_valid_uuid_v4, quote_id,
-    validate_redirect_url,
+    BalanceResource, BalanceTransactionsResource, BillingPortalResource, CalculationsResource,
+    CheckoutResource, CheckoutSessionExt, CreditNotesResource, CustomersResource, DisputesResource,
+    IdentityResource, InvoicesResource, IssuingAuthorizationsResource, IssuingCardholdersResource,
+    IssuingCardsResource, IssuingResource, IssuingTransactionsResource, PaymentIntentsResource,
+    PaymentLinksResource, PayoutsResource, PersonsResource, QuotesResource, RedirectError,
+    RefundsResource, SessionsResource, SubscriptionItemsResource, SubscriptionSchedulesResource,
+    SubscriptionsResource, TaxRegistrationsResource, TaxResource, TaxSettingsResource,
+    TerminalConnectionTokensResource, TerminalLocationsResource, TerminalReadersResource,
+    TerminalResource, TransactionsResource, TransfersResource, TreasuryFinancialAccountsResource,
+    TreasuryResource, TreasuryTransfersResource, VerificationReportsResource,
+    VerificationSessionsResource, WebhooksResource, credit_note_id, generate_uuid_v4,
+    is_fulfillment_ready, is_valid_uuid_v4, quote_id, tax_registration_id, validate_redirect_url,
 };
 
 /// The main Stripe client used to interact with the Stripe API, modeled after `stripe-node`.
@@ -142,6 +147,11 @@ impl StripeClient {
     /// Access the AccountSessions resource namespace (`stripe.account_sessions`).
     pub fn account_sessions(&self) -> AccountSessionsResource<'_> {
         AccountSessionsResource::new(&self.0)
+    }
+
+    /// Access the Identity Verification Sessions resource namespace (`stripe.identity_sessions`).
+    pub fn identity_sessions(&self) -> VerificationSessionsResource<'_> {
+        VerificationSessionsResource::new(&self.0)
     }
 
     /// Access the Persons resource namespace (`stripe.accounts.persons`).
@@ -227,6 +237,66 @@ impl StripeClient {
     /// Access the Payouts resource namespace (`stripe.payouts`).
     pub fn payouts(&self) -> PayoutsResource<'_> {
         PayoutsResource::new(&self.0)
+    }
+
+    /// Access the Tax resource namespace (`stripe.tax`).
+    pub fn tax(&self) -> TaxResource<'_> {
+        TaxResource::new(&self.0)
+    }
+
+    /// Access the Identity resource namespace (`stripe.identity`).
+    pub fn identity(&self) -> IdentityResource<'_> {
+        IdentityResource::new(&self.0)
+    }
+
+    /// Access the Tax Transactions resource namespace (`stripe.tax_transactions`).
+    pub fn tax_transactions(&self) -> TransactionsResource<'_> {
+        TransactionsResource::new(&self.0)
+    }
+
+    /// Access the Issuing resource namespace (`stripe.issuing`).
+    pub fn issuing(&self) -> IssuingResource<'_> {
+        IssuingResource::new(&self.0)
+    }
+
+    /// Access the Issuing Cards resource namespace (`stripe.issuing.cards`).
+    pub fn issuing_cards(&self) -> IssuingCardsResource<'_> {
+        IssuingCardsResource::new(&self.0)
+    }
+
+    /// Access the Issuing Cardholders resource namespace (`stripe.issuing.cardholders`).
+    pub fn issuing_cardholders(&self) -> IssuingCardholdersResource<'_> {
+        IssuingCardholdersResource::new(&self.0)
+    }
+
+    /// Access the Issuing Authorizations resource namespace (`stripe.issuing_authorizations`).
+    pub fn issuing_authorizations(&self) -> IssuingAuthorizationsResource<'_> {
+        IssuingAuthorizationsResource::new(&self.0)
+    }
+
+    /// Access the Issuing Transactions resource namespace (`stripe.issuing_transactions`).
+    pub fn issuing_transactions(&self) -> IssuingTransactionsResource<'_> {
+        IssuingTransactionsResource::new(&self.0)
+    }
+
+    /// Access the Treasury resource namespace (`stripe.treasury`).
+    pub fn treasury(&self) -> TreasuryResource<'_> {
+        TreasuryResource::new(&self.0)
+    }
+
+    /// Access the Treasury Financial Accounts resource namespace (`stripe.treasury_financial_accounts`).
+    pub fn treasury_financial_accounts(&self) -> TreasuryFinancialAccountsResource<'_> {
+        TreasuryFinancialAccountsResource::new(&self.0)
+    }
+
+    /// Access the Treasury Transfers resource namespace (`stripe.treasury_transfers`).
+    pub fn treasury_transfers(&self) -> TreasuryTransfersResource<'_> {
+        TreasuryTransfersResource::new(&self.0)
+    }
+
+    /// Access the Terminal resource namespace (`stripe.terminal`).
+    pub fn terminal(&self) -> TerminalResource<'_> {
+        TerminalResource::new(&self.0)
     }
 }
 
@@ -315,6 +385,9 @@ pub trait StripeClientExt {
 
     /// Access the BillingPortal resource namespace (`stripe.billing_portal`).
     fn billing_portal(&self) -> BillingPortalResource<'_>;
+
+    /// Access the Tax Transactions resource namespace (`stripe.tax_transactions`).
+    fn tax_transactions(&self) -> TransactionsResource<'_>;
 }
 
 impl StripeClientExt for some_stripe_core::StripeClient {
@@ -380,6 +453,10 @@ impl StripeClientExt for some_stripe_core::StripeClient {
 
     fn billing_portal(&self) -> BillingPortalResource<'_> {
         BillingPortalResource::new(self)
+    }
+
+    fn tax_transactions(&self) -> TransactionsResource<'_> {
+        TransactionsResource::new(self)
     }
 }
 

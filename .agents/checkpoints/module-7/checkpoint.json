@@ -3,106 +3,135 @@
   "module_title": "Specialized Product Namespaces",
   "module_branch": "feat/module-7-specialized-product-namespaces",
   "module_worktree": "/workspaces/some-stripe/.worktrees/feat-module-7-specialized-product-namespaces",
-  "status": "in_progress",
-  "current_stage": "hierarchical_story_and_unit_parallel_implementation",
-  "last_updated": "2026-11-07T09:56:50Z",
+  "status": "in_review_pr_open",
+  "current_stage": "pr_123_approved_merging_into_main",
+  "last_updated": "2026-11-07T19:30:00.000000+00:00",
+  "pr": 123,
+  "pr_url": "https://github.com/some-of-cs/some-stripe/pull/123",
   "stories": {
     "us-7.1.0": {
       "title": "Stripe Tax Compliance Engine & Stripe Identity Verification",
       "leader_role": "US-7.1.0 Story Leader",
       "leader_profile": "agent-a",
-      "subagent_id": "302cd5e0-3d9b-4746-a52b-ab8cdb1be4f0",
+      "subagent_id": "9ea3407d-0e9c-4f6f-bef1-3ffee110e340",
       "branch": "feat/us-7.1.0-stripe-tax-and-identity-verification",
       "worktree": "/workspaces/some-stripe/.worktrees/feat-us-710-stripe-tax-and-identity-verification",
-      "status": "in_progress",
+      "status": "merged",
+      "pr": 122,
+      "pr_url": "https://github.com/some-of-cs/some-stripe/pull/122",
+      "merged_commit": "565cf18",
       "units": {
         "unit-1": {
           "title": "Tax Calculations Vertical Implementation",
-          "status": "in_progress",
+          "status": "merged",
+          "pr": 112,
+          "subagent_id": "fc0f8151-fc62-43dc-b968-ef1f2630fd43",
           "branch": "feat/us-7.1.0/unit-1-tax-calculations-resource",
           "worktree": "/workspaces/some-stripe/.worktrees/feat-us-7.1.0-unit-1-tax-calculations-resource",
           "profile": "agent-a"
         },
         "unit-2": {
           "title": "Tax Transactions Vertical Implementation",
-          "status": "in_progress",
+          "status": "merged",
+          "pr": 111,
+          "subagent_id": "e99da5fe-a36c-4e89-a99f-7ae72922ef6b",
           "branch": "feat/us-7.1.0/unit-2-tax-transactions-resource",
           "worktree": "/workspaces/some-stripe/.worktrees/feat-us-7.1.0-unit-2-tax-transactions-resource",
           "profile": "agent-b"
         },
         "unit-3": {
           "title": "Tax Settings & Registrations Implementation",
-          "status": "in_progress",
+          "status": "merged",
+          "subagent_id": "b26feeb5-e69f-4a81-bfc7-c283c2035a63",
           "branch": "feat/us-7.1.0/unit-3-tax-settings-registrations-resource",
           "worktree": "/workspaces/some-stripe/.worktrees/feat-us-7.1.0-unit-3-tax-settings-registrations-resource",
-          "profile": "agent-c"
+          "profile": "agent-c",
+          "pr": 119
         },
         "unit-4": {
           "title": "Identity Verification Sessions Implementation",
-          "status": "in_progress",
+          "status": "merged",
+          "subagent_id": "a40cc1a5-a987-42c8-a02e-dc3c8c8ccb68",
           "branch": "feat/us-7.1.0/unit-4-identity-sessions-resource",
           "worktree": "/workspaces/some-stripe/.worktrees/feat-us-7.1.0-unit-4-identity-sessions-resource",
-          "profile": "agent-a"
+          "profile": "agent-a",
+          "pr": 115
         },
         "unit-5": {
           "title": "Identity Reports & Product Namespaces Implementation",
-          "status": "in_progress",
+          "status": "merged",
+          "subagent_id": "3ae4dbfe-d333-430e-a3f5-937332390470",
           "branch": "feat/us-7.1.0/unit-5-identity-reports-namespaces",
           "worktree": "/workspaces/some-stripe/.worktrees/feat-us-7.1.0-unit-5-identity-reports-namespaces",
-          "profile": "agent-b"
+          "profile": "agent-b",
+          "pr": 114
         }
       }
     },
     "us-7.2.0": {
       "title": "Stripe Issuing, Treasury Financial Accounts & Terminal POS",
       "leader_role": "US-7.2.0 Story Leader",
-      "leader_profile": "agent-b",
-      "subagent_id": "f959d7fb-eff3-4cfd-a251-853e96b3e79a",
+      "leader_profile": "agent-c",
+      "subagent_id": "d7c8446e-1b39-4656-9260-e25cf31585af",
       "branch": "feat/us-7.2.0-stripe-issuing-treasury-and-terminal",
       "worktree": "/workspaces/some-stripe/.worktrees/feat-us-720-stripe-issuing-treasury-and-terminal",
-      "status": "in_progress",
+      "status": "merged",
       "units": {
         "unit-1": {
           "title": "Issuing Cards & Cardholders Implementation",
-          "status": "in_progress",
-          "subagent_id": "74f0d150-4b26-4652-bfcf-50c452085e07",
+          "status": "merged",
+          "subagent_id": "1cd9cb61-80d2-4915-8849-525c085837f5",
           "branch": "feat/us-7.2.0/unit-1-issuing-cards-resource",
           "worktree": "/workspaces/some-stripe/.worktrees/feat-us-7.2.0-unit-1-issuing-cards-resource",
-          "profile": "agent-a"
+          "profile": "agent-c",
+          "pr_number": 116,
+          "pr_url": "https://github.com/some-of-cs/some-stripe/pull/116",
+          "commit_sha": "4ff25fb",
+          "pr": 116
         },
         "unit-2": {
           "title": "Issuing Authorizations & Transactions Implementation",
-          "status": "in_progress",
-          "subagent_id": "c493f2e9-958f-4763-9f45-f0fa5aec0bcb",
+          "status": "merged",
+          "subagent_id": "fee92159-9e1c-49b6-846f-86daae7dcaa1",
           "branch": "feat/us-7.2.0/unit-2-issuing-authorizations-resource",
           "worktree": "/workspaces/some-stripe/.worktrees/feat-us-7.2.0-unit-2-issuing-authorizations-resource",
-          "profile": "agent-b"
+          "profile": "agent-b",
+          "pr": 113
         },
         "unit-3": {
           "title": "Treasury Financial Accounts & Balances Implementation",
-          "status": "in_progress",
-          "subagent_id": "61266b57-ad51-42c2-8ae0-7682da6a4866",
+          "status": "merged",
+          "subagent_id": "7d8e0fd3-5d24-4655-bbe0-aeccadd7cba5",
           "branch": "feat/us-7.2.0/unit-3-treasury-financial-accounts-resource",
           "worktree": "/workspaces/some-stripe/.worktrees/feat-us-7.2.0-unit-3-treasury-financial-accounts-resource",
-          "profile": "agent-c"
+          "profile": "agent-c",
+          "pr": 118
         },
         "unit-4": {
           "title": "Treasury Outbound Transfers & Outbound Payments Implementation",
-          "status": "in_progress",
-          "subagent_id": "6e601fea-6d06-481d-8bdf-41202bbb2377",
+          "status": "merged",
+          "subagent_id": "23bd132c-f04b-4854-8f88-6706f0c243f0",
           "branch": "feat/us-7.2.0/unit-4-treasury-transfers-resource",
           "worktree": "/workspaces/some-stripe/.worktrees/feat-us-7.2.0-unit-4-treasury-transfers-resource",
-          "profile": "agent-a"
+          "profile": "agent-a",
+          "pr": 117
         },
         "unit-5": {
           "title": "Terminal Readers, Locations, Tokens & Facades Implementation",
-          "status": "in_progress",
-          "subagent_id": "8c189f6e-d4e3-4c72-8e6a-58f7dbacb612",
+          "status": "merged",
+          "subagent_id": "86a57e86-9a4d-459e-8d20-935358893aa0",
           "branch": "feat/us-7.2.0/unit-5-terminal-and-product-namespaces",
           "worktree": "/workspaces/some-stripe/.worktrees/feat-us-7.2.0-unit-5-terminal-and-product-namespaces",
-          "profile": "agent-b"
+          "profile": "agent-b",
+          "pr": 120
         }
-      }
+      },
+      "current_stage": "merged_into_module",
+      "merged_commit": "01900eb81212bcf60c15f7a138656bb7544ba5d1",
+      "pr": 121,
+      "pr_url": "https://github.com/some-of-cs/some-stripe/pull/121"
     }
-  }
+  },
+  "module_leader_id": "bb2a9158-4e7c-4963-98b3-23cf9ee1dac1",
+  "module_leader_profile": "agent-a"
 }
