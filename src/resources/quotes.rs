@@ -36,49 +36,7 @@ impl<'a> QuotesResource<'a> {
     /// Creates a new quote in draft mode (`POST /v1/quotes`).
     pub async fn create(&self, params: &CreateQuoteParams) -> Result<Quote, StripeError> {
         let url = format!("{}/v1/quotes", self.client.config.api_base);
-        let mut form_data = Vec::new();
-
-        if let Some(ref c) = params.customer {
-            form_data.push(("customer", c.as_str()));
-        }
-        if let Some(ref d) = params.description {
-            form_data.push(("description", d.as_str()));
-        }
-        let exp_str = params.expires_at.map(|e| e.to_string());
-        if let Some(ref e) = exp_str {
-            form_data.push(("expires_at", e.as_str()));
-        }
-        if let Some(ref f) = params.footer {
-            form_data.push(("footer", f.as_str()));
-        }
-        if let Some(ref h) = params.header {
-            form_data.push(("header", h.as_str()));
-        }
-
-        let mut metadata_entries = Vec::new();
-        if let Some(ref meta) = params.metadata {
-            for (k, v) in meta {
-                metadata_entries.push((format!("metadata[{k}]"), v.as_str()));
-            }
-        }
-        for (k, v) in &metadata_entries {
-            form_data.push((k.as_str(), *v));
-        }
-
-        let mut line_entries = Vec::new();
-        if let Some(ref lines) = params.line_items {
-            for (i, line) in lines.iter().enumerate() {
-                if let Some(ref p) = line.price {
-                    line_entries.push((format!("line_items[{i}][price]"), p.clone()));
-                }
-                if let Some(qty) = line.quantity {
-                    line_entries.push((format!("line_items[{i}][quantity]"), qty.to_string()));
-                }
-            }
-        }
-        for (k, v) in &line_entries {
-            form_data.push((k.as_str(), v.as_str()));
-        }
+        let form_data = to_form_params(params)?;
 
         let generated_key;
         let idempotency_key = match params.idempotency_key.as_deref() {
@@ -120,46 +78,7 @@ impl<'a> QuotesResource<'a> {
     ) -> Result<Quote, StripeError> {
         let safe_id = validate_and_encode_id(quote_id)?;
         let url = format!("{}/v1/quotes/{}", self.client.config.api_base, safe_id);
-        let mut form_data = Vec::new();
-
-        if let Some(ref d) = params.description {
-            form_data.push(("description", d.as_str()));
-        }
-        let exp_str = params.expires_at.map(|e| e.to_string());
-        if let Some(ref e) = exp_str {
-            form_data.push(("expires_at", e.as_str()));
-        }
-        if let Some(ref f) = params.footer {
-            form_data.push(("footer", f.as_str()));
-        }
-        if let Some(ref h) = params.header {
-            form_data.push(("header", h.as_str()));
-        }
-
-        let mut metadata_entries = Vec::new();
-        if let Some(ref meta) = params.metadata {
-            for (k, v) in meta {
-                metadata_entries.push((format!("metadata[{k}]"), v.as_str()));
-            }
-        }
-        for (k, v) in &metadata_entries {
-            form_data.push((k.as_str(), *v));
-        }
-
-        let mut line_entries = Vec::new();
-        if let Some(ref lines) = params.line_items {
-            for (i, line) in lines.iter().enumerate() {
-                if let Some(ref p) = line.price {
-                    line_entries.push((format!("line_items[{i}][price]"), p.clone()));
-                }
-                if let Some(qty) = line.quantity {
-                    line_entries.push((format!("line_items[{i}][quantity]"), qty.to_string()));
-                }
-            }
-        }
-        for (k, v) in &line_entries {
-            form_data.push((k.as_str(), v.as_str()));
-        }
+        let form_data = to_form_params(params)?;
 
         let generated_key;
         let idempotency_key = match params.idempotency_key.as_deref() {

@@ -38,73 +38,7 @@ impl<'a> CreditNotesResource<'a> {
     /// Implements Gate G2 UUID v4 idempotency injection when no key is explicitly supplied.
     pub async fn create(&self, params: &CreateCreditNoteParams) -> Result<CreditNote, StripeError> {
         let url = format!("{}/v1/credit_notes", self.client.config.api_base);
-        let mut form_data = Vec::new();
-
-        form_data.push(("invoice", params.invoice.as_str()));
-
-        let amount_str = params.amount.map(|a| a.to_string());
-        if let Some(ref a) = amount_str {
-            form_data.push(("amount", a.as_str()));
-        }
-
-        let credit_amount_str = params.credit_amount.map(|a| a.to_string());
-        if let Some(ref ca) = credit_amount_str {
-            form_data.push(("credit_amount", ca.as_str()));
-        }
-
-        let refund_amount_str = params.refund_amount.map(|a| a.to_string());
-        if let Some(ref ra) = refund_amount_str {
-            form_data.push(("refund_amount", ra.as_str()));
-        }
-
-        let out_of_band_str = params.out_of_band_amount.map(|a| a.to_string());
-        if let Some(ref ob) = out_of_band_str {
-            form_data.push(("out_of_band_amount", ob.as_str()));
-        }
-
-        if let Some(r) = params.reason {
-            form_data.push(("reason", r.as_str()));
-        }
-
-        if let Some(ref m) = params.memo {
-            form_data.push(("memo", m.as_str()));
-        }
-
-        let mut metadata_entries = Vec::new();
-        if let Some(ref meta) = params.metadata {
-            for (k, v) in meta {
-                metadata_entries.push((format!("metadata[{k}]"), v.as_str()));
-            }
-        }
-        for (k, v) in &metadata_entries {
-            form_data.push((k.as_str(), *v));
-        }
-
-        // Bracket serialization for line items (Gate G3 RFC 1738 indexed bracket notation)
-        let mut line_entries = Vec::new();
-        if let Some(ref lines) = params.lines {
-            for (i, line) in lines.iter().enumerate() {
-                line_entries.push((format!("lines[{i}][type]"), line.r#type.clone()));
-                if let Some(ref il) = line.invoice_line_item {
-                    line_entries.push((format!("lines[{i}][invoice_line_item]"), il.clone()));
-                }
-                if let Some(amount) = line.amount {
-                    line_entries.push((format!("lines[{i}][amount]"), amount.to_string()));
-                }
-                if let Some(ref desc) = line.description {
-                    line_entries.push((format!("lines[{i}][description]"), desc.clone()));
-                }
-                if let Some(qty) = line.quantity {
-                    line_entries.push((format!("lines[{i}][quantity]"), qty.to_string()));
-                }
-                if let Some(unit) = line.unit_amount {
-                    line_entries.push((format!("lines[{i}][unit_amount]"), unit.to_string()));
-                }
-            }
-        }
-        for (k, v) in &line_entries {
-            form_data.push((k.as_str(), v.as_str()));
-        }
+        let form_data = to_form_params(params)?;
 
         let generated_key;
         let idempotency_key = match params.idempotency_key.as_deref() {
