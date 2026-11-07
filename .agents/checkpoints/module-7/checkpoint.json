@@ -3,9 +3,11 @@
   "module_title": "Specialized Product Namespaces",
   "module_branch": "feat/module-7-specialized-product-namespaces",
   "module_worktree": "/workspaces/some-stripe/.worktrees/feat-module-7-specialized-product-namespaces",
-  "status": "in_progress",
-  "current_stage": "finalizing_cascading_merges_and_story_promotions",
-  "last_updated": "2026-11-07T12:34:00.000000+00:00",
+  "status": "in_review_pr_open",
+  "current_stage": "pr_123_approved_merging_into_main",
+  "last_updated": "2026-11-07T19:30:00.000000+00:00",
+  "pr": 123,
+  "pr_url": "https://github.com/some-of-cs/some-stripe/pull/123",
   "stories": {
     "us-7.1.0": {
       "title": "Stripe Tax Compliance Engine & Stripe Identity Verification",
@@ -14,7 +16,10 @@
       "subagent_id": "9ea3407d-0e9c-4f6f-bef1-3ffee110e340",
       "branch": "feat/us-7.1.0-stripe-tax-and-identity-verification",
       "worktree": "/workspaces/some-stripe/.worktrees/feat-us-710-stripe-tax-and-identity-verification",
-      "status": "in_progress",
+      "status": "merged",
+      "pr": 122,
+      "pr_url": "https://github.com/some-of-cs/some-stripe/pull/122",
+      "merged_commit": "565cf18",
       "units": {
         "unit-1": {
           "title": "Tax Calculations Vertical Implementation",
@@ -54,7 +59,7 @@
         },
         "unit-5": {
           "title": "Identity Reports & Product Namespaces Implementation",
-          "status": "in_review",
+          "status": "merged",
           "subagent_id": "3ae4dbfe-d333-430e-a3f5-937332390470",
           "branch": "feat/us-7.1.0/unit-5-identity-reports-namespaces",
           "worktree": "/workspaces/some-stripe/.worktrees/feat-us-7.1.0-unit-5-identity-reports-namespaces",
