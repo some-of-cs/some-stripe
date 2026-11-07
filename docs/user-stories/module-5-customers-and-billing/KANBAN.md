@@ -80,8 +80,8 @@ kanban
   todo[📋 Backlog / Ready]
   spawning[🤖 Subagent Creating]
   in_progress[🔄 Units In Progress]
-    u525[Unit 5: Customer Billing Portal Configuration & Sessions]@{ ticket: 'main', assigned: 'agent-a', priority: 'High' }
   review[🔍 PR Open / Gate Review]
+    u525[Unit 5: Customer Billing Portal Configuration & Sessions]@{ ticket: '81', assigned: 'agent-a', priority: 'High' }
   done[✅ Merged into Story Branch]
     u521[Unit 1: Draft & Finalized Invoices Core Lifecycle]@{ ticket: '72', assigned: 'agent-c', priority: 'High' }
     u522[Unit 2: Invoice Line Items, Adjustments & Upcoming Previews]@{ ticket: '75', assigned: 'agent-a', priority: 'High' }
@@ -108,5 +108,5 @@ kanban
 | **US-5.2.0/U2** | Unit | `feat(us-5.2.0/unit-2): invoice and billing portal parameters and form serde` | `microkernel-architect` (`agent-a`) | `stripe-docs` | `Code Reviewer`<br>`Rust Refactoring` | `stripe-best-practices`<br>`upgrade-stripe` | `.worktrees/feat-us-5.2.0-unit-2-invoice-credit-note-params-serde` | `feat/us-5.2.0/unit-2-invoice-credit-note-params-serde` | ✅ Merged (PR #75) |
 | **US-5.2.0/U3** | Unit | `feat(us-5.2.0/unit-3): invoices, credit notes, quotes, and billing portal resources` | `domain-codegen-specialist` (`agent-b`) | `stripe-docs` | `Code Reviewer`<br>`AppSec Engineer` | `stripe-best-practices`<br>`security-audit` | `.worktrees/feat-us-5.2.0-unit-3-invoices-credit-notes-portal-resources` | `feat/us-5.2.0/unit-3-invoices-credit-notes-portal-resources` | ✅ Merged (PR #79) |
 | **US-5.2.0/U4** | Unit | `feat(us-5.2.0/unit-4): invoice and billing portal wire mock tests and vat compliance` | `API Tester` (`agent-c`) | `stripe-docs` | `Code Reviewer`<br>`AppSec Engineer` | `stripe-best-practices`<br>`security-audit` | `.worktrees/feat-us-5.2.0-unit-4-invoice-portal-mock-wire-test` | `feat/us-5.2.0/unit-4-invoice-portal-mock-wire-test` | ✅ Merged (PR #80) |
-| **US-5.2.0/U5** | Unit | `feat(us-5.2.0/unit-5): zero-clone borrowing audit and documentation gates` | `Rust Refactoring Specialist` (`agent-a`) | `upgrade-stripe` | `Code Reviewer`<br>`Technical Writer` | `stripe-best-practices`<br>`stripe-docs` | `.worktrees/feat-us-5.2.0-unit-5-borrow-audit-doctests-gates` | `feat/us-5.2.0/unit-5-borrow-audit-doctests-gates` | 🔄 In Progress |
+| **US-5.2.0/U5** | Unit | `feat(us-5.2.0/unit-5): zero-clone borrowing audit and documentation gates` | `Rust Refactoring Specialist` (`agent-a`) | `upgrade-stripe` | `Code Reviewer`<br>`Technical Writer` | `stripe-best-practices`<br>`stripe-docs` | `.worktrees/feat-us-5.2.0-unit-5-borrow-audit-doctests-gates` | `feat/us-5.2.0/unit-5-borrow-audit-doctests-gates` | 🔍 In Review (PR #81) |
 | **M5-FINAL** | Module | `feat(module-5): customers, subscriptions, invoices, and billing portal` | `Module 5 Lead Architect` (`agent-c`) | `stripe-best-practices` | Full Council | Council Skills Matrix | `.worktrees/feat-module-5-customers-and-billing` | `feat/module-5-customers-and-billing` | 📋 Ready |

@@ -19,8 +19,8 @@ kanban
   todo[📋 Backlog / Ready]
   spawning[🤖 Subagent Creating]
   in_progress[🔄 Units In Progress]
-    u525[Unit 5: Customer Billing Portal Configuration & Sessions]@{ ticket: 'main', assigned: 'agent-a', priority: 'High' }
   review[🔍 PR Open / Gate Review]
+    u525[Unit 5: Customer Billing Portal Configuration & Sessions]@{ ticket: '81', assigned: 'agent-a', priority: 'High' }
   done[✅ Merged into Story Branch]
     u521[Unit 1: Draft & Finalized Invoices Core Lifecycle]@{ ticket: '72', assigned: 'agent-c', priority: 'High' }
     u522[Unit 2: Invoice Line Items, Adjustments & Upcoming Previews]@{ ticket: '75', assigned: 'agent-a', priority: 'High' }
