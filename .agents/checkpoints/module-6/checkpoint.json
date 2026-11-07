@@ -1,0 +1,154 @@
+{
+  "module_id": "module-6",
+  "module_title": "Connect & Marketplaces",
+  "module_branch": "feat/module-6-connect-and-marketplaces",
+  "module_worktree": "/workspaces/some-stripe/.worktrees/feat-module-6-connect-and-marketplaces",
+  "status": "in_progress",
+  "current_stage": "us_6_1_0_story_promotion_and_module_merge",
+  "last_updated": "2026-11-07T05:32:00Z",
+  "stories": {
+    "us-6.1.0": {
+      "title": "Connected Accounts Onboarding, AccountSessions & KYC Verification",
+      "leader_role": "US-6.1.0 Story Leader",
+      "leader_profile": "agent-a",
+      "branch": "feat/us-6.1.0-connected-accounts-and-embedded-sessions",
+      "worktree": "/workspaces/some-stripe/.worktrees/feat-us-6.1.0-connected-accounts-and-embedded-sessions",
+      "status": "units_merged_ready_for_promotion",
+      "conversation_id": "0db3ba42-71e3-410e-b631-8157eeae0a38",
+      "units": {
+        "unit-1": {
+          "title": "Connect Account Domain Entities & Requirements",
+          "status": "merged",
+          "pr": 93,
+          "pr_url": "https://github.com/some-of-cs/some-stripe/pull/93",
+          "branch": "feat/us-6.1.0/unit-1-account-domain-entities",
+          "merged_at": "2026-11-07T05:18:30Z",
+          "conv": "b2a4d1fa-29ac-41dc-8fa5-10c5654f9ce5"
+        },
+        "unit-2": {
+          "title": "Account Links & Embedded Account Sessions",
+          "status": "merged",
+          "pr": 97,
+          "pr_url": "https://github.com/some-of-cs/some-stripe/pull/97",
+          "branch": "feat/us-6.1.0/unit-2-account-links-and-sessions",
+          "merged_at": "2026-11-07T05:20:54Z",
+          "conv": "68300891-00e1-4044-b15b-4ac255190fc4"
+        },
+        "unit-3": {
+          "title": "KYC Person Entities & Beneficial Ownership",
+          "status": "merged",
+          "pr": 94,
+          "pr_url": "https://github.com/some-of-cs/some-stripe/pull/94",
+          "branch": "feat/us-6.1.0/unit-3-kyc-persons-entities",
+          "merged_at": "2026-11-07T05:22:34Z",
+          "conv": "c201b576-48f2-4408-851a-6bc5a6b04f23"
+        },
+        "unit-4": {
+          "title": "Accounts, Links, Sessions & Persons Resources",
+          "status": "merged",
+          "pr": 96,
+          "pr_url": "https://github.com/some-of-cs/some-stripe/pull/96",
+          "branch": "feat/us-6.1.0/unit-4-accounts-links-sessions-resources",
+          "merged_at": "2026-11-07T05:25:02Z",
+          "conv": "a26418b9-92cc-4dc1-b7a1-c70cd908513a"
+        },
+        "unit-5": {
+          "title": "Borrow Audit, Multi-Tenant Isolation & Gates",
+          "status": "merged",
+          "pr": 95,
+          "pr_url": "https://github.com/some-of-cs/some-stripe/pull/95",
+          "branch": "feat/us-6.1.0/unit-5-borrow-audit-doctests-gates",
+          "merged_at": "2026-11-07T05:25:23Z",
+          "conv": "9fa258ea-ada6-43ea-8170-4d8ac67c9b53"
+        }
+      },
+      "story_promotion_pr": {
+        "number": null,
+        "status": "pending_creation",
+        "target_base": "feat/module-6-connect-and-marketplaces"
+      }
+    },
+    "us-6.2.0": {
+      "title": "Multi-Party Payment Routing, Transfers & Application Fees",
+      "leader_role": "US-6.2.0 Story Leader",
+      "leader_profile": "agent-b",
+      "branch": "feat/us-6.2.0-multi-party-transfers-and-application-fees",
+      "worktree": "/workspaces/some-stripe/.worktrees/feat-us-6.2.0-multi-party-transfers-and-application-fees",
+      "status": "merged_into_module",
+      "conversation_id": "ce72413b-62f2-4186-acd5-ff121226718a",
+      "units": {
+        "unit-1": {
+          "title": "Transfer & Reversals Domain Entities",
+          "status": "merged",
+          "pr": 90,
+          "pr_url": "https://github.com/some-of-cs/some-stripe/pull/90",
+          "branch": "feat/us-6.2.0/unit-1-transfers-and-reversals-entities",
+          "merged_at": "2026-11-07T04:57:57Z",
+          "conv": "3928cd14-cb59-41d4-b851-50339b0fbdfb"
+        },
+        "unit-2": {
+          "title": "Application Fee & Fee Refund Entities",
+          "status": "merged",
+          "pr": 91,
+          "pr_url": "https://github.com/some-of-cs/some-stripe/pull/91",
+          "branch": "feat/us-6.2.0/unit-2-application-fees-and-refunds",
+          "merged_at": "2026-11-07T05:00:23Z",
+          "conv": "4339ff59-835c-40a5-98c4-030ad6556233"
+        },
+        "unit-3": {
+          "title": "Payout Domain Entities & Lifecycle Models",
+          "status": "merged",
+          "pr": 88,
+          "pr_url": "https://github.com/some-of-cs/some-stripe/pull/88",
+          "branch": "feat/us-6.2.0/unit-3-payouts-domain-entities",
+          "merged_at": "2026-11-07T05:02:47Z",
+          "conv": "9575323a-e6ca-4f84-a150-9eb36e545e27"
+        },
+        "unit-4": {
+          "title": "Transfers, Fees & Payouts Resource Endpoints",
+          "status": "merged",
+          "pr": 89,
+          "pr_url": "https://github.com/some-of-cs/some-stripe/pull/89",
+          "branch": "feat/us-6.2.0/unit-4-transfers-fees-payouts-resources",
+          "merged_at": "2026-11-07T05:04:47Z",
+          "conv": "5aa9a01e-3a66-44df-8a52-293e479ed96c"
+        },
+        "unit-5": {
+          "title": "Settlement Math Audit, P2B Compliance & Gates",
+          "status": "merged",
+          "pr": 87,
+          "pr_url": "https://github.com/some-of-cs/some-stripe/pull/87",
+          "branch": "feat/us-6.2.0/unit-5-settlement-math-borrow-audit-gates",
+          "merged_at": "2026-11-07T05:05:45Z",
+          "conv": "5066ee58-0181-4073-af5e-ae295b312584"
+        }
+      },
+      "patch": {
+        "title": "Align Resource Endpoints with Domain Parameter Schemas",
+        "status": "merged",
+        "pr": 92,
+        "pr_url": "https://github.com/some-of-cs/some-stripe/pull/92",
+        "branch": "patch/us-6.2.0-resources-types-alignment",
+        "merged_at": "2026-11-07T05:18:24Z"
+      },
+      "story_promotion_pr": {
+        "number": 98,
+        "status": "merged",
+        "title": "feat(us-6.2.0): Multi-Party Transfers and Application Fees (Units 1..5 Promotion)",
+        "pr_url": "https://github.com/some-of-cs/some-stripe/pull/98",
+        "merged_at": "2026-11-07T05:26:23Z",
+        "merge_commit": "2412ee8"
+      }
+    }
+  },
+  "next_steps": [
+    "1. Create and author US-6.1.0 Story Promotion PR targeting feat/module-6-connect-and-marketplaces",
+    "2. Execute independent Code Reviewer gate validation and post sign-off on US-6.1.0 PR",
+    "3. Merge US-6.1.0 Story PR into feat/module-6-connect-and-marketplaces via gh pr merge",
+    "4. Pull updated feat/module-6-connect-and-marketplaces and execute full workspace validation",
+    "5. Create and author Module 6 Promotion PR targeting main",
+    "6. Conduct Gatekeeper Council sign-off on Module 6 PR",
+    "7. Merge Module 6 into main via gh pr merge",
+    "8. Execute Rule 18 whole-codebase verification across Modules 1-6 at repository root"
+  ]
+}
