@@ -304,4 +304,16 @@ impl<'a> IssuingResource<'a> {
     pub fn cardholders(&self) -> IssuingCardholdersResource<'a> {
         IssuingCardholdersResource::new(self.client)
     }
+
+    /// Access Issuing Authorizations operations.
+    pub fn authorizations(
+        &self,
+    ) -> super::issuing_authorizations::IssuingAuthorizationsResource<'a> {
+        super::issuing_authorizations::IssuingAuthorizationsResource::new(self.client)
+    }
+
+    /// Access Issuing Transactions operations.
+    pub fn transactions(&self) -> super::issuing_transactions::IssuingTransactionsResource<'a> {
+        super::issuing_transactions::IssuingTransactionsResource::new(self.client)
+    }
 }

@@ -118,6 +118,10 @@ pub mod issuing_card;
 pub use issuing_card::*;
 pub mod issuing_cardholder;
 pub use issuing_cardholder::*;
+pub mod issuing_authorization;
+pub use issuing_authorization::*;
+pub mod issuing_transaction;
+pub use issuing_transaction::*;
 
 /// Strongly typed Stripe Connect Account ID (`acct_...`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -798,6 +802,14 @@ pub enum EventObject {
     /// Stripe Issuing Cardholder payload (`object = "issuing.cardholder"`).
     #[serde(rename = "issuing.cardholder")]
     IssuingCardholder(IssuingCardholder),
+
+    /// Stripe Issuing Authorization payload (`object = "issuing.authorization"`).
+    #[serde(rename = "issuing.authorization")]
+    IssuingAuthorization(IssuingAuthorization),
+
+    /// Stripe Issuing Transaction payload (`object = "issuing.transaction"`).
+    #[serde(rename = "issuing.transaction")]
+    IssuingTransaction(IssuingTransaction),
 
     /// Unrecognized, custom, or unsupported event object types.
     #[serde(other)]

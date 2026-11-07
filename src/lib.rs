@@ -86,9 +86,10 @@ pub use resources::{
     AccountLinksResource, AccountSessionsResource, AccountsResource, ApplicationFeesResource,
     BalanceResource, BalanceTransactionsResource, BillingPortalResource, CheckoutResource,
     CheckoutSessionExt, CreditNotesResource, CustomersResource, DisputesResource, InvoicesResource,
-    IssuingCardholdersResource, IssuingCardsResource, IssuingResource, PaymentIntentsResource,
-    PaymentLinksResource, PayoutsResource, PersonsResource, QuotesResource, RedirectError,
-    RefundsResource, SessionsResource, SubscriptionItemsResource, SubscriptionSchedulesResource,
+    IssuingAuthorizationsResource, IssuingCardholdersResource, IssuingCardsResource,
+    IssuingResource, IssuingTransactionsResource, PaymentIntentsResource, PaymentLinksResource,
+    PayoutsResource, PersonsResource, QuotesResource, RedirectError, RefundsResource,
+    SessionsResource, SubscriptionItemsResource, SubscriptionSchedulesResource,
     SubscriptionsResource, TransfersResource, WebhooksResource, credit_note_id, generate_uuid_v4,
     is_fulfillment_ready, is_valid_uuid_v4, quote_id, validate_redirect_url,
 };
@@ -242,6 +243,16 @@ impl StripeClient {
     /// Access the Issuing Cardholders resource namespace (`stripe.issuing.cardholders`).
     pub fn issuing_cardholders(&self) -> IssuingCardholdersResource<'_> {
         IssuingCardholdersResource::new(&self.0)
+    }
+
+    /// Access the Issuing Authorizations resource namespace (`stripe.issuing_authorizations`).
+    pub fn issuing_authorizations(&self) -> IssuingAuthorizationsResource<'_> {
+        IssuingAuthorizationsResource::new(&self.0)
+    }
+
+    /// Access the Issuing Transactions resource namespace (`stripe.issuing_transactions`).
+    pub fn issuing_transactions(&self) -> IssuingTransactionsResource<'_> {
+        IssuingTransactionsResource::new(&self.0)
     }
 }
 
