@@ -10,6 +10,8 @@ pub mod checkout;
 pub mod credit_notes;
 pub mod customers;
 pub mod disputes;
+pub mod identity;
+pub mod identity_reports;
 pub mod invoices;
 pub mod payment_intents;
 pub mod payment_links;
@@ -20,6 +22,7 @@ pub mod refunds;
 pub mod subscription_items;
 pub mod subscription_schedules;
 pub mod subscriptions;
+pub mod tax;
 pub mod transfers;
 pub mod webhooks;
 
@@ -36,6 +39,8 @@ pub use checkout::{
 pub use credit_notes::{CreditNotesResource, credit_note_id};
 pub use customers::CustomersResource;
 pub use disputes::DisputesResource;
+pub use identity::IdentityResource;
+pub use identity_reports::VerificationReportsResource;
 pub use invoices::InvoicesResource;
 pub use payment_intents::{PaymentIntentsResource, generate_uuid_v4, is_valid_uuid_v4};
 pub use payment_links::PaymentLinksResource;
@@ -46,6 +51,7 @@ pub use refunds::RefundsResource;
 pub use subscription_items::SubscriptionItemsResource;
 pub use subscription_schedules::SubscriptionSchedulesResource;
 pub use subscriptions::SubscriptionsResource;
+pub use tax::TaxResource;
 pub use transfers::TransfersResource;
 pub use webhooks::WebhooksResource;
 

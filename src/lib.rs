@@ -85,12 +85,12 @@ pub mod resources;
 pub use resources::{
     AccountLinksResource, AccountSessionsResource, AccountsResource, ApplicationFeesResource,
     BalanceResource, BalanceTransactionsResource, BillingPortalResource, CheckoutResource,
-    CheckoutSessionExt, CreditNotesResource, CustomersResource, DisputesResource, InvoicesResource,
-    PaymentIntentsResource, PaymentLinksResource, PayoutsResource, PersonsResource, QuotesResource,
-    RedirectError, RefundsResource, SessionsResource, SubscriptionItemsResource,
-    SubscriptionSchedulesResource, SubscriptionsResource, TransfersResource, WebhooksResource,
-    credit_note_id, generate_uuid_v4, is_fulfillment_ready, is_valid_uuid_v4, quote_id,
-    validate_redirect_url,
+    CheckoutSessionExt, CreditNotesResource, CustomersResource, DisputesResource, IdentityResource,
+    InvoicesResource, PaymentIntentsResource, PaymentLinksResource, PayoutsResource,
+    PersonsResource, QuotesResource, RedirectError, RefundsResource, SessionsResource,
+    SubscriptionItemsResource, SubscriptionSchedulesResource, SubscriptionsResource, TaxResource,
+    TransfersResource, VerificationReportsResource, WebhooksResource, credit_note_id,
+    generate_uuid_v4, is_fulfillment_ready, is_valid_uuid_v4, quote_id, validate_redirect_url,
 };
 
 /// The main Stripe client used to interact with the Stripe API, modeled after `stripe-node`.
@@ -227,6 +227,16 @@ impl StripeClient {
     /// Access the Payouts resource namespace (`stripe.payouts`).
     pub fn payouts(&self) -> PayoutsResource<'_> {
         PayoutsResource::new(&self.0)
+    }
+
+    /// Access the Tax resource namespace (`stripe.tax`).
+    pub fn tax(&self) -> TaxResource<'_> {
+        TaxResource::new(&self.0)
+    }
+
+    /// Access the Identity resource namespace (`stripe.identity`).
+    pub fn identity(&self) -> IdentityResource<'_> {
+        IdentityResource::new(&self.0)
     }
 }
 

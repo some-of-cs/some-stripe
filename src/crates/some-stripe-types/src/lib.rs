@@ -701,6 +701,8 @@ pub mod connect_compliance;
 pub use connect_compliance::*;
 pub mod payout;
 pub use payout::*;
+pub mod identity_report;
+pub use identity_report::*;
 
 /// Strongly typed, discriminated union of Stripe event payload objects.
 ///
@@ -786,6 +788,10 @@ pub enum EventObject {
 
     /// Stripe Payout payload (`object = "payout"`).
     Payout(Payout),
+
+    /// Stripe Identity VerificationReport payload (`object = "identity.verification_report"`).
+    #[serde(rename = "identity.verification_report")]
+    VerificationReport(VerificationReport),
 
     /// Unrecognized, custom, or unsupported event object types.
     #[serde(other)]
