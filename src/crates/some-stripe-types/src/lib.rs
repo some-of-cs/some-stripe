@@ -88,6 +88,8 @@ pub mod payment_link;
 pub use payment_link::*;
 pub mod omnibus;
 pub use omnibus::*;
+pub mod billing_portal;
+pub use billing_portal::*;
 
 /// Strongly typed Stripe Connect Account ID (`acct_...`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -750,6 +752,14 @@ pub enum EventObject {
     /// Stripe Quote payload (`object = "quote"`).
     #[serde(rename = "quote")]
     Quote(Quote),
+
+    /// Stripe PortalSession payload (`object = "billing_portal.session"`).
+    #[serde(rename = "billing_portal.session")]
+    PortalSession(PortalSession),
+
+    /// Stripe PortalConfiguration payload (`object = "billing_portal.configuration"`).
+    #[serde(rename = "billing_portal.configuration")]
+    PortalConfiguration(PortalConfiguration),
 
     /// Unrecognized, custom, or unsupported event object types.
     #[serde(other)]
@@ -1416,6 +1426,66 @@ mod tests {
                 assert!(!qt.is_accepted());
             }
             other => panic!("Expected Quote variant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_event_object_portal_session() {
+        let json = serde_json::json!({
+            "id": "bps_evt_test_404",
+            "object": "billing_portal.session",
+            "configuration": "bpc_test_conf",
+            "created": 1735689600,
+            "customer": "cus_portal_cust",
+            "url": "https://billing.stripe.com/p/session/bps_evt_test_404"
+        });
+
+        let data = EventData { object: json };
+        let obj = data
+            .deserialize_object()
+            .expect("Failed to deserialize billing_portal.session event");
+
+        match obj {
+            EventObject::PortalSession(bps) => {
+                assert_eq!(bps.id, "bps_evt_test_404");
+                assert_eq!(bps.object, "billing_portal.session");
+                assert_eq!(bps.customer, "cus_portal_cust");
+                assert_eq!(bps.configuration.as_deref(), Some("bpc_test_conf"));
+                assert_eq!(
+                    bps.url,
+                    "https://billing.stripe.com/p/session/bps_evt_test_404"
+                );
+            }
+            other => panic!("Expected PortalSession variant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_event_object_portal_configuration() {
+        let json = serde_json::json!({
+            "id": "bpc_evt_test_505",
+            "object": "billing_portal.configuration",
+            "active": true,
+            "created": 1735689600,
+            "default_return_url": "https://example.com/return"
+        });
+
+        let data = EventData { object: json };
+        let obj = data
+            .deserialize_object()
+            .expect("Failed to deserialize billing_portal.configuration event");
+
+        match obj {
+            EventObject::PortalConfiguration(bpc) => {
+                assert_eq!(bpc.id, "bpc_evt_test_505");
+                assert_eq!(bpc.object, "billing_portal.configuration");
+                assert!(bpc.active);
+                assert_eq!(
+                    bpc.default_return_url.as_deref(),
+                    Some("https://example.com/return")
+                );
+            }
+            other => panic!("Expected PortalConfiguration variant, got {other:?}"),
         }
     }
 }

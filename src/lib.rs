@@ -82,8 +82,8 @@ pub use some_stripe_webhooks::{
 
 pub mod resources;
 pub use resources::{
-    AccountsResource, BalanceResource, BalanceTransactionsResource, CheckoutResource,
-    CheckoutSessionExt, CreditNotesResource, DisputesResource, InvoicesResource,
+    AccountsResource, BalanceResource, BalanceTransactionsResource, BillingPortalResource,
+    CheckoutResource, CheckoutSessionExt, CreditNotesResource, DisputesResource, InvoicesResource,
     PaymentIntentsResource, PaymentLinksResource, QuotesResource, RedirectError, RefundsResource,
     SessionsResource, WebhooksResource, credit_note_id, generate_uuid_v4, is_fulfillment_ready,
     is_valid_uuid_v4, quote_id, validate_redirect_url,
@@ -174,6 +174,11 @@ impl StripeClient {
     pub fn quotes(&self) -> QuotesResource<'_> {
         QuotesResource::new(&self.0)
     }
+
+    /// Access the BillingPortal resource namespace (`stripe.billing_portal`).
+    pub fn billing_portal(&self) -> BillingPortalResource<'_> {
+        BillingPortalResource::new(&self.0)
+    }
 }
 
 /// Validates compliance with EU Omnibus Directive 2019/2161 Article 6a regarding price reductions.
@@ -249,6 +254,9 @@ pub trait StripeClientExt {
 
     /// Access the Quotes resource namespace (`stripe.quotes`).
     fn quotes(&self) -> QuotesResource<'_>;
+
+    /// Access the BillingPortal resource namespace (`stripe.billing_portal`).
+    fn billing_portal(&self) -> BillingPortalResource<'_>;
 }
 
 impl StripeClientExt for some_stripe_core::StripeClient {
@@ -298,6 +306,10 @@ impl StripeClientExt for some_stripe_core::StripeClient {
 
     fn quotes(&self) -> QuotesResource<'_> {
         QuotesResource::new(self)
+    }
+
+    fn billing_portal(&self) -> BillingPortalResource<'_> {
+        BillingPortalResource::new(self)
     }
 }
 
