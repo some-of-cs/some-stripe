@@ -23,13 +23,14 @@ kanban
   todo[📋 Backlog / Ready]
   in_progress[🔄 In Progress]
   in_review[🔍 In Review / PR Open]
-    us71_u5[US-7.1.0 Unit 5: Identity Reports & Product Namespaces]@{ ticket: '114', assigned: 'agent-b', priority: 'High' }
+    us71_promotion[US-7.1.0 Promotion: Stripe Tax & Identity Verification]@{ ticket: '122', assigned: 'agent-a', priority: 'Critical' }
   done[✅ Merged]
     m7_init[Module 7 Architecture & Kanban Decomposed]@{ ticket: 'main', assigned: 'agent-c', priority: 'High' }
     us71_u1[US-7.1.0 Unit 1: Tax Calculations Vertical Implementation]@{ ticket: '112', assigned: 'agent-a', priority: 'Very High' }
     us71_u2[US-7.1.0 Unit 2: Tax Transactions Vertical Implementation]@{ ticket: '111', assigned: 'agent-b', priority: 'High' }
     us71_u3[US-7.1.0 Unit 3: Tax Settings & Registrations Implementation]@{ ticket: '119', assigned: 'agent-c', priority: 'High' }
     us71_u4[US-7.1.0 Unit 4: Identity Verification Sessions Implementation]@{ ticket: '115', assigned: 'agent-a', priority: 'Very High' }
+    us71_u5[US-7.1.0 Unit 5: Identity Reports & Product Namespaces]@{ ticket: '114', assigned: 'agent-b', priority: 'High' }
     us72_u1[US-7.2.0 Unit 1: Issuing Cards & Cardholders Implementation]@{ ticket: '116', assigned: 'agent-c', priority: 'Very High' }
     us72_u2[US-7.2.0 Unit 2: Issuing Authorizations & Transactions Implementation]@{ ticket: '113', assigned: 'agent-b', priority: 'High' }
     us72_u3[US-7.2.0 Unit 3: Treasury Financial Accounts & Balances Implementation]@{ ticket: '118', assigned: 'agent-c', priority: 'High' }

@@ -10,6 +10,9 @@ pub mod checkout;
 pub mod credit_notes;
 pub mod customers;
 pub mod disputes;
+pub mod identity;
+pub mod identity_reports;
+pub mod identity_sessions;
 pub mod invoices;
 pub mod issuing_authorizations;
 pub mod issuing_cards;
@@ -23,6 +26,11 @@ pub mod refunds;
 pub mod subscription_items;
 pub mod subscription_schedules;
 pub mod subscriptions;
+pub mod tax;
+pub mod tax_calculations;
+pub mod tax_registrations;
+pub mod tax_settings;
+pub mod tax_transactions;
 pub mod terminal;
 pub mod transfers;
 pub mod treasury;
@@ -43,6 +51,9 @@ pub use checkout::{
 pub use credit_notes::{CreditNotesResource, credit_note_id};
 pub use customers::CustomersResource;
 pub use disputes::DisputesResource;
+pub use identity::IdentityResource;
+pub use identity_reports::VerificationReportsResource;
+pub use identity_sessions::VerificationSessionsResource;
 pub use invoices::InvoicesResource;
 pub use issuing_authorizations::IssuingAuthorizationsResource;
 pub use issuing_cards::{IssuingCardholdersResource, IssuingCardsResource, IssuingResource};
@@ -56,6 +67,11 @@ pub use refunds::RefundsResource;
 pub use subscription_items::SubscriptionItemsResource;
 pub use subscription_schedules::SubscriptionSchedulesResource;
 pub use subscriptions::SubscriptionsResource;
+pub use tax::TaxResource;
+pub use tax_calculations::CalculationsResource;
+pub use tax_registrations::{TaxRegistrationsResource, tax_registration_id};
+pub use tax_settings::TaxSettingsResource;
+pub use tax_transactions::TransactionsResource;
 pub use terminal::{
     TerminalConnectionTokensResource, TerminalLocationsResource, TerminalReadersResource,
     TerminalResource,
