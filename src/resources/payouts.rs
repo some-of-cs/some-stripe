@@ -25,14 +25,8 @@ impl<'a> PayoutsResource<'a> {
         let url = format!("{}/v1/payouts", self.client.config.api_base);
         let form_data = to_form_params(params)?;
 
-        let generated_key;
-        let idempotency_key = match params.idempotency_key.as_deref() {
-            Some(k) if !k.trim().is_empty() => k,
-            _ => {
-                generated_key = crate::resources::generate_uuid_v4();
-                &generated_key
-            }
-        };
+        let generated_key = crate::resources::generate_uuid_v4();
+        let idempotency_key = generated_key.as_str();
 
         let req = self
             .client
@@ -64,14 +58,8 @@ impl<'a> PayoutsResource<'a> {
         let url = format!("{}/v1/payouts/{encoded}", self.client.config.api_base);
         let form_data = to_form_params(params)?;
 
-        let generated_key;
-        let idempotency_key = match params.idempotency_key.as_deref() {
-            Some(k) if !k.trim().is_empty() => k,
-            _ => {
-                generated_key = crate::resources::generate_uuid_v4();
-                &generated_key
-            }
-        };
+        let generated_key = crate::resources::generate_uuid_v4();
+        let idempotency_key = generated_key.as_str();
 
         let req = self
             .client
@@ -138,9 +126,6 @@ impl<'a> PayoutsResource<'a> {
         if let Some(p) = params {
             if let Some(ref st) = p.status {
                 query_params.push(("status", st.as_str()));
-            }
-            if let Some(ref dest) = p.destination {
-                query_params.push(("destination", dest.as_str()));
             }
             if let Some(ref l) = limit_str {
                 query_params.push(("limit", l.as_str()));
