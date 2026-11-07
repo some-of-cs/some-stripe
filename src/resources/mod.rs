@@ -37,11 +37,9 @@ pub mod treasury;
 pub mod treasury_financial_accounts;
 pub mod treasury_transfers;
 pub mod v2;
-<<<<<<< HEAD
-pub mod v2_meter_event_stream;
-=======
 pub mod v2_meter_event_session;
->>>>>>> origin/feat/us-8.2.0-v2-high-throughput-meter-billing
+pub mod v2_meter_event_stream;
+pub mod v2_meter_events;
 pub mod webhooks;
 
 pub use account_links::AccountLinksResource;
