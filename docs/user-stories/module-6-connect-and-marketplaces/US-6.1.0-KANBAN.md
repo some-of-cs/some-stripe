@@ -19,17 +19,13 @@ config:
     ticketBaseUrl: 'https://github.com/some-of-cs/some-stripe/pull/#TICKET#'
 ---
 kanban
-  todo[📋 Backlog / Ready]
-  spawning[🤖 Subagent Creating]
-  in_progress[🔄 Units In Progress]
-    u611[Unit 1: Connect Account Domain Entities & Requirements]@{ ticket: 'main', assigned: 'agent-a', priority: 'High' }
-    u612[Unit 2: Account Links & Embedded Account Sessions]@{ ticket: 'main', assigned: 'agent-b', priority: 'High' }
-    u613[Unit 3: KYC Person Entities & Beneficial Ownership]@{ ticket: 'main', assigned: 'agent-c', priority: 'High' }
-    u614[Unit 4: Accounts, Links, Sessions & Persons Resources]@{ ticket: 'main', assigned: 'agent-a', priority: 'High' }
-    u615[Unit 5: Borrow Audit, Multi-Tenant Isolation & Gates]@{ ticket: 'main', assigned: 'agent-b', priority: 'High' }
-  review[🔍 PR Open / Gate Review]
   done[✅ Merged into Story Branch]
-    s61_pr[US-6.1.0 Story Promotion PR into Module Branch]@{ ticket: 'main', assigned: 'agent-a', priority: 'Very High' }
+    u611[Unit 1: Connect Account Domain Entities & Requirements]@{ ticket: '93', assigned: 'agent-a', priority: 'High' }
+    u612[Unit 2: Account Links & Embedded Account Sessions]@{ ticket: '97', assigned: 'agent-b', priority: 'High' }
+    u613[Unit 3: KYC Person Entities & Beneficial Ownership]@{ ticket: '94', assigned: 'agent-c', priority: 'High' }
+    u614[Unit 4: Accounts, Links, Sessions & Persons Resources]@{ ticket: '96', assigned: 'agent-a', priority: 'High' }
+    u615[Unit 5: Borrow Audit, Multi-Tenant Isolation & Gates]@{ ticket: '95', assigned: 'agent-b', priority: 'High' }
+    s61_pr[US-6.1.0 Story Promotion PR into Module Branch]@{ ticket: '99', assigned: 'agent-a', priority: 'Very High' }
 ```
 
 ---
@@ -38,8 +34,9 @@ kanban
 
 | Unit ID | Scope & Files | Implementer & Profile | Mandatory Skill | Gatekeeper Council Subagents | Gatekeeper Skills | Branch | Target PR Title | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Unit 1** | `Account`, `AccountType`, `AccountCapabilities`, `AccountRequirements`, `CreateAccountParams`, `UpdateAccountParams` in `some-stripe-types` | `domain-codegen-specialist` (`agent-a`) | `connect-recommend`<br>`stripe-docs` | `Code Reviewer`<br>`AppSec Engineer` | `stripe-best-practices`<br>`security-audit` | `feat/us-6.1.0/unit-1-account-domain-entities` | `feat(us-6.1.0/unit-1): connect account domain entities and requirements` | 🔄 In Progress |
-| **Unit 2** | `AccountLink`, `AccountSession`, `AccountSessionComponents`, `CreateAccountLinkParams`, `CreateAccountSessionParams` in `some-stripe-types` | `microkernel-architect` (`agent-b`) | `stripe-docs`<br>`stripe-best-practices` | `Code Reviewer`<br>`Rust Refactoring` | `stripe-best-practices`<br>`upgrade-stripe` | `feat/us-6.1.0/unit-2-account-links-and-sessions` | `feat(us-6.1.0/unit-2): account links and embedded account sessions` | 🔄 In Progress |
-| **Unit 3** | `Person`, `PersonRelationship`, `PersonVerification`, `PersonDocuments`, `CreatePersonParams`, `UpdatePersonParams` in `some-stripe-types` | `domain-codegen-specialist` (`agent-c`) | `connect-required-verification-information` | `Code Reviewer`<br>`AppSec Engineer` | `stripe-best-practices`<br>`security-audit` | `feat/us-6.1.0/unit-3-kyc-persons-entities` | `feat(us-6.1.0/unit-3): kyc person entities and beneficial ownership` | 🔄 In Progress |
-| **Unit 4** | Endpoints in `AccountsResource` (`create`, `update`, `del`, `reject`, `list`), `AccountLinksResource`, `AccountSessionsResource`, `PersonsResource` | `microkernel-architect` (`agent-a`) | `stripe-docs`<br>`stripe-best-practices` | `Code Reviewer`<br>`AppSec Engineer` | `stripe-best-practices`<br>`security-audit` | `feat/us-6.1.0/unit-4-accounts-links-sessions-resources` | `feat(us-6.1.0/unit-4): accounts, links, sessions and persons resources` | 🔄 In Progress |
-| **Unit 5** | Zero-clone borrowing audit, `Stripe-Account` tenant isolation, FinCEN CDD / DAC7 compliance tests, doctests, gate validation | `Rust Refactoring Specialist` (`agent-b`) | `upgrade-stripe`<br>`security-audit` | `Code Reviewer`<br>`Technical Writer` | `stripe-best-practices`<br>`stripe-docs` | `feat/us-6.1.0/unit-5-borrow-audit-doctests-gates` | `feat(us-6.1.0/unit-5): borrow audit, multi-tenant isolation, doctests and gates` | 🔄 In Progress |
+| **Unit 1** | `Account`, `AccountType`, `AccountCapabilities`, `AccountRequirements`, `CreateAccountParams`, `UpdateAccountParams` in `some-stripe-types` | `domain-codegen-specialist` (`agent-a`) | `connect-recommend`<br>`stripe-docs` | `Code Reviewer`<br>`AppSec Engineer` | `stripe-best-practices`<br>`security-audit` | `feat/us-6.1.0/unit-1-account-domain-entities` | `feat(us-6.1.0/unit-1): connect account domain entities and requirements` | ✅ Merged (PR #93) |
+| **Unit 2** | `AccountLink`, `AccountSession`, `AccountSessionComponents`, `CreateAccountLinkParams`, `CreateAccountSessionParams` in `some-stripe-types` | `microkernel-architect` (`agent-b`) | `stripe-docs`<br>`stripe-best-practices` | `Code Reviewer`<br>`Rust Refactoring` | `stripe-best-practices`<br>`upgrade-stripe` | `feat/us-6.1.0/unit-2-account-links-and-sessions` | `feat(us-6.1.0/unit-2): account links and embedded account sessions` | ✅ Merged (PR #97) |
+| **Unit 3** | `Person`, `PersonRelationship`, `PersonVerification`, `PersonDocuments`, `CreatePersonParams`, `UpdatePersonParams` in `some-stripe-types` | `domain-codegen-specialist` (`agent-c`) | `connect-required-verification-information` | `Code Reviewer`<br>`AppSec Engineer` | `stripe-best-practices`<br>`security-audit` | `feat/us-6.1.0/unit-3-kyc-persons-entities` | `feat(us-6.1.0/unit-3): kyc person entities and beneficial ownership` | ✅ Merged (PR #94) |
+| **Unit 4** | Endpoints in `AccountsResource` (`create`, `update`, `del`, `reject`, `list`), `AccountLinksResource`, `AccountSessionsResource`, `PersonsResource` | `microkernel-architect` (`agent-a`) | `stripe-docs`<br>`stripe-best-practices` | `Code Reviewer`<br>`AppSec Engineer` | `stripe-best-practices`<br>`security-audit` | `feat/us-6.1.0/unit-4-accounts-links-sessions-resources` | `feat(us-6.1.0/unit-4): accounts, links, sessions and persons resources` | ✅ Merged (PR #96) |
+| **Unit 5** | Zero-clone borrowing audit, `Stripe-Account` tenant isolation, FinCEN CDD / DAC7 compliance tests, doctests, gate validation | `Rust Refactoring Specialist` (`agent-b`) | `upgrade-stripe`<br>`security-audit` | `Code Reviewer`<br>`Technical Writer` | `stripe-best-practices`<br>`stripe-docs` | `feat/us-6.1.0/unit-5-borrow-audit-doctests-gates` | `feat(us-6.1.0/unit-5): borrow audit, multi-tenant isolation, doctests and gates` | ✅ Merged (PR #95) |
+| **Story PR** | Promote US-6.1.0 Units 1..5 into Module 6 Branch | `US-6.1.0 Story Leader` (`agent-a`) | `antigravity-guide`<br>`stripe-best-practices` | `Code Reviewer` | `security-audit`<br>`stripe-best-practices` | `feat/us-6.1.0-connected-accounts-and-embedded-sessions` | `feat(us-6.1.0): Connected Accounts Onboarding, AccountSessions & KYC Verification (Units 1..5 Promotion)` | ✅ Merged (PR #99) |

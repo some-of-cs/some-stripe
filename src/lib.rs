@@ -82,12 +82,14 @@ pub use some_stripe_webhooks::{
 
 pub mod resources;
 pub use resources::{
-    AccountsResource, BalanceResource, BalanceTransactionsResource, BillingPortalResource,
-    CheckoutResource, CheckoutSessionExt, CreditNotesResource, CustomersResource, DisputesResource,
-    InvoicesResource, PaymentIntentsResource, PaymentLinksResource, QuotesResource, RedirectError,
-    RefundsResource, SessionsResource, SubscriptionItemsResource, SubscriptionSchedulesResource,
-    SubscriptionsResource, WebhooksResource, credit_note_id, generate_uuid_v4,
-    is_fulfillment_ready, is_valid_uuid_v4, quote_id, validate_redirect_url,
+    AccountLinksResource, AccountSessionsResource, AccountsResource, ApplicationFeesResource,
+    BalanceResource, BalanceTransactionsResource, BillingPortalResource, CheckoutResource,
+    CheckoutSessionExt, CreditNotesResource, CustomersResource, DisputesResource, InvoicesResource,
+    PaymentIntentsResource, PaymentLinksResource, PayoutsResource, PersonsResource, QuotesResource,
+    RedirectError, RefundsResource, SessionsResource, SubscriptionItemsResource,
+    SubscriptionSchedulesResource, SubscriptionsResource, TransfersResource, WebhooksResource,
+    credit_note_id, generate_uuid_v4, is_fulfillment_ready, is_valid_uuid_v4, quote_id,
+    validate_redirect_url,
 };
 
 /// The main Stripe client used to interact with the Stripe API, modeled after `stripe-node`.
@@ -129,6 +131,21 @@ impl StripeClient {
     /// Access the Accounts resource namespace (`stripe.accounts`).
     pub fn accounts(&self) -> AccountsResource<'_> {
         AccountsResource::new(&self.0)
+    }
+
+    /// Access the AccountLinks resource namespace (`stripe.account_links`).
+    pub fn account_links(&self) -> AccountLinksResource<'_> {
+        AccountLinksResource::new(&self.0)
+    }
+
+    /// Access the AccountSessions resource namespace (`stripe.account_sessions`).
+    pub fn account_sessions(&self) -> AccountSessionsResource<'_> {
+        AccountSessionsResource::new(&self.0)
+    }
+
+    /// Access the Persons resource namespace (`stripe.accounts.persons`).
+    pub fn persons(&self) -> PersonsResource<'_> {
+        PersonsResource::new(&self.0)
     }
 
     /// Access the Customers resource namespace (`stripe.customers`).
@@ -194,6 +211,21 @@ impl StripeClient {
     /// Access the BillingPortal resource namespace (`stripe.billing_portal`).
     pub fn billing_portal(&self) -> BillingPortalResource<'_> {
         BillingPortalResource::new(&self.0)
+    }
+
+    /// Access the Transfers resource namespace (`stripe.transfers`).
+    pub fn transfers(&self) -> TransfersResource<'_> {
+        TransfersResource::new(&self.0)
+    }
+
+    /// Access the ApplicationFees resource namespace (`stripe.application_fees`).
+    pub fn application_fees(&self) -> ApplicationFeesResource<'_> {
+        ApplicationFeesResource::new(&self.0)
+    }
+
+    /// Access the Payouts resource namespace (`stripe.payouts`).
+    pub fn payouts(&self) -> PayoutsResource<'_> {
+        PayoutsResource::new(&self.0)
     }
 }
 
