@@ -86,6 +86,10 @@ pub enum StripeWebhookError {
         max_allowed: usize,
     },
 
+    /// The `Stripe-Signature` header is invalid, oversized, or contains excessive signatures.
+    #[error("Invalid Stripe-Signature header: {0}")]
+    InvalidHeader(&'static str),
+
     /// The `Stripe-Signature` header does not contain a valid `t=` timestamp parameter.
     #[error("Invalid timestamp in Stripe-Signature header")]
     InvalidTimestamp,

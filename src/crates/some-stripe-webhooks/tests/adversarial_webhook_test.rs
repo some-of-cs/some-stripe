@@ -5,8 +5,9 @@ use chrono::Utc;
 use some_stripe_core::error::StripeWebhookError;
 use some_stripe_types::Event;
 use some_stripe_webhooks::{
-    DEFAULT_TOLERANCE_SECONDS, MAX_FUTURE_DRIFT_SECONDS, MAX_WEBHOOK_PAYLOAD_BYTES, Webhook,
-    hmac_sha256_hex, verify_stripe_signature,
+    DEFAULT_TOLERANCE_SECONDS, MAX_FUTURE_DRIFT_SECONDS, MAX_SIGNATURE_HEADER_BYTES,
+    MAX_V1_SIGNATURES, MAX_WEBHOOK_PAYLOAD_BYTES, Webhook, hmac_sha256_hex,
+    verify_stripe_signature,
 };
 
 const TEST_SECRET: &str = "whsec_test_secret_key_adversarial_validation_98765";
@@ -387,4 +388,36 @@ fn tc_2_1_0_06_variable_length_and_malformed_header_resilience() {
     let err_blank =
         Webhook::construct_event(VALID_PAYLOAD, blank_header, TEST_SECRET, None).unwrap_err();
     assert_eq!(err_blank, StripeWebhookError::MissingSignatureHeader);
+
+    // 5. Oversized signature header exceeding MAX_SIGNATURE_HEADER_BYTES (4096 bytes)
+    let padding = "x".repeat(MAX_SIGNATURE_HEADER_BYTES);
+    let oversized_header = format!("t={now},v1=sig_test,{padding}");
+    assert!(oversized_header.len() > MAX_SIGNATURE_HEADER_BYTES);
+    let err_oversized =
+        Webhook::construct_event(VALID_PAYLOAD, &oversized_header, TEST_SECRET, None).unwrap_err();
+    assert_eq!(
+        err_oversized,
+        StripeWebhookError::InvalidHeader("header exceeds maximum allowed length")
+    );
+    assert!(
+        !verify_stripe_signature(VALID_PAYLOAD, &oversized_header, TEST_SECRET),
+        "verify_stripe_signature must reject oversized signature headers"
+    );
+
+    // 6. Excessive v1 signature count exceeding MAX_V1_SIGNATURES (16)
+    let mut excessive_tokens = vec![format!("t={now}")];
+    for i in 0..=MAX_V1_SIGNATURES {
+        excessive_tokens.push(format!("v1=sig_overflow_{i}"));
+    }
+    let excessive_header = excessive_tokens.join(",");
+    let err_excessive =
+        Webhook::construct_event(VALID_PAYLOAD, &excessive_header, TEST_SECRET, None).unwrap_err();
+    assert_eq!(
+        err_excessive,
+        StripeWebhookError::InvalidHeader("too many v1 signatures")
+    );
+    assert!(
+        !verify_stripe_signature(VALID_PAYLOAD, &excessive_header, TEST_SECRET),
+        "verify_stripe_signature must reject headers with excessive signatures"
+    );
 }
