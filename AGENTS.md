@@ -123,6 +123,19 @@ Welcome to the **`some-stripe`** workspace. All AI agents, contributors, and aut
      - On PR creation: Move task to `🔍 In Review / PR Open` with PR link.
      - On PR merge: Move task to `✅ Merged` with commit SHA.
 
+16. **[Strict Hierarchical Delegation Invariant (Zero Cross-Tier Spawning)](.agents/rules/strict-hierarchical-spawning.md)**:
+   - **Module Leader Role Boundary**: The Module Leader is strictly responsible for spawning and supervising User Story Leaders (`US-X.1.0 Story Leader`, `US-X.2.0 Story Leader`). The Module Leader MUST NEVER spawn Unit Implementers directly.
+   - **Story Leader Role Boundary**: Each User Story Leader is strictly responsible for spawning, supervising, and coordinating its own 5 Unit Implementers (`Unit 1`, `Unit 2`, `Unit 3`, `Unit 4`, `Unit 5`).
+   - Any agent attempting cross-tier spawning will be rejected by the supervisor watchdog.
+
+17. **[Dedicated Quota Sentinel Agent (`quota-sentinel`)](.agents/rules/quota-sentinel.md)**:
+   - A dedicated, autonomous subagent **`quota-sentinel`** is maintained throughout workspace execution to monitor API quota consumption, rate limits (HTTP 429 / `RESOURCE_EXHAUSTED`), and token velocity.
+   - **1% Quota Threshold Trigger**: As soon as quota drops to 1% (or upon 429 rate limit detection), the `quota-sentinel` immediately broadcasts a high-priority alert to all active agents and the main supervisor conversation, enforcing an immediate execution pause and scheduling a timer until the quota resets.
+
+18. **[Main Conversation End-of-Module Whole-Codebase Validation & Review](.agents/rules/main-conversation-end-of-module-review.md)**:
+   - Always maintain an active Module Leader during module execution.
+   - At the main conversation level, upon completion and merge of every module, the Main Supervisor MUST execute whole-codebase verification (`cargo test --workspace`, `cargo test --doc`, `cargo clippy --workspace --all-targets -- -D warnings`, `cargo fmt --all -- --check`) and invoke an independent Gatekeeper Council review across the current module AND all preceding modules (Modules 1..N) to ensure zero regressions, zero debt, and 100% defense-in-depth across the entire repository.
+
 ---
 
 ## 2. Multi-Profile Quota Engine & Dynamic Agent Generation
@@ -144,6 +157,7 @@ Profiles are **universal agent generators** tied to independent billing accounts
     - **`microkernel-architect`** (Skills: `stripe-docs`, `stripe-best-practices`): Audits Gate G3 (lean microkernel architecture, progressive Cargo features, dual-protocol serializers).
     - **`Technical Writer`** (Skill: `stripe-docs`): Audits Gate G-Docs (`cargo test --doc`, crate README.md).
     - **`Code Reviewer`** (Skills: `security-audit`, `stripe-best-practices`): Council President for Gate G-Review sign-off.
+    - **`Quota Sentinel`** (Skills: `antigravity-guide`, `stripe-best-practices`): Dedicated quota monitor that detects 1% remaining capacity, notifies all active agents and the main conversation, and schedules wait timers until quota reset.
     - **`Git Workflow Master`** (Skills: `antigravity-guide`, `stripe-best-practices`): Mandatory manager for all Git and GitHub operations across all tiers—including worktree provisioning/pruning (`git worktree add`/`remove`), branch creation, atomic conventional commits, remote tracking (`git push -u`), GitHub PR creation (`gh pr create` with strict unit naming), and cascading promotion merges (`gh pr merge`).
     - **`DevOps Automator`** (Skills: `antigravity-guide`, `stripe-best-practices`): Cargo target cache (`CARGO_TARGET_DIR`), CI/CD pipeline management.
   - Tasks and gatekeeper reviews must be dispatched across the 3 profile generators in a round-robin / quota-balanced manner to evenly split the quota bill.
