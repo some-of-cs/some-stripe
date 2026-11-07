@@ -357,29 +357,7 @@ pub fn is_valid_aba_routing_number(routing: &str) -> bool {
 
 /// Detects whether an account or routing number mistakenly contains a raw Primary Account Number (PAN).
 ///
-/// Under PCI-DSS 4.0 and Gate G-Law, raw payment card PANs must never enter bank account rails.
-#[must_use]
-pub fn contains_raw_pan(candidate: &str) -> bool {
-    let digits: Vec<u32> = candidate.chars().filter_map(|c| c.to_digit(10)).collect();
-    if digits.len() < 13 || digits.len() > 19 {
-        return false;
-    }
-
-    // Luhn algorithm check
-    let mut sum = 0;
-    let mut double = false;
-    for &digit in digits.iter().rev() {
-        if double {
-            let doubled = digit * 2;
-            sum += if doubled > 9 { doubled - 9 } else { doubled };
-        } else {
-            sum += digit;
-        }
-        double = !double;
-    }
-
-    sum.is_multiple_of(10)
-}
+use crate::issuing_authorization::contains_raw_pan;
 
 /// Details for an ABA financial address (routing and account number).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]

@@ -114,6 +114,14 @@ pub mod transfer_params;
 pub use transfer_params::*;
 pub mod settlement;
 pub use settlement::*;
+pub mod issuing_card;
+pub use issuing_card::*;
+pub mod issuing_cardholder;
+pub use issuing_cardholder::*;
+pub mod issuing_authorization;
+pub use issuing_authorization::*;
+pub mod issuing_transaction;
+pub use issuing_transaction::*;
 pub mod treasury_financial_account;
 pub use treasury_financial_account::*;
 
@@ -788,6 +796,22 @@ pub enum EventObject {
 
     /// Stripe Payout payload (`object = "payout"`).
     Payout(Payout),
+
+    /// Stripe Issuing Card payload (`object = "issuing.card"`).
+    #[serde(rename = "issuing.card")]
+    IssuingCard(IssuingCard),
+
+    /// Stripe Issuing Cardholder payload (`object = "issuing.cardholder"`).
+    #[serde(rename = "issuing.cardholder")]
+    IssuingCardholder(IssuingCardholder),
+
+    /// Stripe Issuing Authorization payload (`object = "issuing.authorization"`).
+    #[serde(rename = "issuing.authorization")]
+    IssuingAuthorization(IssuingAuthorization),
+
+    /// Stripe Issuing Transaction payload (`object = "issuing.transaction"`).
+    #[serde(rename = "issuing.transaction")]
+    IssuingTransaction(IssuingTransaction),
 
     /// Stripe Treasury FinancialAccount payload (`object = "treasury.financial_account"`).
     #[serde(rename = "treasury.financial_account")]
