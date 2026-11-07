@@ -425,24 +425,27 @@ impl StripeClient {
 
     async fn should_retry_api_error(
         &self,
-        status_code: u16,
-        code: &str,
-        message: &str,
+        api_error: &StripeError,
         retry_after_delay: Option<Duration>,
         can_retry_network: bool,
         has_next_req: bool,
         retries_taken: u32,
     ) -> bool {
-        let can_retry_status = status_code == 429 || can_retry_network;
-        if !can_retry_status || !has_next_req {
+        let StripeError::Api {
+            status: status_code,
+            code,
+            message,
+            ..
+        } = api_error
+        else {
             return false;
-        }
+        };
 
         let action = self
             .config
             .error_workflow
             .on_api_error(
-                status_code,
+                *status_code,
                 code,
                 message,
                 retries_taken,
@@ -450,28 +453,8 @@ impl StripeClient {
             )
             .await;
 
-        if action == ErrorAction::Retry {
-            let delay =
-                retry_after_delay.unwrap_or_else(|| compute_backoff_delay(retries_taken, 50, 5000));
-            tokio::time::sleep(delay).await;
-            return true;
-        }
-        false
-    }
-    ) -> bool {
-        let action = self
-            .config
-            .error_workflow
-            .on_api_error(
-                status_code,
-                code,
-                message,
-                retries_taken,
-                self.config.max_retries,
-            )
-            .await;
-
-        if action == ErrorAction::Retry && has_next_req {
+        let can_retry_status = *status_code == 429 || can_retry_network;
+        if action == ErrorAction::Retry && can_retry_status && has_next_req {
             let delay =
                 retry_after_delay.unwrap_or_else(|| compute_backoff_delay(retries_taken, 50, 5000));
             tokio::time::sleep(delay).await;
@@ -534,30 +517,15 @@ impl StripeClient {
 
             if !status.is_success() {
                 let api_error = parse_api_error_response(status, &body_bytes);
-                if let StripeError::Api {
-                    status: status_code,
-                    ref code,
-                    ref message,
-                    ..
-                } = api_error
-                    && self
-                        .should_retry_api_error(
-                            status_code,
-                            code,
-                            message,
-                            retry_after_delay,
-                            can_retry_network,
-                            next_req.is_some(),
-                            retries_taken,
-                        )
-                        .await
-                {
-                    retries_taken += 1;
-                    req = next_req.expect("next_req confirmed present");
-                    continue;
-                }
-                return Err(api_error);
-            }
+                if self
+                    .should_retry_api_error(
+                        &api_error,
+                        retry_after_delay,
+                        can_retry_network,
+                        next_req.is_some(),
+                        retries_taken,
+                    )
+                    .await
                 {
                     retries_taken += 1;
                     req = next_req.expect("next_req confirmed present");
