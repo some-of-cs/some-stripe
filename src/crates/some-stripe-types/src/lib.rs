@@ -5,7 +5,7 @@
 //!
 //! ## Overview
 //!
-//! - **Domain Entities**: [`PaymentIntent`], [`PaymentIntentStatus`], [`CaptureMethod`], [`PaymentMethodOptions`], [`CheckoutSession`], [`LineItem`], [`LineItemList`], [`Account`], [`Invoice`], [`Dispute`], [`Refund`], [`Balance`], [`BalanceTransaction`], [`PaymentLink`], [`PaymentLinkStatus`].
+//! - **Domain Entities**: [`PaymentIntent`], [`PaymentIntentStatus`], [`CaptureMethod`], [`PaymentMethodOptions`], [`CheckoutSession`], [`LineItem`], [`LineItemList`], [`Account`], [`AccountLink`], [`AccountSession`], [`Invoice`], [`Dispute`], [`Refund`], [`Balance`], [`BalanceTransaction`], [`PaymentLink`], [`PaymentLinkStatus`].
 //! - **ISO 4217 Integer Arithmetic (Gate G-Law)**: [`currency`] module provides zero-float exact integer arithmetic across non-decimal, 2-decimal, and 3-decimal currencies.
 //! - **Event Pipeline**: [`Event`], [`EventData`], [`EventObject`].
 //! - **Statutory Legal Compliance**: [`is_statutory_withdrawal_compliant`] enforces EU Directive 2011/83/EU Article 13.
@@ -97,6 +97,10 @@ pub mod subscription;
 pub use subscription::*;
 pub mod nullable;
 pub use nullable::*;
+pub mod account_link;
+pub use account_link::*;
+pub mod account_session;
+pub use account_session::*;
 
 /// Strongly typed Stripe Connect Account ID (`acct_...`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
