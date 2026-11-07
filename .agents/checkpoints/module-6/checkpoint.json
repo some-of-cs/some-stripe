@@ -4,17 +4,17 @@
   "module_branch": "feat/module-6-connect-and-marketplaces",
   "module_worktree": "/workspaces/some-stripe/.worktrees/feat-module-6-connect-and-marketplaces",
   "status": "in_progress",
-  "current_stage": "us_6_1_0_story_promotion_and_module_merge",
-  "last_updated": "2026-11-07T05:32:00Z",
+  "current_stage": "module_6_gatekeeper_council_review_and_main_promotion",
+  "last_updated": "2026-11-07T06:02:00Z",
   "stories": {
     "us-6.1.0": {
       "title": "Connected Accounts Onboarding, AccountSessions & KYC Verification",
       "leader_role": "US-6.1.0 Story Leader",
-      "leader_profile": "agent-a",
+      "leader_profile": "agent-b",
       "branch": "feat/us-6.1.0-connected-accounts-and-embedded-sessions",
       "worktree": "/workspaces/some-stripe/.worktrees/feat-us-6.1.0-connected-accounts-and-embedded-sessions",
-      "status": "units_merged_ready_for_promotion",
-      "conversation_id": "0db3ba42-71e3-410e-b631-8157eeae0a38",
+      "status": "merged_into_module",
+      "conversation_id": "287d8c38-9577-4e94-b1db-12694e019dcb",
       "units": {
         "unit-1": {
           "title": "Connect Account Domain Entities & Requirements",
@@ -63,9 +63,12 @@
         }
       },
       "story_promotion_pr": {
-        "number": null,
-        "status": "pending_creation",
-        "target_base": "feat/module-6-connect-and-marketplaces"
+        "number": 99,
+        "status": "merged",
+        "title": "feat(us-6.1.0): Connected Accounts Onboarding, AccountSessions & KYC Verification (Units 1..5 Promotion)",
+        "pr_url": "https://github.com/some-of-cs/some-stripe/pull/99",
+        "merged_at": "2026-11-07T05:59:11Z",
+        "merge_commit": "29564fa"
       }
     },
     "us-6.2.0": {
