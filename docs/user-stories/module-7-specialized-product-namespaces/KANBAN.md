@@ -31,8 +31,8 @@ kanban
     us72_u4[US-7.2.0 Unit 4: Treasury Outbound Transfers & Outbound Payments Implementation]@{ ticket: 'main', assigned: 'agent-a', priority: 'Very High' }
     us72_u5[US-7.2.0 Unit 5: Terminal Readers, Locations, Tokens & Facades]@{ ticket: 'main', assigned: 'agent-b', priority: 'High' }
   in_progress[🔄 In Progress]
-    us71_u5[US-7.1.0 Unit 5: Identity Reports & Product Namespaces]@{ ticket: 'main', assigned: 'agent-b', priority: 'High' }
   in_review[🔍 In Review / PR Open]
+    us71_u5[US-7.1.0 Unit 5: Identity Reports & Product Namespaces]@{ ticket: 'https://github.com/some-of-cs/some-stripe/pull/114', assigned: 'agent-b', priority: 'High' }
   done[✅ Merged]
     m7_init[Module 7 Architecture & Kanban Decomposed]@{ ticket: 'main', assigned: 'agent-c', priority: 'High' }
 ```
