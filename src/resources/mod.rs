@@ -14,6 +14,9 @@ pub mod identity;
 pub mod identity_reports;
 pub mod identity_sessions;
 pub mod invoices;
+pub mod issuing_authorizations;
+pub mod issuing_cards;
+pub mod issuing_transactions;
 pub mod payment_intents;
 pub mod payment_links;
 pub mod payouts;
@@ -28,7 +31,11 @@ pub mod tax_calculations;
 pub mod tax_registrations;
 pub mod tax_settings;
 pub mod tax_transactions;
+pub mod terminal;
 pub mod transfers;
+pub mod treasury;
+pub mod treasury_financial_accounts;
+pub mod treasury_transfers;
 pub mod webhooks;
 
 pub use account_links::AccountLinksResource;
@@ -48,6 +55,9 @@ pub use identity::IdentityResource;
 pub use identity_reports::VerificationReportsResource;
 pub use identity_sessions::VerificationSessionsResource;
 pub use invoices::InvoicesResource;
+pub use issuing_authorizations::IssuingAuthorizationsResource;
+pub use issuing_cards::{IssuingCardholdersResource, IssuingCardsResource, IssuingResource};
+pub use issuing_transactions::IssuingTransactionsResource;
 pub use payment_intents::{PaymentIntentsResource, generate_uuid_v4, is_valid_uuid_v4};
 pub use payment_links::PaymentLinksResource;
 pub use payouts::PayoutsResource;
@@ -62,7 +72,17 @@ pub use tax_calculations::CalculationsResource;
 pub use tax_registrations::{TaxRegistrationsResource, tax_registration_id};
 pub use tax_settings::TaxSettingsResource;
 pub use tax_transactions::TransactionsResource;
+pub use terminal::{
+    TerminalConnectionTokensResource, TerminalLocationsResource, TerminalReadersResource,
+    TerminalResource,
+};
 pub use transfers::TransfersResource;
+pub use treasury::TreasuryResource;
+pub use treasury_financial_accounts::TreasuryFinancialAccountsResource;
+pub use treasury_transfers::{
+    OutboundPaymentsResource, OutboundTransfersResource, ReceivedCreditsResource,
+    TreasuryTransfersResource,
+};
 pub use webhooks::WebhooksResource;
 
 /// Resolves an idempotency key for state-mutating requests.

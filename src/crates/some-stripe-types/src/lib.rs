@@ -125,6 +125,20 @@ pub use tax_settings::*;
 pub mod tax_transaction;
 pub use tax_calculation::TaxShippingCost;
 pub use tax_transaction::*;
+pub mod issuing_card;
+pub use issuing_card::*;
+pub mod issuing_cardholder;
+pub use issuing_cardholder::*;
+pub mod issuing_authorization;
+pub use issuing_authorization::*;
+pub mod issuing_transaction;
+pub use issuing_transaction::*;
+pub mod treasury_financial_account;
+pub use treasury_financial_account::*;
+pub mod treasury_transfer;
+pub use treasury_transfer::*;
+pub mod terminal;
+pub use terminal::*;
 
 /// Strongly typed Stripe Connect Account ID (`acct_...`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -809,6 +823,50 @@ pub enum EventObject {
     /// Stripe TaxTransaction payload (`object = "tax.transaction"`).
     #[serde(rename = "tax.transaction")]
     TaxTransaction(TaxTransaction),
+
+    /// Stripe Issuing Card payload (`object = "issuing.card"`).
+    #[serde(rename = "issuing.card")]
+    IssuingCard(IssuingCard),
+
+    /// Stripe Issuing Cardholder payload (`object = "issuing.cardholder"`).
+    #[serde(rename = "issuing.cardholder")]
+    IssuingCardholder(IssuingCardholder),
+
+    /// Stripe Issuing Authorization payload (`object = "issuing.authorization"`).
+    #[serde(rename = "issuing.authorization")]
+    IssuingAuthorization(IssuingAuthorization),
+
+    /// Stripe Issuing Transaction payload (`object = "issuing.transaction"`).
+    #[serde(rename = "issuing.transaction")]
+    IssuingTransaction(IssuingTransaction),
+
+    /// Stripe Treasury FinancialAccount payload (`object = "treasury.financial_account"`).
+    #[serde(rename = "treasury.financial_account")]
+    TreasuryFinancialAccount(FinancialAccount),
+
+    /// Stripe Treasury OutboundTransfer payload (`object = "treasury.outbound_transfer"`).
+    #[serde(rename = "treasury.outbound_transfer")]
+    TreasuryOutboundTransfer(OutboundTransfer),
+
+    /// Stripe Treasury OutboundPayment payload (`object = "treasury.outbound_payment"`).
+    #[serde(rename = "treasury.outbound_payment")]
+    TreasuryOutboundPayment(OutboundPayment),
+
+    /// Stripe Treasury ReceivedCredit payload (`object = "treasury.received_credit"`).
+    #[serde(rename = "treasury.received_credit")]
+    TreasuryReceivedCredit(ReceivedCredit),
+
+    /// Stripe Terminal Reader payload (`object = "terminal.reader"`).
+    #[serde(rename = "terminal.reader")]
+    TerminalReader(TerminalReader),
+
+    /// Stripe Terminal Location payload (`object = "terminal.location"`).
+    #[serde(rename = "terminal.location")]
+    TerminalLocation(TerminalLocation),
+
+    /// Stripe Terminal ConnectionToken payload (`object = "terminal.connection_token"`).
+    #[serde(rename = "terminal.connection_token")]
+    TerminalConnectionToken(ConnectionToken),
 
     /// Unrecognized, custom, or unsupported event object types.
     #[serde(other)]
@@ -1630,6 +1688,90 @@ mod tests {
                 assert_eq!(report.status, VerificationReportStatus::Verified);
             }
             other => panic!("Expected VerificationReport variant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_event_object_treasury_financial_account() {
+        let json = serde_json::json!({
+            "id": "fa_test_999",
+            "object": "treasury.financial_account",
+            "active_features": ["deposit_insurance", "financial_addresses.aba"],
+            "balance": {
+                "cash": {"usd": 5000000},
+                "inbound_pending": {"usd": 100000},
+                "outbound_pending": {"usd": 50000}
+            },
+            "country": "US",
+            "created": 1728345600,
+            "financial_addresses": [],
+            "livemode": false,
+            "pending_features": [],
+            "restricted_features": [],
+            "status": "open",
+            "supported_currencies": ["usd"]
+        });
+
+        let data = EventData { object: json };
+        let obj = data
+            .deserialize_object()
+            .expect("Failed to deserialize treasury.financial_account event");
+
+        match obj {
+            EventObject::TreasuryFinancialAccount(fa) => {
+                assert_eq!(fa.id, "fa_test_999");
+                assert_eq!(fa.object, "treasury.financial_account");
+                assert!(fa.is_open());
+                assert_eq!(fa.balance.cash_amount("usd"), 5000000);
+            }
+            other => panic!("Expected TreasuryFinancialAccount variant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_event_object_terminal_reader_and_token() {
+        let reader_json = serde_json::json!({
+            "id": "tmr_test_777",
+            "object": "terminal.reader",
+            "device_type": "bbpos_wisepos_e",
+            "livemode": false,
+            "serial_number": "WPOS-777",
+            "status": "online"
+        });
+
+        let data = EventData {
+            object: reader_json,
+        };
+        let obj = data
+            .deserialize_object()
+            .expect("Failed to deserialize terminal.reader event");
+
+        match obj {
+            EventObject::TerminalReader(r) => {
+                assert_eq!(r.id(), "tmr_test_777");
+                assert!(r.is_online());
+                assert!(r.is_emv_certified());
+            }
+            other => panic!("Expected TerminalReader variant, got {other:?}"),
+        }
+
+        let token_json = serde_json::json!({
+            "object": "terminal.connection_token",
+            "secret": "pst_test_secret_999",
+            "location": "loc_test_123"
+        });
+
+        let token_data = EventData { object: token_json };
+        let token_obj = token_data
+            .deserialize_object()
+            .expect("Failed to deserialize terminal.connection_token event");
+
+        match token_obj {
+            EventObject::TerminalConnectionToken(tok) => {
+                assert_eq!(tok.secret(), "pst_test_secret_999");
+                assert!(tok.is_bound_to_location("loc_test_123"));
+            }
+            other => panic!("Expected TerminalConnectionToken variant, got {other:?}"),
         }
     }
 }

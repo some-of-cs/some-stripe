@@ -86,11 +86,14 @@ pub use resources::{
     AccountLinksResource, AccountSessionsResource, AccountsResource, ApplicationFeesResource,
     BalanceResource, BalanceTransactionsResource, BillingPortalResource, CalculationsResource,
     CheckoutResource, CheckoutSessionExt, CreditNotesResource, CustomersResource, DisputesResource,
-    IdentityResource, InvoicesResource, PaymentIntentsResource, PaymentLinksResource,
-    PayoutsResource, PersonsResource, QuotesResource, RedirectError, RefundsResource,
-    SessionsResource, SubscriptionItemsResource, SubscriptionSchedulesResource,
+    IdentityResource, InvoicesResource, IssuingAuthorizationsResource, IssuingCardholdersResource,
+    IssuingCardsResource, IssuingResource, IssuingTransactionsResource, PaymentIntentsResource,
+    PaymentLinksResource, PayoutsResource, PersonsResource, QuotesResource, RedirectError,
+    RefundsResource, SessionsResource, SubscriptionItemsResource, SubscriptionSchedulesResource,
     SubscriptionsResource, TaxRegistrationsResource, TaxResource, TaxSettingsResource,
-    TransactionsResource, TransfersResource, VerificationReportsResource,
+    TerminalConnectionTokensResource, TerminalLocationsResource, TerminalReadersResource,
+    TerminalResource, TransactionsResource, TransfersResource, TreasuryFinancialAccountsResource,
+    TreasuryResource, TreasuryTransfersResource, VerificationReportsResource,
     VerificationSessionsResource, WebhooksResource, credit_note_id, generate_uuid_v4,
     is_fulfillment_ready, is_valid_uuid_v4, quote_id, tax_registration_id, validate_redirect_url,
 };
@@ -249,6 +252,51 @@ impl StripeClient {
     /// Access the Tax Transactions resource namespace (`stripe.tax_transactions`).
     pub fn tax_transactions(&self) -> TransactionsResource<'_> {
         TransactionsResource::new(&self.0)
+    }
+
+    /// Access the Issuing resource namespace (`stripe.issuing`).
+    pub fn issuing(&self) -> IssuingResource<'_> {
+        IssuingResource::new(&self.0)
+    }
+
+    /// Access the Issuing Cards resource namespace (`stripe.issuing.cards`).
+    pub fn issuing_cards(&self) -> IssuingCardsResource<'_> {
+        IssuingCardsResource::new(&self.0)
+    }
+
+    /// Access the Issuing Cardholders resource namespace (`stripe.issuing.cardholders`).
+    pub fn issuing_cardholders(&self) -> IssuingCardholdersResource<'_> {
+        IssuingCardholdersResource::new(&self.0)
+    }
+
+    /// Access the Issuing Authorizations resource namespace (`stripe.issuing_authorizations`).
+    pub fn issuing_authorizations(&self) -> IssuingAuthorizationsResource<'_> {
+        IssuingAuthorizationsResource::new(&self.0)
+    }
+
+    /// Access the Issuing Transactions resource namespace (`stripe.issuing_transactions`).
+    pub fn issuing_transactions(&self) -> IssuingTransactionsResource<'_> {
+        IssuingTransactionsResource::new(&self.0)
+    }
+
+    /// Access the Treasury resource namespace (`stripe.treasury`).
+    pub fn treasury(&self) -> TreasuryResource<'_> {
+        TreasuryResource::new(&self.0)
+    }
+
+    /// Access the Treasury Financial Accounts resource namespace (`stripe.treasury_financial_accounts`).
+    pub fn treasury_financial_accounts(&self) -> TreasuryFinancialAccountsResource<'_> {
+        TreasuryFinancialAccountsResource::new(&self.0)
+    }
+
+    /// Access the Treasury Transfers resource namespace (`stripe.treasury_transfers`).
+    pub fn treasury_transfers(&self) -> TreasuryTransfersResource<'_> {
+        TreasuryTransfersResource::new(&self.0)
+    }
+
+    /// Access the Terminal resource namespace (`stripe.terminal`).
+    pub fn terminal(&self) -> TerminalResource<'_> {
+        TerminalResource::new(&self.0)
     }
 }
 
