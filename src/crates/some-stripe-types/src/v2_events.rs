@@ -134,7 +134,9 @@ impl<T> V2Event<T> {
     #[inline]
     #[must_use]
     pub fn related_object_url(&self) -> Option<&str> {
-        self.related_object.as_ref().and_then(|ro| ro.url.as_deref())
+        self.related_object
+            .as_ref()
+            .and_then(|ro| ro.url.as_deref())
     }
 
     /// Returns `true` if this event is a thin event notification (has a related object but no embedded data).
@@ -525,7 +527,10 @@ mod tests {
         let event: V2Event = serde_json::from_str(json).expect("should deserialize v2 event");
         assert_eq!(event.id, "evt_v2_full_123");
         assert_eq!(event.object, "v2.core.event");
-        assert_eq!(event.event_type(), "v1.billing.meter.error_report_triggered");
+        assert_eq!(
+            event.event_type(),
+            "v1.billing.meter.error_report_triggered"
+        );
         assert_eq!(event.created, 1728345600);
         assert!(!event.livemode);
         assert!(!event.is_thin()); // has embedded data
@@ -550,7 +555,10 @@ mod tests {
         assert_eq!(reason.reason_type.as_deref(), Some("request"));
         let reason_req = reason.request.as_ref().unwrap();
         assert_eq!(reason_req.id.as_deref(), Some("req_audit_789"));
-        assert_eq!(reason_req.idempotency_key.as_deref(), Some("idemp_test_456"));
+        assert_eq!(
+            reason_req.idempotency_key.as_deref(),
+            Some("idemp_test_456")
+        );
     }
 
     #[test]

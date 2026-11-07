@@ -94,7 +94,10 @@ impl<'a> V2EventsResource<'a> {
     /// ```
     pub async fn retrieve(&self, event_id: &str) -> Result<V2Event, StripeError> {
         let encoded_id = validate_and_encode_id(event_id)?;
-        let url = format!("{}/v2/core/events/{}", self.client.config.api_base, encoded_id);
+        let url = format!(
+            "{}/v2/core/events/{}",
+            self.client.config.api_base, encoded_id
+        );
         let mut req = self.client.http.get(&url);
         req = req.header(reqwest::header::CONTENT_TYPE, "application/json");
         req = req.header(reqwest::header::ACCEPT, "application/json");

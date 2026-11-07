@@ -24,7 +24,10 @@ fn test_v2_event_thin_notification_model() {
     let event: V2Event = serde_json::from_value(json).expect("should deserialize v2 event");
     assert_eq!(event.id, "evt_v2_thin_meter_001");
     assert_eq!(event.object, "v2.core.event");
-    assert_eq!(event.event_type(), "v1.billing.meter.error_report_triggered");
+    assert_eq!(
+        event.event_type(),
+        "v1.billing.meter.error_report_triggered"
+    );
     assert_eq!(event.r#type, "v1.billing.meter.error_report_triggered");
     assert_eq!(event.created, 1728345600);
     assert!(!event.livemode);
@@ -226,7 +229,10 @@ async fn test_retrieve_v2_event_wire() {
         .expect("wire retrieval must succeed");
 
     assert_eq!(event.id, "evt_v2_wire_123");
-    assert_eq!(event.event_type(), "v1.billing.meter.error_report_triggered");
+    assert_eq!(
+        event.event_type(),
+        "v1.billing.meter.error_report_triggered"
+    );
     assert_eq!(event.related_object_id(), Some("meter_wire_abc"));
     assert_eq!(event.related_object_type(), Some("billing.meter"));
     assert!(event.is_thin());
@@ -403,12 +409,10 @@ async fn test_ac_us_8_1_0_01_thin_event_notification_and_live_hydration_flow() {
         let n = socket.read(&mut buf).await.unwrap();
         let req_str = String::from_utf8_lossy(&buf[..n]);
 
-        assert!(
-            req_str.starts_with(&format!(
-                "GET /v2/core/events/{} HTTP/1.1",
-                expected_event_id
-            ))
-        );
+        assert!(req_str.starts_with(&format!(
+            "GET /v2/core/events/{} HTTP/1.1",
+            expected_event_id
+        )));
 
         // Server responds with live hydrated state
         let live_payload = serde_json::json!({
@@ -438,7 +442,8 @@ async fn test_ac_us_8_1_0_01_thin_event_notification_and_live_hydration_flow() {
         socket.write_all(http_response.as_bytes()).await.unwrap();
     });
 
-    let config = StripeConfig::new("sk_test_mock").with_api_base(format!("http://127.0.0.1:{}", port));
+    let config =
+        StripeConfig::new("sk_test_mock").with_api_base(format!("http://127.0.0.1:{}", port));
     let client = StripeClient::with_config(config);
 
     // Live hydration call

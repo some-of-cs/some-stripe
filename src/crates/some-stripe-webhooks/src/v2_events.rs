@@ -70,9 +70,7 @@ impl V2ThinEvent {
 
     /// Returns the type identifier of the related object, if present.
     pub fn related_object_type(&self) -> Option<&str> {
-        self.related_object
-            .as_ref()
-            .map(|ro| ro.r#type.as_str())
+        self.related_object.as_ref().map(|ro| ro.r#type.as_str())
     }
 
     /// Returns the hydration URL for the related object, if present.
