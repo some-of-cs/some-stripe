@@ -686,6 +686,8 @@ pub mod quote;
 pub use quote::*;
 pub mod quote_params;
 pub use quote_params::*;
+pub mod connect_compliance;
+pub use connect_compliance::*;
 
 /// Strongly typed, discriminated union of Stripe event payload objects.
 ///
