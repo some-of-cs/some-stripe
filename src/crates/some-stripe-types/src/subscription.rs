@@ -622,10 +622,435 @@ pub struct SubscriptionItem {
     /// Key-value metadata attached to the item.
     #[serde(default)]
     pub metadata: HashMap<String, String>,
+
+    /// Define thresholds at which an invoice will be sent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub billing_thresholds: Option<SubscriptionItemBillingThresholds>,
+
+    /// Proration behavior applied to this item change.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub proration_behavior: Option<ProrationBehavior>,
+
+    /// A list of tax rates applied to this item.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tax_rates: Option<Vec<String>>,
+}
+
+impl SubscriptionItem {
+    /// Zero-copy access to the subscription item ID.
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+
+    /// Zero-copy access to the parent subscription ID.
+    pub fn subscription(&self) -> &str {
+        &self.subscription
+    }
+
+    /// Quantity of units subscribed.
+    pub fn quantity(&self) -> Option<u64> {
+        self.quantity
+    }
+}
+
+/// Extracts the ID from a [`SubscriptionItem`] for pagination cursors.
+pub fn subscription_item_id(item: &SubscriptionItem) -> &str {
+    &item.id
 }
 
 fn default_subscription_item_object() -> String {
     "subscription_item".into()
+}
+
+/// Define thresholds at which an invoice will be sent, and the subscription in-flight usage reset.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct SubscriptionItemBillingThresholds {
+    /// Number of units that meets the threshold to send an invoice.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub usage_gte: Option<i64>,
+}
+
+impl SubscriptionItemBillingThresholds {
+    /// Creates a new `SubscriptionItemBillingThresholds` with `usage_gte`.
+    pub fn new(usage_gte: i64) -> Self {
+        Self {
+            usage_gte: Some(usage_gte),
+        }
+    }
+}
+
+/// Represents a deleted subscription item response from the Stripe API.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeletedSubscriptionItem {
+    /// Unique identifier of the deleted subscription item.
+    pub id: String,
+
+    /// Object type, always `subscription_item`.
+    #[serde(default = "default_subscription_item_object")]
+    pub object: String,
+
+    /// Whether the subscription item was deleted.
+    pub deleted: bool,
+}
+
+impl DeletedSubscriptionItem {
+    /// Returns `true` if the item was successfully deleted.
+    pub fn is_deleted(&self) -> bool {
+        self.deleted
+    }
+
+    /// Zero-copy ID accessor.
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+}
+
+/// Represents a Stripe Usage Record for metered subscription items.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UsageRecord {
+    /// Unique identifier for the usage record (`mbur_...` or `ur_...`).
+    pub id: String,
+
+    /// Object type, always `usage_record`.
+    #[serde(default = "default_usage_record_object")]
+    pub object: String,
+
+    /// Has the value `true` if the object exists in live mode or `false` in test mode.
+    #[serde(default)]
+    pub livemode: bool,
+
+    /// The quantity of units used.
+    pub quantity: i64,
+
+    /// The ID of the subscription item this usage record belongs to.
+    pub subscription_item: String,
+
+    /// The timestamp when this usage occurred (Unix timestamp).
+    pub timestamp: i64,
+
+    /// The action for this usage record (`increment` or `set`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub action: Option<String>,
+}
+
+fn default_usage_record_object() -> String {
+    "usage_record".into()
+}
+
+impl UsageRecord {
+    /// Zero-copy access to the usage record ID.
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+
+    /// Zero-copy access to the subscription item ID.
+    pub fn subscription_item(&self) -> &str {
+        &self.subscription_item
+    }
+
+    /// The quantity of units recorded.
+    pub fn quantity(&self) -> i64 {
+        self.quantity
+    }
+}
+
+/// Action to take when creating a usage record.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum UsageRecordAction {
+    /// Increments the existing usage by the specified quantity.
+    #[default]
+    Increment,
+    /// Overwrites the usage with the specified quantity.
+    Set,
+}
+
+/// Parameters for creating a usage record on a metered subscription item.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct CreateUsageRecordParams {
+    /// The quantity of usage to record.
+    pub quantity: i64,
+
+    /// The timestamp for the usage record. Can be a Unix timestamp.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub timestamp: Option<i64>,
+
+    /// How to handle the usage record: `increment` (default) or `set`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub action: Option<UsageRecordAction>,
+
+    /// Optional idempotency key for this request.
+    #[serde(skip_serializing)]
+    pub idempotency_key: Option<String>,
+}
+
+impl CreateUsageRecordParams {
+    /// Creates a new `CreateUsageRecordParams` with the specified quantity.
+    pub fn new(quantity: i64) -> Self {
+        Self {
+            quantity,
+            timestamp: None,
+            action: None,
+            idempotency_key: None,
+        }
+    }
+
+    /// Sets the timestamp.
+    pub fn timestamp(mut self, timestamp: i64) -> Self {
+        self.timestamp = Some(timestamp);
+        self
+    }
+
+    /// Sets the action (`increment` or `set`).
+    pub fn action(mut self, action: UsageRecordAction) -> Self {
+        self.action = Some(action);
+        self
+    }
+
+    /// Sets the idempotency key.
+    pub fn idempotency_key(mut self, key: impl Into<String>) -> Self {
+        self.idempotency_key = Some(key.into());
+        self
+    }
+}
+
+/// Parameters for creating a subscription item directly via the API (`POST /v1/subscription_items`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct CreateSubscriptionItemParams {
+    /// The ID of the subscription to add the item to.
+    pub subscription: String,
+
+    /// The ID of the price to subscribe to.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub price: Option<String>,
+
+    /// The quantity of the subscription item.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quantity: Option<u64>,
+
+    /// Key-value metadata attached to the item.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub metadata: HashMap<String, String>,
+
+    /// Proration behavior to apply.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub proration_behavior: Option<ProrationBehavior>,
+
+    /// Define thresholds at which an invoice will be sent.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub billing_thresholds: Option<SubscriptionItemBillingThresholds>,
+
+    /// A list of tax rates applied to this item.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tax_rates: Option<Vec<String>>,
+
+    /// Optional idempotency key for this request.
+    #[serde(skip_serializing)]
+    pub idempotency_key: Option<String>,
+}
+
+impl CreateSubscriptionItemParams {
+    /// Creates a new `CreateSubscriptionItemParams` for the given subscription and price.
+    pub fn new(subscription: impl Into<String>, price: impl Into<String>) -> Self {
+        Self {
+            subscription: subscription.into(),
+            price: Some(price.into()),
+            ..Default::default()
+        }
+    }
+
+    /// Sets the quantity.
+    pub fn quantity(mut self, quantity: u64) -> Self {
+        self.quantity = Some(quantity);
+        self
+    }
+
+    /// Sets the proration behavior.
+    pub fn proration_behavior(mut self, behavior: ProrationBehavior) -> Self {
+        self.proration_behavior = Some(behavior);
+        self
+    }
+
+    /// Sets billing thresholds.
+    pub fn billing_thresholds(mut self, thresholds: SubscriptionItemBillingThresholds) -> Self {
+        self.billing_thresholds = Some(thresholds);
+        self
+    }
+
+    /// Sets metadata.
+    pub fn metadata(mut self, metadata: HashMap<String, String>) -> Self {
+        self.metadata = metadata;
+        self
+    }
+
+    /// Sets an idempotency key.
+    pub fn idempotency_key(mut self, key: impl Into<String>) -> Self {
+        self.idempotency_key = Some(key.into());
+        self
+    }
+}
+
+/// Parameters for updating an existing subscription item (`POST /v1/subscription_items/{id}`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct UpdateSubscriptionItemParams {
+    /// The ID of the new price to subscribe to.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub price: Option<String>,
+
+    /// The new quantity of the subscription item.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub quantity: Option<u64>,
+
+    /// Key-value metadata attached to the item.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
+    pub metadata: HashMap<String, String>,
+
+    /// Proration behavior to apply.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub proration_behavior: Option<ProrationBehavior>,
+
+    /// Define thresholds at which an invoice will be sent.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub billing_thresholds: Option<SubscriptionItemBillingThresholds>,
+
+    /// A list of tax rates applied to this item.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tax_rates: Option<Vec<String>>,
+
+    /// Indicates whether the update is off-session.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub off_session: Option<bool>,
+
+    /// Optional idempotency key for this request.
+    #[serde(skip_serializing)]
+    pub idempotency_key: Option<String>,
+}
+
+impl UpdateSubscriptionItemParams {
+    /// Creates a new empty `UpdateSubscriptionItemParams`.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets the updated price ID.
+    pub fn price(mut self, price: impl Into<String>) -> Self {
+        self.price = Some(price.into());
+        self
+    }
+
+    /// Sets the updated quantity.
+    pub fn quantity(mut self, quantity: u64) -> Self {
+        self.quantity = Some(quantity);
+        self
+    }
+
+    /// Sets the proration behavior.
+    pub fn proration_behavior(mut self, behavior: ProrationBehavior) -> Self {
+        self.proration_behavior = Some(behavior);
+        self
+    }
+
+    /// Sets the billing thresholds.
+    pub fn billing_thresholds(mut self, thresholds: SubscriptionItemBillingThresholds) -> Self {
+        self.billing_thresholds = Some(thresholds);
+        self
+    }
+
+    /// Sets metadata.
+    pub fn metadata(mut self, metadata: HashMap<String, String>) -> Self {
+        self.metadata = metadata;
+        self
+    }
+
+    /// Sets an idempotency key.
+    pub fn idempotency_key(mut self, key: impl Into<String>) -> Self {
+        self.idempotency_key = Some(key.into());
+        self
+    }
+}
+
+/// Parameters for deleting a subscription item (`DELETE /v1/subscription_items/{id}`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct DeleteSubscriptionItemParams {
+    /// Delete all usage for the given subscription item. Allowed only when the current plan's usage type is metered.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub clear_usage: Option<bool>,
+
+    /// Determines how to handle prorations when the subscription item is deleted.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub proration_behavior: Option<ProrationBehavior>,
+
+    /// Optional idempotency key for this request.
+    #[serde(skip_serializing)]
+    pub idempotency_key: Option<String>,
+}
+
+impl DeleteSubscriptionItemParams {
+    /// Creates a new empty `DeleteSubscriptionItemParams`.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets `clear_usage`.
+    pub fn clear_usage(mut self, clear: bool) -> Self {
+        self.clear_usage = Some(clear);
+        self
+    }
+
+    /// Sets `proration_behavior`.
+    pub fn proration_behavior(mut self, behavior: ProrationBehavior) -> Self {
+        self.proration_behavior = Some(behavior);
+        self
+    }
+}
+
+/// Parameters for listing subscription items (`GET /v1/subscription_items`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListSubscriptionItemsParams {
+    /// The ID of the subscription whose items are being retrieved.
+    pub subscription: String,
+
+    /// A cursor for pagination. An object ID defining your place in the list.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub starting_after: Option<String>,
+
+    /// A cursor for pagination. An object ID defining your place in the list.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ending_before: Option<String>,
+
+    /// A limit on the number of objects to be returned (between 1 and 100).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u32>,
+}
+
+impl ListSubscriptionItemsParams {
+    /// Creates a new `ListSubscriptionItemsParams` for a given subscription.
+    pub fn new(subscription: impl Into<String>) -> Self {
+        Self {
+            subscription: subscription.into(),
+            starting_after: None,
+            ending_before: None,
+            limit: None,
+        }
+    }
+
+    /// Sets the page limit.
+    pub fn limit(mut self, limit: u32) -> Self {
+        self.limit = Some(limit);
+        self
+    }
+
+    /// Sets the starting_after cursor.
+    pub fn starting_after(mut self, cursor: impl Into<String>) -> Self {
+        self.starting_after = Some(cursor.into());
+        self
+    }
+
+    /// Sets the ending_before cursor.
+    pub fn ending_before(mut self, cursor: impl Into<String>) -> Self {
+        self.ending_before = Some(cursor.into());
+        self
+    }
 }
 
 /// Simplified price information attached to a subscription item.
@@ -796,6 +1221,12 @@ impl CreateSubscriptionParams {
         self
     }
 
+    /// Appends an item to the subscription (alias for [`item`]).
+    pub fn add_item(mut self, item: SubscriptionItemParams) -> Self {
+        self.items.push(item);
+        self
+    }
+
     /// Sets whether the subscription will cancel at the period end.
     pub fn cancel_at_period_end(mut self, cancel: bool) -> Self {
         self.cancel_at_period_end = Some(cancel);
@@ -958,7 +1389,18 @@ pub struct SubscriptionItemParams {
     /// Determines how to handle prorations resulting from this item change.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub proration_behavior: Option<ProrationBehavior>,
+
+    /// Define thresholds at which an invoice will be sent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub billing_thresholds: Option<SubscriptionItemBillingThresholds>,
+
+    /// A list of tax rates applied to this item.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tax_rates: Option<Vec<String>>,
 }
+
+/// Type alias for [`SubscriptionItemParams`] providing backward and singular compatibility.
+pub type SubscriptionItemParam = SubscriptionItemParams;
 
 impl SubscriptionItemParams {
     /// Creates a new subscription item parameter with the given price and quantity.
@@ -978,8 +1420,41 @@ impl SubscriptionItemParams {
         }
     }
 
+    /// Creates a subscription item parameter with price.
+    pub fn with_price(price: impl Into<String>) -> Self {
+        Self::price(price)
+    }
+
+    /// Creates a subscription item parameter with price and quantity.
+    pub fn with_price_and_quantity(price: impl Into<String>, quantity: u64) -> Self {
+        Self::new(price, quantity)
+    }
+
+    /// Creates a subscription item parameter to modify an existing item by ID.
+    pub fn for_update(id: impl Into<String>) -> Self {
+        Self {
+            id: Some(id.into()),
+            ..Default::default()
+        }
+    }
+
+    /// Creates a subscription item parameter to delete an existing item by ID.
+    pub fn for_deletion(id: impl Into<String>) -> Self {
+        Self {
+            id: Some(id.into()),
+            deleted: Some(true),
+            ..Default::default()
+        }
+    }
+
     /// Sets the quantity.
     pub fn with_quantity(mut self, quantity: u64) -> Self {
+        self.quantity = Some(quantity);
+        self
+    }
+
+    /// Sets the quantity.
+    pub fn quantity(mut self, quantity: u64) -> Self {
         self.quantity = Some(quantity);
         self
     }
@@ -993,6 +1468,24 @@ impl SubscriptionItemParams {
     /// Marks the item for deletion during an update.
     pub fn deleted(mut self, deleted: bool) -> Self {
         self.deleted = Some(deleted);
+        self
+    }
+
+    /// Sets metadata.
+    pub fn metadata(mut self, metadata: HashMap<String, String>) -> Self {
+        self.metadata = Some(metadata);
+        self
+    }
+
+    /// Sets billing thresholds.
+    pub fn billing_thresholds(mut self, thresholds: SubscriptionItemBillingThresholds) -> Self {
+        self.billing_thresholds = Some(thresholds);
+        self
+    }
+
+    /// Sets tax rates.
+    pub fn tax_rates(mut self, tax_rates: Vec<String>) -> Self {
+        self.tax_rates = Some(tax_rates);
         self
     }
 
@@ -1096,6 +1589,12 @@ impl UpdateSubscriptionParams {
     /// Sets subscription items.
     pub fn items(mut self, items: Vec<SubscriptionItemParams>) -> Self {
         self.items = Some(items);
+        self
+    }
+
+    /// Appends a subscription item change.
+    pub fn add_item(mut self, item: SubscriptionItemParams) -> Self {
+        self.items.get_or_insert_with(Vec::new).push(item);
         self
     }
 

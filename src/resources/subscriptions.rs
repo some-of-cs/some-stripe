@@ -33,6 +33,7 @@
 //! ```
 
 use crate::resources::generate_uuid_v4;
+use crate::resources::subscription_items::SubscriptionItemsResource;
 use some_stripe_core::patterns::pagination::{ListResponse, Paginator};
 use some_stripe_core::patterns::serializer::{encode_form_pairs, percent_encode, to_form_params};
 use some_stripe_core::{StripeClient, StripeError, validate_and_encode_id};
@@ -52,21 +53,32 @@ use some_stripe_types::subscription::{
 ///
 /// let client = StripeClient::new("sk_test_123");
 /// let subs = client.subscriptions();
+/// let items = subs.items;
 /// ```
 #[derive(Clone, Copy)]
 pub struct SubscriptionsResource<'a> {
     client: &'a StripeClient,
+    /// Subscription items sub-resource (`stripe.subscriptions.items`).
+    pub items: SubscriptionItemsResource<'a>,
 }
 
 impl<'a> SubscriptionsResource<'a> {
     /// Creates a new `SubscriptionsResource` bound to the provided client.
     pub fn new(client: &'a StripeClient) -> Self {
-        Self { client }
+        Self {
+            client,
+            items: SubscriptionItemsResource::new(client),
+        }
     }
 
     /// Access reference to the underlying [`StripeClient`].
     pub fn client(&self) -> &'a StripeClient {
         self.client
+    }
+
+    /// Access the Subscription Items sub-resource (`stripe.subscriptions.items`).
+    pub fn items(&self) -> &SubscriptionItemsResource<'a> {
+        &self.items
     }
 
     /// Creates a new subscription (`POST /v1/subscriptions`).
