@@ -62,7 +62,9 @@ pub use constants::{
 };
 pub use crypto::{compute_streaming_hmac_bytes, compute_streaming_hmac_hex};
 pub use error::StripeWebhookError;
-pub use header::{StripeSignatureHeader, parse_signature_header};
+pub use header::{
+    MAX_SIGNATURE_HEADER_BYTES, MAX_V1_SIGNATURES, StripeSignatureHeader, parse_signature_header,
+};
 
 use hmac::digest::KeyInit;
 use hmac::{Hmac, Mac};
@@ -116,7 +118,7 @@ pub fn verify_stripe_signature(
     if is_blank_webhook_secret(webhook_secret)
         || payload.is_empty()
         || payload.len() > MAX_WEBHOOK_PAYLOAD_BYTES
-        || signature_header.trim().is_empty()
+        || signature_header.len() > MAX_SIGNATURE_HEADER_BYTES
     {
         return false;
     }
@@ -181,9 +183,6 @@ impl Webhook {
                 size: payload.len(),
                 max_allowed: MAX_WEBHOOK_PAYLOAD_BYTES,
             });
-        }
-        if header.trim().is_empty() {
-            return Err(StripeWebhookError::MissingSignatureHeader);
         }
 
         let parsed_header = parse_signature_header(header)?;
