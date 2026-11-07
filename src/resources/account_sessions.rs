@@ -52,12 +52,12 @@ impl<'a> AccountSessionsResource<'a> {
     ///
     /// ```no_run
     /// use some_stripe::StripeClient;
-    /// use some_stripe_types::account_session::{AccountSessionComponents, CreateAccountSessionParams};
+    /// use some_stripe_types::account_session::{CreateAccountSessionParams, PaymentsComponent};
     ///
     /// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = StripeClient::new("sk_test_123");
     /// let params = CreateAccountSessionParams::for_account("acct_1032D82eZvKYlo2C")
-    ///     .with_payments(true);
+    ///     .with_payments(PaymentsComponent::enabled());
     ///
     /// let session = client.account_sessions().create(&params).await?;
     /// println!("Client secret: {}", session.client_secret);
