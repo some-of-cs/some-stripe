@@ -610,7 +610,7 @@ async fn test_subscriptions_resource_mock_wire_lifecycle() {
 
     // 3. Resume payment collection
     let resumed = subscriptions
-        .resume("sub_wire_test_100")
+        .resume_collection("sub_wire_test_100")
         .await
         .expect("Resume collection must succeed");
 

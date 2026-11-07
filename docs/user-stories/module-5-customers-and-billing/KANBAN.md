@@ -54,13 +54,13 @@ kanban
   todo[📋 Backlog / Ready]
   spawning[🤖 Subagent Creating]
   in_progress[🔄 Units In Progress]
-    u511[Unit 1: Customer, Subscription, Item & Schedule Entities]@{ ticket: 'main', assigned: 'agent-b', priority: 'High' }
-    u512[Unit 2: CreateSubscriptionParams & Multi-Item Form Serde]@{ ticket: 'main', assigned: 'agent-c', priority: 'High' }
-    u513[Unit 3: Customers & Subscriptions Resource CRUD & Lifecycle]@{ ticket: 'main', assigned: 'agent-a', priority: 'High' }
     u514[Unit 4: Prorations, 14-Day Trial & GDPR Article 17 Tests]@{ ticket: 'main', assigned: 'agent-b', priority: 'High' }
+    u515[Unit 5: Gate G-Borrow Audit, Doctests & Acceptance Gates]@{ ticket: 'main', assigned: 'agent-c', priority: 'High' }
   review[🔍 PR Open / Gate Review]
-    u515[Unit 5: In-Flight Plan Prorations, Trials & Pause Collection]@{ ticket: 'main', assigned: 'agent-b', priority: 'High' }
+    u513[Unit 3: Customers & Subscriptions Resource CRUD & Lifecycle]@{ ticket: '77', assigned: 'agent-c', priority: 'High' }
   done[✅ Merged into Story Branch]
+    u511[Unit 1: Customer, Subscription, Item & Schedule Entities]@{ ticket: '71', assigned: 'agent-b', priority: 'High' }
+    u512[Unit 2: CreateSubscriptionParams & Multi-Item Form Serde]@{ ticket: '73', assigned: 'agent-c', priority: 'High' }
     s51_pr[US-5.1.0 Story Promotion PR into Module Branch]@{ ticket: 'main', assigned: 'agent-a', priority: 'Very High' }
 ```
 
@@ -98,11 +98,11 @@ kanban
 | :--- | :---: | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :---: |
 | **M5-SETUP** | Module | `N/A (Baseline Commit)` | `Supervisor` (`agent-c`) | `antigravity-guide` | `Git Workflow Master` | `stripe-best-practices` | `.worktrees/feat-module-5-customers-and-billing` | `feat/module-5-customers-and-billing` | 📋 Ready |
 | **US-5.1.0** | Story | `feat(us-5.1.0): customer vaulting and subscriptions (Units 1..5 Promotion)` | `US-5.1.0 Story Lead` (`agent-a`) | `stripe-best-practices` | `Code Reviewer`<br>`API Tester` | `security-audit`<br>`stripe-docs` | `.worktrees/feat-us-5.1.0-customer-vaulting-and-subscriptions` | `feat/us-5.1.0-customer-vaulting-and-subscriptions` | 📋 Ready |
-| **US-5.1.0/U1** | Unit | `feat(us-5.1.0/unit-1): customer, subscription, and schedule domain entities` | `domain-codegen-specialist` (`agent-b`) | `stripe-docs` | `Code Reviewer`<br>`AppSec Engineer` | `stripe-best-practices`<br>`security-audit` | `.worktrees/feat-us-5.1.0-unit-1-customer-subscription-entities` | `feat/us-5.1.0/unit-1-customer-subscription-entities` | 🤖 Spawning |
-| **US-5.1.0/U2** | Unit | `feat(us-5.1.0/unit-2): multi-item subscription parameters and indexed bracket serde` | `microkernel-architect` (`agent-c`) | `stripe-docs` | `Code Reviewer`<br>`Rust Refactoring` | `stripe-best-practices`<br>`upgrade-stripe` | `.worktrees/feat-us-5.1.0-unit-2-multi-item-subscription-params-serde` | `feat/us-5.1.0/unit-2-multi-item-subscription-params-serde` | 🤖 Spawning |
+| **US-5.1.0/U1** | Unit | `feat(us-5.1.0/unit-1): customer, subscription, and schedule domain entities` | `domain-codegen-specialist` (`agent-b`) | `stripe-docs` | `Code Reviewer`<br>`AppSec Engineer` | `stripe-best-practices`<br>`security-audit` | `.worktrees/feat-us-5.1.0-unit-1-customer-subscription-entities` | `feat/us-5.1.0/unit-1-customer-subscription-entities` | ✅ Merged |
+| **US-5.1.0/U2** | Unit | `feat(us-5.1.0/unit-2): core recurring subscriptions lifecycle and state machine` | `microkernel-architect` (`agent-b`) | `stripe-docs` | `Code Reviewer`<br>`Rust Refactoring` | `stripe-best-practices`<br>`upgrade-stripe` | `.worktrees/feat-us-5.1.0-unit-2-multi-item-subscription-params-serde` | `feat/us-5.1.0/unit-2-multi-item-subscription-params-serde` | 🔄 In Progress |
 | **US-5.1.0/U3** | Unit | `feat(us-5.1.0/unit-3): customers and subscriptions resource crud and client facade` | `domain-codegen-specialist` (`agent-a`) | `stripe-docs` | `Code Reviewer`<br>`AppSec Engineer` | `stripe-best-practices`<br>`security-audit` | `.worktrees/feat-us-5.1.0-unit-3-customers-subscriptions-resources` | `feat/us-5.1.0/unit-3-customers-subscriptions-resources` | 🤖 Spawning |
 | **US-5.1.0/U4** | Unit | `feat(us-5.1.0/unit-4): subscription wire mock tests and gdpr compliance verification` | `API Tester` (`agent-b`) | `stripe-docs` | `Code Reviewer`<br>`AppSec Engineer` | `stripe-best-practices`<br>`security-audit` | `.worktrees/feat-us-5.1.0-unit-4-proration-trials-mock-test` | `feat/us-5.1.0/unit-4-proration-trials-mock-test` | 🤖 Spawning |
-| **US-5.1.0/U5** | Unit | `feat(us-5.1.0/unit-5): in-flight plan prorations, trials, and pause collection` | `domain-codegen-specialist` (`agent-b`) | `stripe-docs`<br>`stripe-best-practices` | `Code Reviewer`<br>`Technical Writer` | `stripe-best-practices`<br>`stripe-docs` | `.worktrees/feat-us-5.1.0-unit-5-borrow-audit-doctests-gates` | `feat/us-5.1.0/unit-5-borrow-audit-doctests-gates` | 🔍 In Review |
+| **US-5.1.0/U5** | Unit | `feat(us-5.1.0/unit-5): zero-clone borrowing audit and documentation gates` | `Rust Refactoring Specialist` (`agent-c`) | `upgrade-stripe` | `Code Reviewer`<br>`Technical Writer` | `stripe-best-practices`<br>`stripe-docs` | `.worktrees/feat-us-5.1.0-unit-5-borrow-audit-doctests-gates` | `feat/us-5.1.0/unit-5-borrow-audit-doctests-gates` | 🤖 Spawning |
 | **US-5.2.0** | Story | `feat(us-5.2.0): invoices, credit notes, and billing portal (Units 1..5 Promotion)` | `US-5.2.0 Story Lead` (`agent-b`) | `stripe-best-practices` | `Code Reviewer`<br>`API Tester` | `security-audit`<br>`stripe-docs` | `.worktrees/feat-us-5.2.0-invoices-credit-notes-and-portal` | `feat/us-5.2.0-invoices-credit-notes-and-portal` | 📋 Ready |
 | **US-5.2.0/U1** | Unit | `feat(us-5.2.0/unit-1): invoice, credit note, quote, and portal domain entities` | `domain-codegen-specialist` (`agent-c`) | `stripe-docs` | `Code Reviewer`<br>`AppSec Engineer` | `stripe-best-practices`<br>`security-audit` | `.worktrees/feat-us-5.2.0-unit-1-invoice-credit-note-quote-entities` | `feat/us-5.2.0/unit-1-invoice-credit-note-quote-entities` | 🔄 In Progress |
 | **US-5.2.0/U2** | Unit | `feat(us-5.2.0/unit-2): invoice and billing portal parameters and form serde` | `microkernel-architect` (`agent-a`) | `stripe-docs` | `Code Reviewer`<br>`Rust Refactoring` | `stripe-best-practices`<br>`upgrade-stripe` | `.worktrees/feat-us-5.2.0-unit-2-invoice-credit-note-params-serde` | `feat/us-5.2.0/unit-2-invoice-credit-note-params-serde` | 🔄 In Progress |
