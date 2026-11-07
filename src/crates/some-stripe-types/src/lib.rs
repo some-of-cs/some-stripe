@@ -90,6 +90,13 @@ pub mod omnibus;
 pub use omnibus::*;
 pub mod billing_portal;
 pub use billing_portal::*;
+pub mod customer;
+pub use customer::*;
+pub mod subscription;
+#[allow(unused_imports)]
+pub use subscription::*;
+pub mod nullable;
+pub use nullable::*;
 
 /// Strongly typed Stripe Connect Account ID (`acct_...`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -760,6 +767,9 @@ pub enum EventObject {
     /// Stripe PortalConfiguration payload (`object = "billing_portal.configuration"`).
     #[serde(rename = "billing_portal.configuration")]
     PortalConfiguration(PortalConfiguration),
+
+    /// Stripe Customer payload (`object = "customer"`).
+    Customer(Customer),
 
     /// Unrecognized, custom, or unsupported event object types.
     #[serde(other)]
