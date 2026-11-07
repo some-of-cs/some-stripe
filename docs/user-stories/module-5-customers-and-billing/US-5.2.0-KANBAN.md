@@ -20,13 +20,13 @@ kanban
   spawning[🤖 Subagent Creating]
   in_progress[🔄 Units In Progress]
   review[🔍 PR Open / Gate Review]
-    s52_pr[US-5.2.0 Story Promotion PR into Module Branch]@{ ticket: 'main', assigned: 'agent-b', priority: 'Very High' }
-  done[✅ Merged into Story Branch]
-    u521[Unit 1: Draft & Finalized Invoices Core Lifecycle]@{ ticket: '72', assigned: 'agent-c', priority: 'High' }
-    u522[Unit 2: Invoice Line Items, Adjustments & Upcoming Previews]@{ ticket: '75', assigned: 'agent-a', priority: 'High' }
-    u523[Unit 3: Credit Notes Lifecycle & Invoice Balance Deductions]@{ ticket: '79', assigned: 'agent-b', priority: 'High' }
-    u524[Unit 4: Quotes Lifecycle & Zero-Copy Binary PDF Streaming]@{ ticket: '80', assigned: 'agent-c', priority: 'High' }
-    u525[Unit 5: Customer Billing Portal Configuration & Sessions]@{ ticket: '81', assigned: 'agent-a', priority: 'High' }
+  done[✅ Merged into Story & Module Branch]
+    u521[Unit 1: Draft & Finalized Invoices Core Lifecycle (PR #72)]@{ ticket: '72', assigned: 'agent-c', priority: 'High' }
+    u522[Unit 2: Invoice Line Items, Adjustments & Upcoming Previews (PR #75)]@{ ticket: '75', assigned: 'agent-a', priority: 'High' }
+    u523[Unit 3: Credit Notes Lifecycle & Invoice Balance Deductions (PR #79)]@{ ticket: '79', assigned: 'agent-b', priority: 'High' }
+    u524[Unit 4: Quotes Lifecycle & Zero-Copy Binary PDF Streaming (PR #80)]@{ ticket: '80', assigned: 'agent-c', priority: 'High' }
+    u525[Unit 5: Customer Billing Portal Configuration & Sessions (PR #81)]@{ ticket: '81', assigned: 'agent-a', priority: 'High' }
+    s52_pr[US-5.2.0 Story Promotion PR into Module Branch (PR #82)]@{ ticket: '82', assigned: 'agent-b', priority: 'Very High' }
 ```
 
 ---
