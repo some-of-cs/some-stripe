@@ -114,6 +114,8 @@ pub mod transfer_params;
 pub use transfer_params::*;
 pub mod settlement;
 pub use settlement::*;
+pub mod treasury_transfer;
+pub use treasury_transfer::*;
 
 /// Strongly typed Stripe Connect Account ID (`acct_...`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -786,6 +788,18 @@ pub enum EventObject {
 
     /// Stripe Payout payload (`object = "payout"`).
     Payout(Payout),
+
+    /// Stripe Treasury OutboundTransfer payload (`object = "treasury.outbound_transfer"`).
+    #[serde(rename = "treasury.outbound_transfer")]
+    TreasuryOutboundTransfer(OutboundTransfer),
+
+    /// Stripe Treasury OutboundPayment payload (`object = "treasury.outbound_payment"`).
+    #[serde(rename = "treasury.outbound_payment")]
+    TreasuryOutboundPayment(OutboundPayment),
+
+    /// Stripe Treasury ReceivedCredit payload (`object = "treasury.received_credit"`).
+    #[serde(rename = "treasury.received_credit")]
+    TreasuryReceivedCredit(ReceivedCredit),
 
     /// Unrecognized, custom, or unsupported event object types.
     #[serde(other)]

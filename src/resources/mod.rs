@@ -21,6 +21,7 @@ pub mod subscription_items;
 pub mod subscription_schedules;
 pub mod subscriptions;
 pub mod transfers;
+pub mod treasury_transfers;
 pub mod webhooks;
 
 pub use account_links::AccountLinksResource;
@@ -47,6 +48,10 @@ pub use subscription_items::SubscriptionItemsResource;
 pub use subscription_schedules::SubscriptionSchedulesResource;
 pub use subscriptions::SubscriptionsResource;
 pub use transfers::TransfersResource;
+pub use treasury_transfers::{
+    OutboundPaymentsResource, OutboundTransfersResource, ReceivedCreditsResource,
+    TreasuryTransfersResource,
+};
 pub use webhooks::WebhooksResource;
 
 /// Resolves an idempotency key for state-mutating requests.

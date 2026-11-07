@@ -88,9 +88,9 @@ pub use resources::{
     CheckoutSessionExt, CreditNotesResource, CustomersResource, DisputesResource, InvoicesResource,
     PaymentIntentsResource, PaymentLinksResource, PayoutsResource, PersonsResource, QuotesResource,
     RedirectError, RefundsResource, SessionsResource, SubscriptionItemsResource,
-    SubscriptionSchedulesResource, SubscriptionsResource, TransfersResource, WebhooksResource,
-    credit_note_id, generate_uuid_v4, is_fulfillment_ready, is_valid_uuid_v4, quote_id,
-    validate_redirect_url,
+    SubscriptionSchedulesResource, SubscriptionsResource, TransfersResource,
+    TreasuryTransfersResource, WebhooksResource, credit_note_id, generate_uuid_v4,
+    is_fulfillment_ready, is_valid_uuid_v4, quote_id, validate_redirect_url,
 };
 
 /// The main Stripe client used to interact with the Stripe API, modeled after `stripe-node`.
@@ -227,6 +227,11 @@ impl StripeClient {
     /// Access the Payouts resource namespace (`stripe.payouts`).
     pub fn payouts(&self) -> PayoutsResource<'_> {
         PayoutsResource::new(&self.0)
+    }
+
+    /// Access the Treasury Transfers resource namespace (`stripe.treasury_transfers`).
+    pub fn treasury_transfers(&self) -> TreasuryTransfersResource<'_> {
+        TreasuryTransfersResource::new(&self.0)
     }
 }
 
