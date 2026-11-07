@@ -53,11 +53,11 @@ kanban
   todo[📋 Backlog / Ready]
     u612[Unit 2: Account Links & Embedded Account Sessions (PR TBD)]@{ ticket: 'main', assigned: 'agent-b', priority: 'High' }
     u613[Unit 3: KYC Person Entities & Beneficial Ownership (PR TBD)]@{ ticket: 'main', assigned: 'agent-c', priority: 'High' }
-    u614[Unit 4: Accounts, Links, Sessions & Persons Resources (PR TBD)]@{ ticket: 'main', assigned: 'agent-a', priority: 'High' }
     u615[Unit 5: Borrow Audit, Multi-Tenant Isolation & Gates (PR TBD)]@{ ticket: 'main', assigned: 'agent-b', priority: 'High' }
   spawning[🤖 Subagent Creating]
   in_progress[🔄 Units In Progress]
     u611[Unit 1: Connect Account Domain Entities & Requirements]@{ ticket: 'main', assigned: 'agent-a', priority: 'High' }
+    u614[Unit 4: Accounts, Links, Sessions & Persons Resources (PR TBD)]@{ ticket: 'main', assigned: 'agent-a', priority: 'High' }
   review[🔍 PR Open / Gate Review]
   done[✅ Merged into Story Branch]
     s61_pr[US-6.1.0 Story Promotion PR into Module Branch]@{ ticket: 'main', assigned: 'agent-a', priority: 'Very High' }
