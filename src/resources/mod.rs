@@ -1,6 +1,7 @@
 //! API resource namespaces for Stripe operations.
 
 pub mod accounts;
+pub mod application_fees;
 pub mod balance;
 pub mod billing_portal;
 pub mod checkout;
@@ -10,14 +11,17 @@ pub mod disputes;
 pub mod invoices;
 pub mod payment_intents;
 pub mod payment_links;
+pub mod payouts;
 pub mod quotes;
 pub mod refunds;
 pub mod subscription_items;
 pub mod subscription_schedules;
 pub mod subscriptions;
+pub mod transfers;
 pub mod webhooks;
 
 pub use accounts::AccountsResource;
+pub use application_fees::ApplicationFeesResource;
 pub use balance::{BalanceResource, BalanceTransactionsResource};
 pub use billing_portal::BillingPortalResource;
 pub use checkout::{
@@ -30,9 +34,11 @@ pub use disputes::DisputesResource;
 pub use invoices::InvoicesResource;
 pub use payment_intents::{PaymentIntentsResource, generate_uuid_v4, is_valid_uuid_v4};
 pub use payment_links::PaymentLinksResource;
+pub use payouts::PayoutsResource;
 pub use quotes::{QuotesResource, quote_id};
 pub use refunds::RefundsResource;
 pub use subscription_items::SubscriptionItemsResource;
 pub use subscription_schedules::SubscriptionSchedulesResource;
 pub use subscriptions::SubscriptionsResource;
+pub use transfers::TransfersResource;
 pub use webhooks::WebhooksResource;
