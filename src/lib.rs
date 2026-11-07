@@ -87,9 +87,9 @@ pub use resources::{
     BalanceResource, BalanceTransactionsResource, BillingPortalResource, CalculationsResource,
     CheckoutResource, CheckoutSessionExt, CreditNotesResource, CustomersResource, DisputesResource,
     IdentityResource, InvoicesResource, IssuingAuthorizationsResource, IssuingCardholdersResource,
-    IssuingCardsResource, IssuingResource, IssuingTransactionsResource, MeterEventStreamResource,
-    MeterEventsResource, PaymentIntentsResource, PaymentLinksResource, PayoutsResource,
-    PersonsResource, QuotesResource, RedirectError, RefundsResource, SessionsResource,
+    IssuingCardsResource, IssuingResource, IssuingTransactionsResource, MeterEventSessionResource,
+    MeterEventStreamResource, MeterEventsResource, PaymentIntentsResource, PaymentLinksResource,
+    PayoutsResource, PersonsResource, QuotesResource, RedirectError, RefundsResource, SessionsResource,
     SubscriptionItemsResource, SubscriptionSchedulesResource, SubscriptionsResource,
     TaxRegistrationsResource, TaxResource, TaxSettingsResource, TerminalConnectionTokensResource,
     TerminalLocationsResource, TerminalReadersResource, TerminalResource, TransactionsResource,
@@ -300,6 +300,11 @@ impl StripeClient {
         TerminalResource::new(&self.0)
     }
 
+    /// Access the Meter Event Sessions resource namespace (`POST /v2/billing/meter_event_session`).
+    pub fn meter_event_sessions(&self) -> MeterEventSessionResource<'_> {
+        MeterEventSessionResource::new(&self.0)
+    }
+
     /// Access the V2 Meter Event Stream resource (`stripe.meter_event_stream`).
     pub fn meter_event_stream(&self) -> MeterEventStreamResource<'_> {
         MeterEventStreamResource::new(&self.0)
@@ -308,6 +313,7 @@ impl StripeClient {
     /// Access the V2 Meter Events resource (`stripe.meter_events`).
     pub fn meter_events(&self) -> MeterEventsResource<'_> {
         MeterEventsResource::new(&self.0)
+    }
     }
 }
 
