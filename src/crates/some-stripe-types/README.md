@@ -26,6 +26,11 @@ Strongly Typed Domain Models, Events & Request DTOs for [`some-stripe`](https://
   - Exhaustive 20-field evidence container (`DisputeEvidence`) for fulfillment proofs, customer communications, duplicate charge explanations, and policy disclosures.
   - Evidence submission tracking (`DisputeEvidenceDetails`) with due dates and past-due detection.
   - Submission locking invariants: `Dispute::is_evidence_locked` and `UpdateDisputeParams::is_submission_final` prevent modifying finalized or closed dispute evidence.
+- **Terminal POS Readers, Locations & Connection Tokens (AC-US-7.2.0-03 & EMV Level 1/2)**:
+  - `TerminalReader`, `TerminalLocation`, `ConnectionToken`, `TerminalAddress`, `ReaderAction`.
+  - Ephemeral connection token issuance with location binding for smart POS reader hardware (`AC-US-7.2.0-03`).
+  - EMV Level 1 and Level 2 contact, contactless (NFC/Apple Pay), and swipe presentment device security verification (`is_emv_compliant_device`).
+  - Strict Debug redaction for `ConnectionToken.secret` (`[REDACTED]`).
 - **Discriminated Event Union & Upcoming Invoice Guard**:
   - `EventObject` tagged union (`payment_intent`, `checkout.session`, `invoice`, `dispute`, `refund`, with `#[serde(other)] Unknown` fallback).
   - `Invoice.id` is typed as `Option<String>` to safely accommodate `invoice.upcoming` preview events where `id` is null on Stripe payloads.

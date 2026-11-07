@@ -90,9 +90,11 @@ pub use resources::{
     IssuingResource, IssuingTransactionsResource, PaymentIntentsResource, PaymentLinksResource,
     PayoutsResource, PersonsResource, QuotesResource, RedirectError, RefundsResource,
     SessionsResource, SubscriptionItemsResource, SubscriptionSchedulesResource,
-    SubscriptionsResource, TransfersResource, TreasuryFinancialAccountsResource,
-    TreasuryTransfersResource, WebhooksResource, credit_note_id, generate_uuid_v4,
-    is_fulfillment_ready, is_valid_uuid_v4, quote_id, validate_redirect_url,
+    SubscriptionsResource, TerminalConnectionTokensResource, TerminalLocationsResource,
+    TerminalReadersResource, TerminalResource, TransfersResource,
+    TreasuryFinancialAccountsResource, TreasuryResource, TreasuryTransfersResource,
+    WebhooksResource, credit_note_id, generate_uuid_v4, is_fulfillment_ready, is_valid_uuid_v4,
+    quote_id, validate_redirect_url,
 };
 
 /// The main Stripe client used to interact with the Stripe API, modeled after `stripe-node`.
@@ -256,6 +258,11 @@ impl StripeClient {
         IssuingTransactionsResource::new(&self.0)
     }
 
+    /// Access the Treasury resource namespace (`stripe.treasury`).
+    pub fn treasury(&self) -> TreasuryResource<'_> {
+        TreasuryResource::new(&self.0)
+    }
+
     /// Access the Treasury Financial Accounts resource namespace (`stripe.treasury_financial_accounts`).
     pub fn treasury_financial_accounts(&self) -> TreasuryFinancialAccountsResource<'_> {
         TreasuryFinancialAccountsResource::new(&self.0)
@@ -264,6 +271,11 @@ impl StripeClient {
     /// Access the Treasury Transfers resource namespace (`stripe.treasury_transfers`).
     pub fn treasury_transfers(&self) -> TreasuryTransfersResource<'_> {
         TreasuryTransfersResource::new(&self.0)
+    }
+
+    /// Access the Terminal resource namespace (`stripe.terminal`).
+    pub fn terminal(&self) -> TerminalResource<'_> {
+        TerminalResource::new(&self.0)
     }
 }
 

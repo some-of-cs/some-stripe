@@ -23,7 +23,9 @@ pub mod refunds;
 pub mod subscription_items;
 pub mod subscription_schedules;
 pub mod subscriptions;
+pub mod terminal;
 pub mod transfers;
+pub mod treasury;
 pub mod treasury_financial_accounts;
 pub mod treasury_transfers;
 pub mod webhooks;
@@ -54,7 +56,12 @@ pub use refunds::RefundsResource;
 pub use subscription_items::SubscriptionItemsResource;
 pub use subscription_schedules::SubscriptionSchedulesResource;
 pub use subscriptions::SubscriptionsResource;
+pub use terminal::{
+    TerminalConnectionTokensResource, TerminalLocationsResource, TerminalReadersResource,
+    TerminalResource,
+};
 pub use transfers::TransfersResource;
+pub use treasury::TreasuryResource;
 pub use treasury_financial_accounts::TreasuryFinancialAccountsResource;
 pub use treasury_transfers::{
     OutboundPaymentsResource, OutboundTransfersResource, ReceivedCreditsResource,

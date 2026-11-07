@@ -295,6 +295,11 @@ impl<'a> IssuingResource<'a> {
         Self { client }
     }
 
+    /// Access reference to the underlying [`StripeClient`].
+    pub fn client(&self) -> &'a StripeClient {
+        self.client
+    }
+
     /// Access Issuing Cards operations.
     pub fn cards(&self) -> IssuingCardsResource<'a> {
         IssuingCardsResource::new(self.client)
