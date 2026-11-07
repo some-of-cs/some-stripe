@@ -97,6 +97,8 @@ pub mod subscription;
 pub use subscription::*;
 pub mod nullable;
 pub use nullable::*;
+pub mod person;
+pub use person::*;
 
 /// Strongly typed Stripe Connect Account ID (`acct_...`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
