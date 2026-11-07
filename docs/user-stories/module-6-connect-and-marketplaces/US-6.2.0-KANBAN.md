@@ -20,13 +20,13 @@ config:
 ---
 kanban
   todo[📋 Backlog / Ready]
-    u624[Unit 4: Transfers, Fees & Payouts Resource Endpoints]@{ ticket: 'main', assigned: 'agent-c', priority: 'High' }
-    u625[Unit 5: Settlement Math Audit, P2B Compliance & Gates]@{ ticket: 'main', assigned: 'agent-a', priority: 'High' }
   spawning[🤖 Subagent Creating]
   in_progress[🔄 Units In Progress]
     u621[Unit 1: Transfer & Reversals Domain Entities]@{ ticket: 'main', assigned: 'agent-c', priority: 'High' }
     u622[Unit 2: Application Fee & Fee Refund Entities]@{ ticket: 'main', assigned: 'agent-a', priority: 'High' }
     u623[Unit 3: Payout Domain Entities & Lifecycle Models]@{ ticket: 'main', assigned: 'agent-b', priority: 'High' }
+    u624[Unit 4: Transfers, Fees & Payouts Resource Endpoints]@{ ticket: 'main', assigned: 'agent-c', priority: 'High' }
+    u625[Unit 5: Settlement Math Audit, P2B Compliance & Gates]@{ ticket: 'main', assigned: 'agent-a', priority: 'High' }
   review[🔍 PR Open / Gate Review]
   done[✅ Merged into Story Branch]
     s62_pr[US-6.2.0 Story Promotion PR into Module Branch]@{ ticket: 'main', assigned: 'agent-b', priority: 'Very High' }
@@ -41,5 +41,7 @@ kanban
 | **Unit 1** | `Transfer`, `TransferReversal`, `CreateTransferParams`, `CreateTransferReversalParams` in `some-stripe-types` | `domain-codegen-specialist` (`agent-c`) | `stripe-docs`<br>`stripe-best-practices` | `Code Reviewer`<br>`AppSec Engineer` | `stripe-best-practices`<br>`security-audit` | `feat/us-6.2.0/unit-1-transfers-and-reversals-entities` | `feat(us-6.2.0/unit-1): transfer and reversals domain entities` | 🔄 In Progress |
 | **Unit 2** | `ApplicationFee`, `FeeRefund`, `CreateFeeRefundParams` in `some-stripe-types` | `microkernel-architect` (`agent-a`) | `stripe-docs`<br>`stripe-best-practices` | `Code Reviewer`<br>`Rust Refactoring` | `stripe-best-practices`<br>`upgrade-stripe` | `feat/us-6.2.0/unit-2-application-fees-and-refunds` | `feat(us-6.2.0/unit-2): application fee and fee refund entities` | 🔄 In Progress |
 | **Unit 3** | `Payout`, `PayoutStatus`, `PayoutMethod`, `CreatePayoutParams`, `CancelPayoutParams` in `some-stripe-types` | `domain-codegen-specialist` (`agent-b`) | `stripe-docs`<br>`stripe-best-practices` | `Code Reviewer`<br>`AppSec Engineer` | `stripe-best-practices`<br>`security-audit` | `feat/us-6.2.0/unit-3-payouts-domain-entities` | `feat(us-6.2.0/unit-3): payout domain entities and lifecycle models` | 🔄 In Progress |
+| **Unit 4** | `TransfersResource` (`create`, `retrieve`, `update`, `reverse`, `list`), `ApplicationFeesResource`, `PayoutsResource` in `src/resources/` | `microkernel-architect` (`agent-c`) | `stripe-docs`<br>`stripe-best-practices` | `Code Reviewer`<br>`AppSec Engineer` | `stripe-best-practices`<br>`security-audit` | `feat/us-6.2.0/unit-4-transfers-fees-payouts-resources` | `feat(us-6.2.0/unit-4): transfers, fees and payouts resource endpoints` | 🔄 In Progress |
+| **Unit 5** | Split settlement math verification, EU P2B Regulation 2019/1150 transparency, borrow audit, doctests, gate validation | `Rust Refactoring Specialist` (`agent-a`) | `stripe-best-practices`<br>`security-audit` | `Code Reviewer`<br>`Technical Writer` | `stripe-best-practices`<br>`stripe-docs` | `feat/us-6.2.0/unit-5-settlement-math-borrow-audit-gates` | `feat(us-6.2.0/unit-5): settlement math audit, p2b compliance, doctests and gates` | 🔄 In Progress |
 | **Unit 4** | `TransfersResource` (`create`, `retrieve`, `update`, `reverse`, `list`), `ApplicationFeesResource`, `PayoutsResource` in `src/resources/` | `microkernel-architect` (`agent-c`) | `stripe-docs`<br>`stripe-best-practices` | `Code Reviewer`<br>`AppSec Engineer` | `stripe-best-practices`<br>`security-audit` | `feat/us-6.2.0/unit-4-transfers-fees-payouts-resources` | `feat(us-6.2.0/unit-4): transfers, fees and payouts resource endpoints` | 📋 Ready |
 | **Unit 5** | Split settlement math verification, EU P2B Regulation 2019/1150 transparency, borrow audit, doctests, gate validation | `Rust Refactoring Specialist` (`agent-a`) | `stripe-best-practices`<br>`security-audit` | `Code Reviewer`<br>`Technical Writer` | `stripe-best-practices`<br>`stripe-docs` | `feat/us-6.2.0/unit-5-settlement-math-borrow-audit-gates` | `feat(us-6.2.0/unit-5): settlement math audit, p2b compliance, doctests and gates` | 📋 Ready |
