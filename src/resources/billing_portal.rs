@@ -63,21 +63,14 @@ impl<'a> BillingPortalResource<'a> {
             form_data.push(("on_behalf_of", o.as_str()));
         }
 
-        let generated_key;
-        let idempotency_key = match params.idempotency_key.as_deref() {
-            Some(k) if !k.trim().is_empty() => k,
-            _ => {
-                generated_key = crate::resources::generate_uuid_v4();
-                &generated_key
-            }
-        };
+        let idempotency_key = super::resolve_idempotency_key(params.idempotency_key.as_deref());
 
         let req = self
             .client
             .http
             .post(&url)
             .form(&form_data)
-            .header("Idempotency-Key", idempotency_key);
+            .header("Idempotency-Key", &*idempotency_key);
 
         let val = self.client.execute(req).await?;
         let session: PortalSession = serde_json::from_value(val)?;
@@ -166,21 +159,14 @@ impl<'a> BillingPortalResource<'a> {
             form_data.push((k.as_str(), *v));
         }
 
-        let generated_key;
-        let idempotency_key = match params.idempotency_key.as_deref() {
-            Some(k) if !k.trim().is_empty() => k,
-            _ => {
-                generated_key = crate::resources::generate_uuid_v4();
-                &generated_key
-            }
-        };
+        let idempotency_key = super::resolve_idempotency_key(params.idempotency_key.as_deref());
 
         let req = self
             .client
             .http
             .post(&url)
             .form(&form_data)
-            .header("Idempotency-Key", idempotency_key);
+            .header("Idempotency-Key", &*idempotency_key);
 
         let val = self.client.execute(req).await?;
         let config: PortalConfiguration = serde_json::from_value(val)?;
@@ -296,21 +282,14 @@ impl<'a> BillingPortalResource<'a> {
             form_data.push((k.as_str(), *v));
         }
 
-        let generated_key;
-        let idempotency_key = match params.idempotency_key.as_deref() {
-            Some(k) if !k.trim().is_empty() => k,
-            _ => {
-                generated_key = crate::resources::generate_uuid_v4();
-                &generated_key
-            }
-        };
+        let idempotency_key = super::resolve_idempotency_key(params.idempotency_key.as_deref());
 
         let req = self
             .client
             .http
             .post(&url)
             .form(&form_data)
-            .header("Idempotency-Key", idempotency_key);
+            .header("Idempotency-Key", &*idempotency_key);
 
         let val = self.client.execute(req).await?;
         let config: PortalConfiguration = serde_json::from_value(val)?;

@@ -87,15 +87,15 @@ impl<'a> ApplicationFeesResource<'a> {
             None => to_form_params(&CreateFeeRefundParams::default())?,
         };
 
-        let generated_key = crate::resources::generate_uuid_v4();
-        let idempotency_key = generated_key.as_str();
+        let idempotency_key =
+            super::resolve_idempotency_key(params.and_then(|p| p.idempotency_key.as_deref()));
 
         let req = self
             .client
             .http
             .post(&url)
             .form(&form_data)
-            .header("Idempotency-Key", idempotency_key);
+            .header("Idempotency-Key", &*idempotency_key);
 
         let val = self.client.execute(req).await?;
         let refund: FeeRefund = serde_json::from_value(val)?;

@@ -125,17 +125,10 @@ impl<'a> SessionsResource<'a> {
     ) -> Result<CheckoutSession, StripeError> {
         let url = format!("{}/v1/checkout/sessions", self.client.config.api_base);
 
-        let generated_key;
-        let idempotency_key = match params.idempotency_key.as_deref() {
-            Some(k) => {
-                IdempotencyKeyManager::validate(k)?;
-                k
-            }
-            None => {
-                generated_key = crate::resources::generate_uuid_v4();
-                &generated_key
-            }
-        };
+        if let Some(k) = params.idempotency_key.as_deref() {
+            IdempotencyKeyManager::validate(k)?;
+        }
+        let idempotency_key = super::resolve_idempotency_key(params.idempotency_key.as_deref());
 
         let mut form_pairs = some_stripe_core::patterns::serializer::to_form_params(params)?;
 
@@ -173,7 +166,7 @@ impl<'a> SessionsResource<'a> {
             .http
             .post(&url)
             .form(&form_pairs)
-            .header("Idempotency-Key", idempotency_key);
+            .header("Idempotency-Key", &*idempotency_key);
 
         let val = self.client.execute(req).await?;
         let session: CheckoutSession = serde_json::from_value(val)?;
@@ -228,12 +221,12 @@ impl<'a> SessionsResource<'a> {
             "{}/v1/checkout/sessions/{}/expire",
             self.client.config.api_base, encoded_id
         );
-        let idempotency_key = crate::resources::generate_uuid_v4();
+        let idempotency_key = super::resolve_idempotency_key(None);
         let req = self
             .client
             .http
             .post(&url)
-            .header("Idempotency-Key", idempotency_key);
+            .header("Idempotency-Key", &*idempotency_key);
         let val = self.client.execute(req).await?;
         let session: CheckoutSession = serde_json::from_value(val)?;
         Ok(session)
