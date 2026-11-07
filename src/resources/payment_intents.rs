@@ -15,7 +15,8 @@
 //! Amounts are specified and validated as positive integers (`amount > 0`) in minor currency
 //! units (cents), and currency codes are checked against 3-letter lowercase ISO formats.
 
-use some_stripe_core::{StripeClient, StripeError};
+use some_stripe_core::patterns::serializer::to_form_params;
+use some_stripe_core::{StripeClient, StripeError, validate_and_encode_id};
 use some_stripe_types::{
     CancelPaymentIntentParams, CapturePaymentIntentParams, ConfirmPaymentIntentParams,
     CreatePaymentIntentParams, PaymentIntent,
@@ -149,29 +150,7 @@ impl<'a> PaymentIntentsResource<'a> {
             .map_err(|e| StripeError::InvalidRequest(e.to_string()))?;
 
         let url = format!("{}/v1/payment_intents", self.client.config.api_base);
-        let amount_str = params.amount.to_string();
-
-        let mut form_data = vec![
-            ("amount", amount_str.as_str()),
-            ("currency", params.currency.as_str()),
-        ];
-
-        if let Some(capture_method) = &params.capture_method {
-            form_data.push(("capture_method", capture_method.as_str()));
-        }
-        if let Some(desc) = &params.description {
-            form_data.push(("description", desc.as_str()));
-        }
-        if let Some(pm) = &params.payment_method {
-            form_data.push(("payment_method", pm.as_str()));
-        }
-        let confirm_str = params.confirm.map(|c| c.to_string());
-        if let Some(ref c) = confirm_str {
-            form_data.push(("confirm", c.as_str()));
-        }
-        if let Some(ru) = &params.return_url {
-            form_data.push(("return_url", ru.as_str()));
-        }
+        let form_data = to_form_params(params)?;
 
         let generated_key;
         let idempotency_key = match params.idempotency_key.as_deref() {
@@ -211,9 +190,10 @@ impl<'a> PaymentIntentsResource<'a> {
     /// # }
     /// ```
     pub async fn retrieve(&self, intent_id: &str) -> Result<PaymentIntent, StripeError> {
+        let safe_id = validate_and_encode_id(intent_id)?;
         let url = format!(
-            "{}/v1/payment_intents/{}",
-            self.client.config.api_base, intent_id
+            "{}/v1/payment_intents/{safe_id}",
+            self.client.config.api_base
         );
         let req = self.client.http.get(&url);
         let val = self.client.execute(req).await?;
@@ -251,14 +231,15 @@ impl<'a> PaymentIntentsResource<'a> {
         intent_id: &str,
         params: Option<&CapturePaymentIntentParams>,
     ) -> Result<PaymentIntent, StripeError> {
+        let safe_id = validate_and_encode_id(intent_id)?;
         if let Some(p) = params {
             p.validate()
                 .map_err(|e| StripeError::InvalidRequest(e.to_string()))?;
         }
 
         let url = format!(
-            "{}/v1/payment_intents/{}/capture",
-            self.client.config.api_base, intent_id
+            "{}/v1/payment_intents/{safe_id}/capture",
+            self.client.config.api_base
         );
         let mut form_data = Vec::new();
         let amount_str = params
@@ -319,14 +300,15 @@ impl<'a> PaymentIntentsResource<'a> {
         intent_id: &str,
         params: Option<&CancelPaymentIntentParams>,
     ) -> Result<PaymentIntent, StripeError> {
+        let safe_id = validate_and_encode_id(intent_id)?;
         if let Some(p) = params {
             p.validate()
                 .map_err(|e| StripeError::InvalidRequest(e.to_string()))?;
         }
 
         let url = format!(
-            "{}/v1/payment_intents/{}/cancel",
-            self.client.config.api_base, intent_id
+            "{}/v1/payment_intents/{safe_id}/cancel",
+            self.client.config.api_base
         );
         let mut form_data = Vec::new();
         if let Some(reason) = params.and_then(|p| p.cancellation_reason.as_deref()) {
@@ -384,14 +366,15 @@ impl<'a> PaymentIntentsResource<'a> {
         intent_id: &str,
         params: Option<&ConfirmPaymentIntentParams>,
     ) -> Result<PaymentIntent, StripeError> {
+        let safe_id = validate_and_encode_id(intent_id)?;
         if let Some(p) = params {
             p.validate()
                 .map_err(|e| StripeError::InvalidRequest(e.to_string()))?;
         }
 
         let url = format!(
-            "{}/v1/payment_intents/{}/confirm",
-            self.client.config.api_base, intent_id
+            "{}/v1/payment_intents/{safe_id}/confirm",
+            self.client.config.api_base
         );
         let mut form_data = Vec::new();
         if let Some(pm) = params.and_then(|p| p.payment_method.as_deref()) {
@@ -888,5 +871,48 @@ mod tests {
         assert_eq!(pi2.status, "succeeded");
 
         server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_payment_intents_path_traversal_rejection() {
+        let config = StripeConfig::new("sk_test_dummy");
+        let client = StripeClient::with_config(config);
+        let resource = PaymentIntentsResource::new(&client);
+
+        let bad_ids = [
+            "../evil",
+            "pi/123",
+            "pi\\123",
+            "pi_123?foo=bar",
+            "pi_123#frag",
+            "",
+            "   ",
+        ];
+
+        for &bad_id in &bad_ids {
+            let res_ret = resource.retrieve(bad_id).await;
+            assert!(
+                matches!(res_ret, Err(StripeError::InvalidRequest(_))),
+                "retrieve({bad_id:?}) must reject path traversal, got: {res_ret:?}"
+            );
+
+            let res_cap = resource.capture(bad_id, None).await;
+            assert!(
+                matches!(res_cap, Err(StripeError::InvalidRequest(_))),
+                "capture({bad_id:?}) must reject path traversal, got: {res_cap:?}"
+            );
+
+            let res_can = resource.cancel(bad_id, None).await;
+            assert!(
+                matches!(res_can, Err(StripeError::InvalidRequest(_))),
+                "cancel({bad_id:?}) must reject path traversal, got: {res_can:?}"
+            );
+
+            let res_cnf = resource.confirm(bad_id, None).await;
+            assert!(
+                matches!(res_cnf, Err(StripeError::InvalidRequest(_))),
+                "confirm({bad_id:?}) must reject path traversal, got: {res_cnf:?}"
+            );
+        }
     }
 }

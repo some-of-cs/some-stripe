@@ -32,7 +32,7 @@
 
 use some_stripe_core::patterns::pagination::Paginator;
 use some_stripe_core::patterns::serializer::to_form_params;
-use some_stripe_core::{StripeClient, StripeError};
+use some_stripe_core::{StripeClient, StripeError, validate_and_encode_id};
 use some_stripe_types::{
     CreatePaymentLinkParams, LineItem, ListLineItemsParams, PaymentLink, UpdatePaymentLinkParams,
     line_item_id,
@@ -137,10 +137,8 @@ impl<'a> PaymentLinksResource<'a> {
     /// # }
     /// ```
     pub async fn retrieve(&self, link_id: &str) -> Result<PaymentLink, StripeError> {
-        let url = format!(
-            "{}/v1/payment_links/{}",
-            self.client.config.api_base, link_id
-        );
+        let safe_id = validate_and_encode_id(link_id)?;
+        let url = format!("{}/v1/payment_links/{safe_id}", self.client.config.api_base);
         let req = self.client.http.get(&url);
         let val = self.client.execute(req).await?;
         let link: PaymentLink = serde_json::from_value(val)?;
@@ -170,14 +168,12 @@ impl<'a> PaymentLinksResource<'a> {
         link_id: &str,
         params: &UpdatePaymentLinkParams,
     ) -> Result<PaymentLink, StripeError> {
+        let safe_id = validate_and_encode_id(link_id)?;
         params
             .validate()
             .map_err(|e| StripeError::InvalidRequest(e.to_string()))?;
 
-        let url = format!(
-            "{}/v1/payment_links/{}",
-            self.client.config.api_base, link_id
-        );
+        let url = format!("{}/v1/payment_links/{safe_id}", self.client.config.api_base);
         let form_data = to_form_params(params)?;
 
         let generated_key;
@@ -224,13 +220,16 @@ impl<'a> PaymentLinksResource<'a> {
         link_id: &str,
         params: &ListLineItemsParams,
     ) -> Paginator<'a, LineItem> {
+        let (path, initial_err) = match validate_and_encode_id(link_id) {
+            Ok(encoded) => (format!("v1/payment_links/{encoded}/line_items"), None),
+            Err(e) => (String::new(), Some(e)),
+        };
+
         let limit = params.limit.unwrap_or(10);
-        let mut paginator = Paginator::new(
-            self.client,
-            format!("v1/payment_links/{link_id}/line_items"),
-            limit,
-            line_item_id,
-        );
+        let mut paginator = Paginator::new(self.client, path, limit, line_item_id);
+        if let Some(err) = initial_err {
+            paginator = paginator.with_initial_error(err);
+        }
         if let Some(ref sa) = params.starting_after {
             paginator = paginator.starting_after(sa);
         }
@@ -276,5 +275,51 @@ impl<'a> PaymentLinksResource<'a> {
     /// ```
     pub fn list_line_items_with_limit(&self, link_id: &str, limit: u32) -> Paginator<'a, LineItem> {
         self.list_line_items(link_id, &ListLineItemsParams::new().limit(limit))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use some_stripe_core::StripeConfig;
+
+    #[tokio::test]
+    async fn test_payment_links_path_traversal_rejection() {
+        let config = StripeConfig::new("sk_test_dummy");
+        let client = StripeClient::with_config(config);
+        let resource = PaymentLinksResource::new(&client);
+
+        let bad_ids = [
+            "../evil",
+            "plink/123",
+            "plink\\123",
+            "plink_123?foo=bar",
+            "plink_123#frag",
+            "",
+            "   ",
+        ];
+
+        for &bad_id in &bad_ids {
+            let res_ret = resource.retrieve(bad_id).await;
+            assert!(
+                matches!(res_ret, Err(StripeError::InvalidRequest(_))),
+                "retrieve({bad_id:?}) must reject path traversal, got: {res_ret:?}"
+            );
+
+            let res_upd = resource
+                .update(bad_id, &UpdatePaymentLinkParams::default())
+                .await;
+            assert!(
+                matches!(res_upd, Err(StripeError::InvalidRequest(_))),
+                "update({bad_id:?}) must reject path traversal, got: {res_upd:?}"
+            );
+
+            let mut paginator = resource.list_line_items_default(bad_id);
+            let res_page = paginator.next_item().await;
+            assert!(
+                matches!(res_page, Err(StripeError::InvalidRequest(_))),
+                "list_line_items({bad_id:?}) must fail on first page with InvalidRequest, got: {res_page:?}"
+            );
+        }
     }
 }

@@ -103,7 +103,43 @@ impl HttpClient for ReqwestTransport {
 pub fn compute_backoff_delay(attempt: u32, base_ms: u64, max_ms: u64) -> Duration {
     let exponential = base_ms.saturating_mul(1u64 << attempt.min(6));
     let capped = exponential.min(max_ms);
-    // Add simple deterministic pseudorandom jitter
-    let jitter = (capped / 4).saturating_mul((attempt as u64 % 3) + 1) / 3;
+    // Deterministic pseudorandom jitter with effective spread up to 50% of capped delay
+    // while guaranteeing delay <= capped and delay >= base_ms / 2.
+    // Knuth's multiplicative hash / LCG to spread attempt values smoothly:
+    let hash = (attempt as u64)
+        .wrapping_mul(2654435761)
+        .wrapping_add(1013904223);
+    // Jitter spread between 1% and 50% of capped
+    let jitter_fraction = (hash % 50) + 1;
+    let max_jitter = capped / 2;
+    let jitter = (max_jitter * jitter_fraction) / 50;
     Duration::from_millis(capped.saturating_sub(jitter))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_compute_backoff_delay_bounds_and_dispersion() {
+        let delay0 = compute_backoff_delay(0, 100, 5000);
+        assert!(delay0 >= Duration::from_millis(50));
+        assert!(delay0 <= Duration::from_millis(100));
+
+        let delay1 = compute_backoff_delay(1, 100, 5000);
+        assert!(delay1 >= Duration::from_millis(100));
+        assert!(delay1 <= Duration::from_millis(200));
+
+        let delay_max = compute_backoff_delay(10, 100, 5000);
+        assert!(delay_max <= Duration::from_millis(5000));
+        assert!(delay_max >= Duration::from_millis(2500));
+
+        // Test smooth spread across attempts
+        for attempt in 0..20 {
+            let delay = compute_backoff_delay(attempt, 100, 5000);
+            let capped = (100u64 * (1u64 << attempt.min(6))).min(5000);
+            assert!(delay <= Duration::from_millis(capped));
+            assert!(delay >= Duration::from_millis(capped / 2));
+        }
+    }
 }

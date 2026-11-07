@@ -4,6 +4,7 @@
 //! or PaymentIntents, ensuring strict compliance with statutory 14-day consumer withdrawal
 //! directives (EU Directive 2011/83/EU Article 13) and idempotent request handling.
 
+use some_stripe_core::patterns::serializer::to_form_params;
 use some_stripe_core::{StripeClient, StripeError, validate_and_encode_id};
 use some_stripe_types::{CancelRefundParams, CreateRefundParams, Refund, UpdateRefundParams};
 
@@ -73,39 +74,7 @@ impl<'a> RefundsResource<'a> {
     /// ```
     pub async fn create(&self, params: &CreateRefundParams) -> Result<Refund, StripeError> {
         let url = format!("{}/v1/refunds", self.client.config.api_base);
-        let mut form_data = Vec::new();
-
-        if let Some(ref pi) = params.payment_intent {
-            form_data.push(("payment_intent", pi.as_str()));
-        }
-        if let Some(ref ch) = params.charge {
-            form_data.push(("charge", ch.as_str()));
-        }
-        let amount_str = params.amount.map(|a| a.to_string());
-        if let Some(ref a) = amount_str {
-            form_data.push(("amount", a.as_str()));
-        }
-        if let Some(ref r) = params.reason {
-            form_data.push(("reason", r.as_str()));
-        }
-        let app_fee_str = params.refund_application_fee.map(|f| f.to_string());
-        if let Some(ref f) = app_fee_str {
-            form_data.push(("refund_application_fee", f.as_str()));
-        }
-        let rev_transfer_str = params.reverse_transfer.map(|r| r.to_string());
-        if let Some(ref r) = rev_transfer_str {
-            form_data.push(("reverse_transfer", r.as_str()));
-        }
-
-        let mut metadata_entries = Vec::new();
-        if let Some(ref meta) = params.metadata {
-            for (k, v) in meta {
-                metadata_entries.push((format!("metadata[{k}]"), v.as_str()));
-            }
-        }
-        for (k, v) in &metadata_entries {
-            form_data.push((k.as_str(), *v));
-        }
+        let form_data = to_form_params(params)?;
 
         let generated_key;
         let idempotency_key = match params.idempotency_key.as_deref() {
