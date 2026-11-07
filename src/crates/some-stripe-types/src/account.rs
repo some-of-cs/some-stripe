@@ -298,19 +298,34 @@ pub struct AccountCapabilities {
 }
 
 impl AccountCapabilities {
+    /// Creates a new default instance of account capabilities.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Returns `true` if the card payments capability is active.
+    pub fn is_card_payments_active(&self) -> bool {
+        self.card_payments == Some(CapabilityStatus::Active)
+    }
+
     /// Returns `true` if the card payments capability is active.
     pub fn has_active_card_payments(&self) -> bool {
-        self.card_payments == Some(CapabilityStatus::Active)
+        self.is_card_payments_active()
+    }
+
+    /// Returns `true` if the transfers capability is active.
+    pub fn is_transfers_active(&self) -> bool {
+        self.transfers == Some(CapabilityStatus::Active)
     }
 
     /// Returns `true` if the transfers capability is active.
     pub fn has_active_transfers(&self) -> bool {
-        self.transfers == Some(CapabilityStatus::Active)
+        self.is_transfers_active()
     }
 
     /// Returns `true` if both card payments and transfers are active.
     pub fn is_fully_active(&self) -> bool {
-        self.has_active_card_payments() && self.has_active_transfers()
+        self.is_card_payments_active() && self.is_transfers_active()
     }
 }
 
@@ -472,6 +487,59 @@ pub struct AccountRequirements {
 }
 
 impl AccountRequirements {
+    /// Creates a new default instance of account requirements.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets the list of currently due requirements.
+    pub fn with_currently_due(mut self, currently_due: Vec<String>) -> Self {
+        self.currently_due = currently_due;
+        self
+    }
+
+    /// Sets the list of eventually due requirements.
+    pub fn with_eventually_due(mut self, eventually_due: Vec<String>) -> Self {
+        self.eventually_due = eventually_due;
+        self
+    }
+
+    /// Sets the disabled reason.
+    pub fn with_disabled_reason(mut self, reason: impl Into<String>) -> Self {
+        self.disabled_reason = Some(reason.into());
+        self
+    }
+
+    /// Returns the currently due requirements.
+    pub fn currently_due(&self) -> &[String] {
+        &self.currently_due
+    }
+
+    /// Returns the eventually due requirements.
+    pub fn eventually_due(&self) -> &[String] {
+        &self.eventually_due
+    }
+
+    /// Returns the past due requirements.
+    pub fn past_due(&self) -> &[String] {
+        &self.past_due
+    }
+
+    /// Returns the pending verification requirements.
+    pub fn pending_verification(&self) -> &[String] {
+        &self.pending_verification
+    }
+
+    /// Returns the disabled reason, if any.
+    pub fn disabled_reason(&self) -> Option<&str> {
+        self.disabled_reason.as_deref()
+    }
+
+    /// Returns `true` if a disabled reason is present.
+    pub fn has_disabled_reason(&self) -> bool {
+        self.disabled_reason.is_some()
+    }
+
     /// Returns `true` if all requirements are fulfilled (no items in `currently_due` or `past_due`).
     pub fn is_complete(&self) -> bool {
         self.currently_due.is_empty() && self.past_due.is_empty()
@@ -1014,7 +1082,7 @@ pub struct AccountControllerDashboard {
 /// assert!(account.is_charges_enabled());
 /// assert!(account.is_payouts_enabled());
 /// ```
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Account {
     /// Unique identifier for the account (`acct_...`).
     pub id: String,
@@ -1257,10 +1325,6 @@ pub struct CreateAccountParams {
     /// Custom key-value metadata.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<HashMap<String, String>>,
-
-    /// Optional idempotency key for safe request retries.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub idempotency_key: Option<String>,
 }
 
 impl CreateAccountParams {
@@ -1346,12 +1410,6 @@ impl CreateAccountParams {
         self.metadata = Some(m);
         self
     }
-
-    /// Sets the idempotency key for safe request retries.
-    pub fn idempotency_key(mut self, key: impl Into<String>) -> Self {
-        self.idempotency_key = Some(key.into());
-        self
-    }
 }
 
 /// Request parameters for updating an existing Connected Account (`POST /v1/accounts/{id}`).
@@ -1409,10 +1467,6 @@ pub struct UpdateAccountParams {
     /// Key-value metadata updates.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<HashMap<String, String>>,
-
-    /// Optional idempotency key for safe request retries.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub idempotency_key: Option<String>,
 }
 
 impl UpdateAccountParams {
@@ -1480,128 +1534,4 @@ impl UpdateAccountParams {
         self.metadata = Some(m);
         self
     }
-
-    /// Sets the idempotency key for safe request retries.
-    pub fn idempotency_key(mut self, key: impl Into<String>) -> Self {
-        self.idempotency_key = Some(key.into());
-        self
-    }
-}
-
-/// Parameters for rejecting an account (`POST /v1/accounts/{id}/reject`).
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct RejectAccountParams {
-    /// The reason for rejecting the account. Can be `fraud`, `terms_of_service`, or `other`.
-    pub reason: String,
-
-    /// Optional idempotency key for safe request retries.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub idempotency_key: Option<String>,
-}
-
-impl RejectAccountParams {
-    /// Creates a new reject parameters block with the specified reason.
-    pub fn new(reason: impl Into<String>) -> Self {
-        Self {
-            reason: reason.into(),
-            idempotency_key: None,
-        }
-    }
-
-    /// Sets the idempotency key for safe request retries.
-    pub fn idempotency_key(mut self, key: impl Into<String>) -> Self {
-        self.idempotency_key = Some(key.into());
-        self
-    }
-}
-
-/// Parameters for listing connected accounts (`GET /v1/accounts`).
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct ListAccountsParams {
-    /// A limit on the number of objects to be returned, between 1 and 100.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub limit: Option<u32>,
-
-    /// A cursor for use in pagination. An object ID defining your place in the list.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub starting_after: Option<String>,
-
-    /// A cursor for use in pagination. An object ID defining your place in the list.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub ending_before: Option<String>,
-
-    /// Filter accounts created at this UNIX timestamp.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub created: Option<i64>,
-}
-
-impl ListAccountsParams {
-    /// Creates a new default parameter block for listing accounts.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Sets the maximum number of accounts to return.
-    pub fn limit(mut self, limit: u32) -> Self {
-        self.limit = Some(limit);
-        self
-    }
-
-    /// Sets starting_after cursor.
-    pub fn starting_after(mut self, cursor: impl Into<String>) -> Self {
-        self.starting_after = Some(cursor.into());
-        self
-    }
-
-    /// Sets ending_before cursor.
-    pub fn ending_before(mut self, cursor: impl Into<String>) -> Self {
-        self.ending_before = Some(cursor.into());
-        self
-    }
-
-    /// Sets created timestamp filter.
-    pub fn created(mut self, created: i64) -> Self {
-        self.created = Some(created);
-        self
-    }
-}
-
-/// Paginated list of Connect Account objects (`object = "list"`).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct AccountList {
-    /// Object type, always `list`.
-    #[serde(default = "default_list_object")]
-    pub object: String,
-
-    /// List of accounts for this page.
-    pub data: Vec<Account>,
-
-    /// True if more items exist.
-    pub has_more: bool,
-
-    /// Request URL.
-    pub url: String,
-}
-
-fn default_list_object() -> String {
-    "list".into()
-}
-
-/// Confirmation object returned upon account deletion.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DeletedAccount {
-    /// Unique identifier of deleted account.
-    pub id: String,
-
-    /// Object type, always `account`.
-    #[serde(default = "default_account_object")]
-    pub object: String,
-
-    /// Always `true` if deleted.
-    pub deleted: bool,
-}
-
-/// Function for paginator ID extraction.
-pub fn account_id(account: &Account) -> &str {
-    account.id()
 }

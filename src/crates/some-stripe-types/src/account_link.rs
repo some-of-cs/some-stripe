@@ -503,12 +503,6 @@ impl CreateAccountLinkParams {
         self
     }
 
-    /// Alias for [`with_idempotency_key`](Self::with_idempotency_key).
-    #[must_use]
-    pub fn idempotency_key(self, key: impl Into<String>) -> Self {
-        self.with_idempotency_key(key)
-    }
-
     /// Validates the parameters against Stripe Connect API invariants (Gate G2).
     ///
     /// # Errors
