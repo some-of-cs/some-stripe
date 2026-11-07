@@ -7,6 +7,7 @@ pub mod nullable;
 pub mod pagination;
 pub mod serializer;
 pub mod transport;
+pub mod v2_pagination;
 
 pub use builder::StripeRequestBuilder;
 pub use crud::{
@@ -21,3 +22,4 @@ pub use serializer::{
     to_form_urlencoded,
 };
 pub use transport::{HttpClient, ReqwestTransport, compute_backoff_delay};
+pub use v2_pagination::{V2Paginator, resolve_v2_url};
