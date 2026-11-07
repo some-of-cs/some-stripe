@@ -116,6 +116,8 @@ pub mod settlement;
 pub use settlement::*;
 pub mod tax_calculation;
 pub use tax_calculation::*;
+pub mod tax_transaction;
+pub use tax_transaction::*;
 
 /// Strongly typed Stripe Connect Account ID (`acct_...`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -792,6 +794,10 @@ pub enum EventObject {
     /// Stripe TaxCalculation payload (`object = "tax.calculation"`).
     #[serde(rename = "tax.calculation")]
     TaxCalculation(TaxCalculation),
+
+    /// Stripe TaxTransaction payload (`object = "tax.transaction"`).
+    #[serde(rename = "tax.transaction")]
+    TaxTransaction(TaxTransaction),
 
     /// Unrecognized, custom, or unsupported event object types.
     #[serde(other)]
@@ -1518,6 +1524,37 @@ mod tests {
                 );
             }
             other => panic!("Expected PortalConfiguration variant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn test_event_object_tax_transaction() {
+        let json = serde_json::json!({
+            "id": "tax_tx_evt_606",
+            "object": "tax.transaction",
+            "created": 1735689600,
+            "currency": "usd",
+            "livemode": false,
+            "posted_at": 1735689600,
+            "reference": "order_evt_606",
+            "tax_date": 1735689600,
+            "type": "transaction"
+        });
+
+        let data = EventData { object: json };
+        let obj = data
+            .deserialize_object()
+            .expect("Failed to deserialize tax.transaction event");
+
+        match obj {
+            EventObject::TaxTransaction(tx) => {
+                assert_eq!(tx.id, "tax_tx_evt_606");
+                assert_eq!(tx.object, "tax.transaction");
+                assert_eq!(tx.currency, "usd");
+                assert_eq!(tx.reference, "order_evt_606");
+                assert!(tx.is_standard_transaction());
+            }
+            other => panic!("Expected TaxTransaction variant, got {other:?}"),
         }
     }
 }
