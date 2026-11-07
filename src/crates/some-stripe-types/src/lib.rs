@@ -97,6 +97,10 @@ pub mod subscription;
 pub use subscription::*;
 pub mod nullable;
 pub use nullable::*;
+pub mod transfer;
+pub use transfer::*;
+pub mod transfer_params;
+pub use transfer_params::*;
 
 /// Strongly typed Stripe Connect Account ID (`acct_...`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -770,6 +774,13 @@ pub enum EventObject {
 
     /// Stripe Customer payload (`object = "customer"`).
     Customer(Customer),
+
+    /// Stripe Transfer payload (`object = "transfer"`).
+    Transfer(Transfer),
+
+    /// Stripe TransferReversal payload (`object = "transfer_reversal"`).
+    #[serde(rename = "transfer_reversal")]
+    TransferReversal(TransferReversal),
 
     /// Unrecognized, custom, or unsupported event object types.
     #[serde(other)]
