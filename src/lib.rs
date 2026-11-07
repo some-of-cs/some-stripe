@@ -87,15 +87,16 @@ pub use resources::{
     BalanceResource, BalanceTransactionsResource, BillingPortalResource, CalculationsResource,
     CheckoutResource, CheckoutSessionExt, CreditNotesResource, CustomersResource, DisputesResource,
     IdentityResource, InvoicesResource, IssuingAuthorizationsResource, IssuingCardholdersResource,
-    IssuingCardsResource, IssuingResource, IssuingTransactionsResource, PaymentIntentsResource,
-    PaymentLinksResource, PayoutsResource, PersonsResource, QuotesResource, RedirectError,
-    RefundsResource, SessionsResource, SubscriptionItemsResource, SubscriptionSchedulesResource,
-    SubscriptionsResource, TaxRegistrationsResource, TaxResource, TaxSettingsResource,
-    TerminalConnectionTokensResource, TerminalLocationsResource, TerminalReadersResource,
-    TerminalResource, TransactionsResource, TransfersResource, TreasuryFinancialAccountsResource,
-    TreasuryResource, TreasuryTransfersResource, VerificationReportsResource,
-    VerificationSessionsResource, WebhooksResource, credit_note_id, generate_uuid_v4,
-    is_fulfillment_ready, is_valid_uuid_v4, quote_id, tax_registration_id, validate_redirect_url,
+    IssuingCardsResource, IssuingResource, IssuingTransactionsResource, MeterEventSessionResource,
+    PaymentIntentsResource, PaymentLinksResource, PayoutsResource, PersonsResource, QuotesResource,
+    RedirectError, RefundsResource, SessionsResource, SubscriptionItemsResource,
+    SubscriptionSchedulesResource, SubscriptionsResource, TaxRegistrationsResource, TaxResource,
+    TaxSettingsResource, TerminalConnectionTokensResource, TerminalLocationsResource,
+    TerminalReadersResource, TerminalResource, TransactionsResource, TransfersResource,
+    TreasuryFinancialAccountsResource, TreasuryResource, TreasuryTransfersResource,
+    VerificationReportsResource, VerificationSessionsResource, WebhooksResource, credit_note_id,
+    generate_uuid_v4, is_fulfillment_ready, is_valid_uuid_v4, quote_id, tax_registration_id,
+    validate_redirect_url,
 };
 
 /// The main Stripe client used to interact with the Stripe API, modeled after `stripe-node`.
@@ -297,6 +298,11 @@ impl StripeClient {
     /// Access the Terminal resource namespace (`stripe.terminal`).
     pub fn terminal(&self) -> TerminalResource<'_> {
         TerminalResource::new(&self.0)
+    }
+
+    /// Access the Meter Event Sessions resource namespace (`POST /v2/billing/meter_event_session`).
+    pub fn meter_event_sessions(&self) -> MeterEventSessionResource<'_> {
+        MeterEventSessionResource::new(&self.0)
     }
 }
 
