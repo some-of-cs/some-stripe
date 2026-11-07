@@ -713,6 +713,8 @@ pub mod quote;
 pub use quote::*;
 pub mod quote_params;
 pub use quote_params::*;
+pub mod payout;
+pub use payout::*;
 
 /// Strongly typed, discriminated union of Stripe event payload objects.
 ///
@@ -792,6 +794,9 @@ pub enum EventObject {
 
     /// Stripe FeeRefund payload (`object = "fee_refund"`).
     FeeRefund(FeeRefund),
+
+    /// Stripe Payout payload (`object = "payout"`).
+    Payout(Payout),
 
     /// Unrecognized, custom, or unsupported event object types.
     #[serde(other)]
