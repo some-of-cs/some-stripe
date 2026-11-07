@@ -84,12 +84,13 @@ pub use some_stripe_webhooks::{
 pub mod resources;
 pub use resources::{
     AccountLinksResource, AccountSessionsResource, AccountsResource, ApplicationFeesResource,
-    BalanceResource, BalanceTransactionsResource, BillingPortalResource, CalculationsResource,
-    CheckoutResource, CheckoutSessionExt, CreditNotesResource, CustomersResource, DisputesResource,
-    IdentityResource, InvoicesResource, IssuingAuthorizationsResource, IssuingCardholdersResource,
-    IssuingCardsResource, IssuingResource, IssuingTransactionsResource, PaymentIntentsResource,
-    PaymentLinksResource, PayoutsResource, PersonsResource, QuotesResource, RedirectError,
-    RefundsResource, SessionsResource, SubscriptionItemsResource, SubscriptionSchedulesResource,
+    BalanceResource, BalanceTransactionsResource, BillingMetersResource, BillingPortalResource,
+    CalculationsResource, CheckoutResource, CheckoutSessionExt, CreditNotesResource,
+    CustomersResource, DisputesResource, IdentityResource, InvoicesResource,
+    IssuingAuthorizationsResource, IssuingCardholdersResource, IssuingCardsResource,
+    IssuingResource, IssuingTransactionsResource, PaymentIntentsResource, PaymentLinksResource,
+    PayoutsResource, PersonsResource, QuotesResource, RedirectError, RefundsResource,
+    SessionsResource, SubscriptionItemsResource, SubscriptionSchedulesResource,
     SubscriptionsResource, TaxRegistrationsResource, TaxResource, TaxSettingsResource,
     TerminalConnectionTokensResource, TerminalLocationsResource, TerminalReadersResource,
     TerminalResource, TransactionsResource, TransfersResource, TreasuryFinancialAccountsResource,
@@ -297,6 +298,11 @@ impl StripeClient {
     /// Access the Terminal resource namespace (`stripe.terminal`).
     pub fn terminal(&self) -> TerminalResource<'_> {
         TerminalResource::new(&self.0)
+    }
+
+    /// Access the V2 Billing Meters resource namespace (`stripe.v2.billing.meters`).
+    pub fn billing_meters(&self) -> BillingMetersResource<'_> {
+        BillingMetersResource::new(&self.0)
     }
 }
 
