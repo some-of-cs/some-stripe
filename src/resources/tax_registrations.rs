@@ -27,8 +27,8 @@ pub fn tax_registration_id(reg: &TaxRegistration) -> &str {
 ///
 /// # Example
 /// ```no_run
-/// use some_stripe_core::StripeClient;
-/// use some_stripe_resources::TaxRegistrationsResource;
+/// use some_stripe::StripeClient;
+/// use some_stripe::resources::TaxRegistrationsResource;
 ///
 /// # async fn doc() -> Result<(), Box<dyn std::error::Error>> {
 /// let client = StripeClient::new("sk_test_123");

@@ -157,34 +157,7 @@ pub struct ReversalDetails {
     pub mode: Option<String>,
 }
 
-/// Shipping cost and tax details for a tax transaction.
-///
-/// # Example
-/// ```
-/// use some_stripe_types::TaxShippingCost;
-///
-/// let shipping = TaxShippingCost {
-///     amount: 500,
-///     amount_tax: 45,
-///     tax_behavior: Some("exclusive".into()),
-///     tax_code: Some("txcd_92010001".into()),
-/// };
-/// assert_eq!(shipping.amount, 500);
-/// assert_eq!(shipping.amount_tax, 45);
-/// ```
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
-pub struct TaxShippingCost {
-    /// The shipping amount in minor integer currency units.
-    pub amount: i64,
-    /// The tax amount for shipping in minor integer currency units.
-    pub amount_tax: i64,
-    /// The tax behavior: `inclusive` or `exclusive`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub tax_behavior: Option<String>,
-    /// The tax code associated with shipping (e.g. `txcd_92010001`).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub tax_code: Option<String>,
-}
+pub use crate::tax_calculation::TaxShippingCost;
 
 /// Customer tax-relevant details associated with a tax transaction.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]

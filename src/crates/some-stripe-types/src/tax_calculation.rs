@@ -812,6 +812,7 @@ pub struct TaxCalculation {
     pub customer: Option<String>,
 
     /// Customer details used to compute taxes.
+    #[serde(default)]
     pub customer_details: CustomerTaxDetails,
 
     /// Timestamp at which the calculation expires (48 hours after creation).

@@ -86,10 +86,11 @@ pub use resources::{
     AccountLinksResource, AccountSessionsResource, AccountsResource, ApplicationFeesResource,
     BalanceResource, BalanceTransactionsResource, BillingPortalResource, CalculationsResource,
     CheckoutResource, CheckoutSessionExt, CreditNotesResource, CustomersResource, DisputesResource,
-    InvoicesResource, PaymentIntentsResource, PaymentLinksResource, PayoutsResource,
-    PersonsResource, QuotesResource, RedirectError, RefundsResource, SessionsResource,
-    SubscriptionItemsResource, SubscriptionSchedulesResource, SubscriptionsResource,
-    TaxRegistrationsResource, TaxSettingsResource, TransactionsResource, TransfersResource,
+    IdentityResource, InvoicesResource, PaymentIntentsResource, PaymentLinksResource,
+    PayoutsResource, PersonsResource, QuotesResource, RedirectError, RefundsResource,
+    SessionsResource, SubscriptionItemsResource, SubscriptionSchedulesResource,
+    SubscriptionsResource, TaxRegistrationsResource, TaxResource, TaxSettingsResource,
+    TransactionsResource, TransfersResource, VerificationReportsResource,
     VerificationSessionsResource, WebhooksResource, credit_note_id, generate_uuid_v4,
     is_fulfillment_ready, is_valid_uuid_v4, quote_id, tax_registration_id, validate_redirect_url,
 };
@@ -233,6 +234,16 @@ impl StripeClient {
     /// Access the Payouts resource namespace (`stripe.payouts`).
     pub fn payouts(&self) -> PayoutsResource<'_> {
         PayoutsResource::new(&self.0)
+    }
+
+    /// Access the Tax resource namespace (`stripe.tax`).
+    pub fn tax(&self) -> TaxResource<'_> {
+        TaxResource::new(&self.0)
+    }
+
+    /// Access the Identity resource namespace (`stripe.identity`).
+    pub fn identity(&self) -> IdentityResource<'_> {
+        IdentityResource::new(&self.0)
     }
 
     /// Access the Tax Transactions resource namespace (`stripe.tax_transactions`).

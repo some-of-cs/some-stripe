@@ -18,8 +18,8 @@ use some_stripe_types::{TaxSettings, UpdateTaxSettingsParams};
 ///
 /// # Example
 /// ```no_run
-/// use some_stripe_core::StripeClient;
-/// use some_stripe_resources::TaxSettingsResource;
+/// use some_stripe::StripeClient;
+/// use some_stripe::resources::TaxSettingsResource;
 ///
 /// # async fn doc() -> Result<(), Box<dyn std::error::Error>> {
 /// let client = StripeClient::new("sk_test_123");
