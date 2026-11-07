@@ -3,11 +3,12 @@
   "module_title": "Specialized Product Namespaces",
   "module_branch": "feat/module-7-specialized-product-namespaces",
   "module_worktree": "/workspaces/some-stripe/.worktrees/feat-module-7-specialized-product-namespaces",
-  "status": "in_review_pr_open",
-  "current_stage": "pr_123_approved_merging_into_main",
-  "last_updated": "2026-11-07T19:30:00.000000+00:00",
+  "status": "completed",
+  "current_stage": "module_7_promoted_and_merged_into_main",
+  "last_updated": "2026-11-07T19:31:00.000000+00:00",
   "pr": 123,
   "pr_url": "https://github.com/some-of-cs/some-stripe/pull/123",
+  "merged_commit": "f97bb14",
   "stories": {
     "us-7.1.0": {
       "title": "Stripe Tax Compliance Engine & Stripe Identity Verification",
