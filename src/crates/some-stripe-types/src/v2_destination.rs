@@ -750,6 +750,9 @@ pub struct UpdateEventDestinationParams {
     /// Updated Webhook endpoint configuration.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub webhook_endpoint: Option<WebhookEndpointDetails>,
+    /// Updated Amazon CloudWatch configuration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cloudwatch: Option<CloudWatchDetails>,
     /// Updated metadata key-value pairs.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<HashMap<String, String>>,
@@ -803,6 +806,12 @@ impl UpdateEventDestinationParams {
         self
     }
 
+    /// Sets the updated Amazon CloudWatch details.
+    pub fn with_cloudwatch(mut self, details: CloudWatchDetails) -> Self {
+        self.cloudwatch = Some(details);
+        self
+    }
+
     /// Sets the updated metadata.
     pub fn with_metadata(mut self, metadata: HashMap<String, String>) -> Self {
         self.metadata = Some(metadata);
@@ -832,6 +841,18 @@ impl UpdateEventDestinationParams {
             if !is_valid_webhook_url(&wh.url) {
                 return Err(EventDestinationValidationError::InvalidWebhookUrl(
                     wh.url.clone(),
+                ));
+            }
+        }
+        if let Some(cw) = &self.cloudwatch {
+            if !is_valid_aws_account_id(&cw.aws_account_id) {
+                return Err(EventDestinationValidationError::InvalidAwsAccountId(
+                    cw.aws_account_id.clone(),
+                ));
+            }
+            if !is_valid_aws_region(&cw.aws_region) {
+                return Err(EventDestinationValidationError::InvalidAwsRegion(
+                    cw.aws_region.clone(),
                 ));
             }
         }
@@ -989,5 +1010,51 @@ mod tests {
         assert!(!is_valid_webhook_url("ftp://example.com"));
         assert!(!is_valid_webhook_url("https://example.com/with space"));
         assert!(!is_valid_webhook_url(""));
+    }
+
+    #[test]
+    fn test_cloudwatch_destination_roundtrip_and_validation() {
+        let params = CreateEventDestinationParams::cloudwatch(
+            "123456789012",
+            "eu-west-1",
+            vec!["v2.billing.meter.*".to_string()],
+        )
+        .with_cloudwatch(
+            CloudWatchDetails::new("123456789012", "eu-west-1")
+                .with_log_group_name("/stripe/v2/events"),
+        );
+        assert!(params.validate().is_ok());
+
+        let dest = EventDestination::new(
+            "edest_cw_999",
+            EventDestinationStatus::Enabled,
+            EventDestinationType::Cloudwatch,
+            vec!["v2.billing.meter.*".to_string()],
+            1728345600,
+        )
+        .with_cloudwatch(
+            CloudWatchDetails::new("123456789012", "eu-west-1")
+                .with_log_group_name("/stripe/v2/events"),
+        );
+
+        let json = serde_json::to_string(&dest).unwrap();
+        let parsed: EventDestination = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed.id, "edest_cw_999");
+        assert!(parsed.is_cloudwatch());
+        assert_eq!(parsed.destination_type, EventDestinationType::Cloudwatch);
+        let cw = parsed.cloudwatch.unwrap();
+        assert_eq!(cw.aws_account_id, "123456789012");
+        assert_eq!(cw.aws_region, "eu-west-1");
+        assert_eq!(cw.log_group_name.as_deref(), Some("/stripe/v2/events"));
+
+        let invalid_cw = CreateEventDestinationParams::cloudwatch(
+            "invalid_id",
+            "eu-west-1",
+            vec!["v2.*".to_string()],
+        );
+        assert!(matches!(
+            invalid_cw.validate(),
+            Err(EventDestinationValidationError::InvalidAwsAccountId(_))
+        ));
     }
 }

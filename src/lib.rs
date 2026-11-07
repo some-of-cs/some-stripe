@@ -93,7 +93,7 @@ pub use resources::{
     SubscriptionSchedulesResource, SubscriptionsResource, TaxRegistrationsResource, TaxResource,
     TaxSettingsResource, TerminalConnectionTokensResource, TerminalLocationsResource,
     TerminalReadersResource, TerminalResource, TransactionsResource, TransfersResource,
-    TreasuryFinancialAccountsResource, TreasuryResource, TreasuryTransfersResource,
+    TreasuryFinancialAccountsResource, TreasuryResource, TreasuryTransfersResource, V2EventsResource,
     VerificationReportsResource, VerificationSessionsResource, WebhooksResource, credit_note_id,
     generate_uuid_v4, is_fulfillment_ready, is_valid_uuid_v4, quote_id, tax_registration_id,
     validate_redirect_url,
@@ -303,6 +303,12 @@ impl StripeClient {
     /// Access the V2 Event Destinations resource namespace (`stripe.event_destinations`).
     pub fn event_destinations(&self) -> EventDestinationsResource<'_> {
         EventDestinationsResource::new(&self.0)
+    }
+
+    /// Access the Stripe API v2 Core Events resource (`stripe.v2_events()`).
+    pub fn v2_events(&self) -> V2EventsResource<'_> {
+        V2EventsResource::new(&self.0)
+    }
     }
 }
 
