@@ -23,12 +23,13 @@ kanban
   todo[📋 Backlog / Ready]
   in_progress[🔄 In Progress]
   in_review[🔍 In Review / PR Open]
-    u5[Unit 5: Terminal POS Readers, Locations, Tokens & Facades Implementation]@{ ticket: '120', assigned: 'agent-b', priority: 'High' }
+    us72_promotion[US-7.2.0 Promotion: Stripe Issuing, Treasury & Terminal POS]@{ ticket: '121', assigned: 'agent-c', priority: 'Critical' }
   done[✅ Merged into Story Branch]
     u1[Unit 1: Issuing Cards & Cardholders Vertical Implementation]@{ ticket: '116', assigned: 'agent-a', priority: 'Very High' }
     u2[Unit 2: Issuing Authorizations & Transactions Vertical Implementation]@{ ticket: '113', assigned: 'agent-b', priority: 'High' }
     u3[Unit 3: Treasury Financial Accounts & Balances Vertical Implementation]@{ ticket: '118', assigned: 'agent-c', priority: 'High' }
     u4[Unit 4: Treasury Outbound Transfers & Outbound Payments Vertical Implementation]@{ ticket: '117', assigned: 'agent-a', priority: 'Very High' }
+    u5[Unit 5: Terminal POS Readers, Locations, Tokens & Facades Implementation]@{ ticket: '120', assigned: 'agent-b', priority: 'High' }
 ```
 
 ---
@@ -41,4 +42,4 @@ kanban
 | **Unit 2** | **Issuing Authorizations & Transactions Vertical Implementation**: `IssuingAuthorization`, `IssuingTransaction`, `AuthorizationMerchantData`, `ApproveAuthorizationParams`, `DeclineAuthorizationParams`, `ListIssuingAuthorizationsParams`, `ListIssuingTransactionsParams`, and `IssuingAuthorizationsResource` (`retrieve`, `update`, `approve`, `decline`, `list`). | `agent-b` | `feat/us-7.2.0/unit-2-issuing-authorizations-resource` | `feat(us-7.2.0/unit-2): issuing authorizations and transactions domain models and ledger endpoints` | ✅ Merged (#113) |
 | **Unit 3** | **Treasury Financial Accounts & Balances Vertical Implementation**: `FinancialAccount`, `FinancialAccountBalance`, `FinancialAccountFeatures`, `FinancialAddresses`, `CreateFinancialAccountParams`, `UpdateFinancialAccountParams`, `ListFinancialAccountsParams`, and `TreasuryFinancialAccountsResource` (`create`, `retrieve`, `update`, `list`, `close`). | `agent-c` | `feat/us-7.2.0/unit-3-treasury-financial-accounts-resource` | `feat(us-7.2.0/unit-3): treasury financial accounts domain models and resource endpoints` | ✅ Merged (#118) |
 | **Unit 4** | **Treasury Outbound Transfers & Outbound Payments Vertical Implementation**: `OutboundTransfer`, `OutboundPayment`, `ReceivedCredit`, `CreateOutboundTransferParams`, `CancelOutboundTransferParams`, `CreateOutboundPaymentParams`, `CancelOutboundPaymentParams`, and `TreasuryTransfersResource` (`create`, `retrieve`, `cancel`, `list`). | `agent-a` | `feat/us-7.2.0/unit-4-treasury-transfers-resource` | `feat(us-7.2.0/unit-4): treasury outbound transfers and outbound payments resource implementation` | ✅ Merged (#117) |
-| **Unit 5** | **Terminal POS Readers, Locations, Tokens & Facades Implementation**: `TerminalReader`, `TerminalLocation`, `ConnectionToken`, `CreateReaderParams`, `CreateLocationParams`, `CreateConnectionTokenParams`, `TerminalResource` (`readers`, `locations`, `connection_tokens`), and client namespace mounting `stripe.issuing()`, `stripe.treasury()`, `stripe.terminal()`. | `agent-b` | `feat/us-7.2.0/unit-5-terminal-and-product-namespaces` | `feat(us-7.2.0/unit-5): terminal reader pos resources and product namespaces mounting` | 🔍 In Review (#120) |
+| **Unit 5** | **Terminal POS Readers, Locations, Tokens & Facades Implementation**: `TerminalReader`, `TerminalLocation`, `ConnectionToken`, `CreateReaderParams`, `CreateLocationParams`, `CreateConnectionTokenParams`, `TerminalResource` (`readers`, `locations`, `connection_tokens`), and client namespace mounting `stripe.issuing()`, `stripe.treasury()`, `stripe.terminal()`. | `agent-b` | `feat/us-7.2.0/unit-5-terminal-and-product-namespaces` | `feat(us-7.2.0/unit-5): terminal reader pos resources and product namespaces mounting` | ✅ Merged (#120) |
