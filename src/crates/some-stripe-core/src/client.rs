@@ -225,6 +225,31 @@ impl std::fmt::Debug for ClientInner {
     }
 }
 
+/// Maximum ceiling in seconds applied to the `Retry-After` response header to prevent unbounded sleeping.
+pub const MAX_RETRY_AFTER_SECS: u64 = 60;
+
+/// Parses and clamps the `Retry-After` header value, bounded by [`MAX_RETRY_AFTER_SECS`].
+///
+/// # Examples
+/// ```rust
+/// use some_stripe_core::client::{retry_after_delay, MAX_RETRY_AFTER_SECS};
+/// use std::time::Duration;
+///
+/// let mut headers = reqwest::header::HeaderMap::new();
+/// headers.insert(reqwest::header::RETRY_AFTER, "999999".parse().unwrap());
+/// assert_eq!(retry_after_delay(&headers), Some(Duration::from_secs(MAX_RETRY_AFTER_SECS)));
+///
+/// headers.insert(reqwest::header::RETRY_AFTER, "30".parse().unwrap());
+/// assert_eq!(retry_after_delay(&headers), Some(Duration::from_secs(30)));
+/// ```
+pub fn retry_after_delay(headers: &reqwest::header::HeaderMap) -> Option<Duration> {
+    headers
+        .get(reqwest::header::RETRY_AFTER)
+        .and_then(|h| h.to_str().ok())
+        .and_then(|s| s.parse::<u64>().ok())
+        .map(|secs| Duration::from_secs(secs.min(MAX_RETRY_AFTER_SECS)))
+}
+
 /// The main Stripe client used to interact with the Stripe API, modeled after `stripe-node`.
 ///
 /// Backed by an `Arc<ClientInner>` to guarantee lock-free, zero-contention concurrency across
@@ -411,12 +436,7 @@ impl StripeClient {
 
             let status = response.status();
             let retry_after_delay = if status.as_u16() == 429 {
-                response
-                    .headers()
-                    .get(reqwest::header::RETRY_AFTER)
-                    .and_then(|h| h.to_str().ok())
-                    .and_then(|s| s.parse::<u64>().ok())
-                    .map(Duration::from_secs)
+                retry_after_delay(response.headers())
             } else {
                 None
             };
@@ -455,7 +475,9 @@ impl StripeClient {
                     .on_api_error(status_code, &code, &message, retries_taken, max_retries)
                     .await;
 
+                let can_retry_status = status_code == 429 || can_retry_network;
                 if action == ErrorAction::Retry
+                    && can_retry_status
                     && let Some(next) = next_req
                 {
                     let delay = retry_after_delay
@@ -566,12 +588,7 @@ impl StripeClient {
 
             let status = response.status();
             let retry_after_delay = if status.as_u16() == 429 {
-                response
-                    .headers()
-                    .get(reqwest::header::RETRY_AFTER)
-                    .and_then(|h| h.to_str().ok())
-                    .and_then(|s| s.parse::<u64>().ok())
-                    .map(Duration::from_secs)
+                retry_after_delay(response.headers())
             } else {
                 None
             };
@@ -609,7 +626,9 @@ impl StripeClient {
                     .on_api_error(status_code, &code, &message, retries_taken, max_retries)
                     .await;
 
+                let can_retry_status = status_code == 429 || can_retry_network;
                 if action == ErrorAction::Retry
+                    && can_retry_status
                     && let Some(next) = next_req
                 {
                     let delay = retry_after_delay
@@ -816,6 +835,121 @@ mod tests {
             .await
             .expect("Request should succeed after 429 retry");
         assert_eq!(val.get("id").and_then(|v| v.as_str()), Some("test_ok"));
+
+        server.await.unwrap();
+    }
+
+    #[test]
+    fn test_retry_after_clamped_to_max() {
+        let mut headers = reqwest::header::HeaderMap::new();
+        headers.insert(reqwest::header::RETRY_AFTER, "999999".parse().unwrap());
+        assert_eq!(
+            retry_after_delay(&headers),
+            Some(Duration::from_secs(MAX_RETRY_AFTER_SECS)),
+            "Retry-After: 999999 must be clamped to MAX_RETRY_AFTER_SECS (60s)"
+        );
+
+        headers.insert(reqwest::header::RETRY_AFTER, "30".parse().unwrap());
+        assert_eq!(
+            retry_after_delay(&headers),
+            Some(Duration::from_secs(30)),
+            "Retry-After: 30 must not be clamped"
+        );
+
+        headers.insert(
+            reqwest::header::RETRY_AFTER,
+            "invalid_number".parse().unwrap(),
+        );
+        assert_eq!(retry_after_delay(&headers), None);
+
+        let empty_headers = reqwest::header::HeaderMap::new();
+        assert_eq!(retry_after_delay(&empty_headers), None);
+    }
+
+    #[tokio::test]
+    async fn test_non_idempotent_post_without_idempotency_key_does_not_retry_http_500() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut buf = vec![0; 1024];
+            let _ = socket.read(&mut buf).await.unwrap();
+            let resp = "HTTP/1.1 500 Internal Server Error\r\nContent-Type: application/json\r\nContent-Length: 64\r\nConnection: close\r\n\r\n{\"error\":{\"code\":\"api_error\",\"message\":\"Server error\",\"type\":\"api_error\"}}";
+            socket.write_all(resp.as_bytes()).await.unwrap();
+            drop(socket);
+        });
+
+        let workflow = Arc::new(CallRecordingWorkflow::default());
+        let config = StripeConfig::new("sk_test_123")
+            .with_api_base(format!("http://{addr}"))
+            .with_max_retries(3)
+            .with_error_workflow(workflow.clone());
+        let client = StripeClient::with_config(config);
+
+        let req = client.http.post(format!("http://{addr}/v1/charges"));
+        let result = client.execute(req).await;
+        assert!(result.is_err());
+        match result.unwrap_err() {
+            StripeError::Api { status, .. } => assert_eq!(status, 500),
+            other => panic!("expected API 500 error, got {other:?}"),
+        }
+
+        assert_eq!(
+            workflow.calls.load(std::sync::atomic::Ordering::SeqCst),
+            1,
+            "Workflow called once for status 500 notification"
+        );
+
+        server.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_post_with_idempotency_key_retries_http_500() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            let (mut socket1, _) = listener.accept().await.unwrap();
+            let mut buf1 = vec![0; 1024];
+            let _ = socket1.read(&mut buf1).await.unwrap();
+            let resp1 = "HTTP/1.1 500 Internal Server Error\r\nContent-Type: application/json\r\nContent-Length: 64\r\n\r\n{\"error\":{\"code\":\"api_error\",\"message\":\"Server error\",\"type\":\"api_error\"}}";
+            socket1.write_all(resp1.as_bytes()).await.unwrap();
+            drop(socket1);
+
+            let (mut socket2, _) = listener.accept().await.unwrap();
+            let mut buf2 = vec![0; 1024];
+            let _ = socket2.read(&mut buf2).await.unwrap();
+            let body = "{\"id\":\"ch_retried_ok\"}";
+            let resp2 = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            socket2.write_all(resp2.as_bytes()).await.unwrap();
+            drop(socket2);
+        });
+
+        let workflow = Arc::new(CallRecordingWorkflow::default());
+        let config = StripeConfig::new("sk_test_123")
+            .with_api_base(format!("http://{addr}"))
+            .with_max_retries(2)
+            .with_error_workflow(workflow.clone());
+        let client = StripeClient::with_config(config);
+
+        let req = client
+            .http
+            .post(format!("http://{addr}/v1/charges"))
+            .header("Idempotency-Key", "idem_safe_retry_key");
+        let val = client.execute(req).await.expect("should succeed on retry");
+        assert_eq!(
+            val.get("id").and_then(|v| v.as_str()),
+            Some("ch_retried_ok")
+        );
 
         server.await.unwrap();
     }
