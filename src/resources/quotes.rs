@@ -5,6 +5,7 @@
 //! and zero-copy binary streaming (`bytes::Bytes`).
 
 use some_stripe_core::patterns::Paginator;
+use some_stripe_core::patterns::serializer::{encode_form_pairs, to_form_params};
 use some_stripe_core::{StripeClient, StripeError, validate_and_encode_id};
 use some_stripe_types::{
     AcceptQuoteParams, CancelQuoteParams, CreateQuoteParams, FinalizeQuoteParams, ListQuotesParams,
@@ -341,13 +342,26 @@ impl<'a> QuotesResource<'a> {
 
     /// Auto-paginator stream for quotes.
     pub fn list_paginated(&self, params: &ListQuotesParams) -> Paginator<'a, Quote> {
-        let mut paginator = Paginator::new(
-            self.client,
-            "v1/quotes".to_string(),
-            params.limit.unwrap_or(10),
-            quote_id,
-        );
+        let (base_path, initial_err) = match to_form_params(params) {
+            Ok(mut pairs) => {
+                pairs
+                    .retain(|(k, _)| k != "limit" && k != "starting_after" && k != "ending_before");
+                let path = if pairs.is_empty() {
+                    "v1/quotes".to_string()
+                } else {
+                    format!("v1/quotes?{}", encode_form_pairs(&pairs))
+                };
+                (path, None)
+            }
+            Err(e) => ("v1/quotes".to_string(), Some(e)),
+        };
 
+        let mut paginator =
+            Paginator::new(self.client, base_path, params.limit.unwrap_or(10), quote_id);
+
+        if let Some(err) = initial_err {
+            paginator = paginator.with_initial_error(err);
+        }
         if let Some(ref sa) = params.starting_after {
             paginator = paginator.starting_after(sa);
         }

@@ -37,7 +37,7 @@
 //! ```
 
 use some_stripe_core::patterns::pagination::Paginator;
-use some_stripe_core::patterns::serializer::to_form_params;
+use some_stripe_core::patterns::serializer::{encode_form_pairs, to_form_params};
 use some_stripe_core::{StripeClient, StripeError, validate_and_encode_id};
 use some_stripe_types::subscription::{
     CancelSubscriptionScheduleParams, CreateSubscriptionScheduleParams,
@@ -349,14 +349,30 @@ impl<'a> SubscriptionSchedulesResource<'a> {
         &self,
         params: &ListSubscriptionSchedulesParams,
     ) -> Paginator<'a, SubscriptionSchedule> {
-        let path = "v1/subscription_schedules";
+        let (base_path, initial_err) = match to_form_params(params) {
+            Ok(mut pairs) => {
+                pairs
+                    .retain(|(k, _)| k != "limit" && k != "starting_after" && k != "ending_before");
+                let path = if pairs.is_empty() {
+                    "v1/subscription_schedules".to_string()
+                } else {
+                    format!("v1/subscription_schedules?{}", encode_form_pairs(&pairs))
+                };
+                (path, None)
+            }
+            Err(e) => ("v1/subscription_schedules".to_string(), Some(e)),
+        };
+
         let mut paginator = Paginator::new(
             self.client,
-            path,
+            base_path,
             params.limit.unwrap_or(10),
             subscription_schedule_id,
         );
 
+        if let Some(err) = initial_err {
+            paginator = paginator.with_initial_error(err);
+        }
         if let Some(ref sa) = params.starting_after {
             paginator = paginator.starting_after(sa);
         }

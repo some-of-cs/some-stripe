@@ -5,6 +5,7 @@
 //! ledger records, ISO 4217 integer currency arithmetic, and RFC 4122 UUID v4 idempotency.
 
 use some_stripe_core::patterns::Paginator;
+use some_stripe_core::patterns::serializer::{encode_form_pairs, to_form_params};
 use some_stripe_core::{StripeClient, StripeError, validate_and_encode_id};
 use some_stripe_types::{
     CreateCreditNoteParams, CreditNote, CreditNoteList, ListCreditNotesParams,
@@ -344,13 +345,30 @@ impl<'a> CreditNotesResource<'a> {
 
     /// Auto-paginator stream for credit notes.
     pub fn list_paginated(&self, params: &ListCreditNotesParams) -> Paginator<'a, CreditNote> {
+        let (base_path, initial_err) = match to_form_params(params) {
+            Ok(mut pairs) => {
+                pairs
+                    .retain(|(k, _)| k != "limit" && k != "starting_after" && k != "ending_before");
+                let path = if pairs.is_empty() {
+                    "v1/credit_notes".to_string()
+                } else {
+                    format!("v1/credit_notes?{}", encode_form_pairs(&pairs))
+                };
+                (path, None)
+            }
+            Err(e) => ("v1/credit_notes".to_string(), Some(e)),
+        };
+
         let mut paginator = Paginator::new(
             self.client,
-            "v1/credit_notes".to_string(),
+            base_path,
             params.limit.unwrap_or(10),
             credit_note_id,
         );
 
+        if let Some(err) = initial_err {
+            paginator = paginator.with_initial_error(err);
+        }
         if let Some(ref sa) = params.starting_after {
             paginator = paginator.starting_after(sa);
         }

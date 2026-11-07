@@ -141,9 +141,10 @@ pub struct Paginator<'a, T> {
     last_seen_cursor: Option<String>,
     ending_before: Option<String>,
     initial_error: Option<StripeError>,
+    stripe_account: Option<&'a str>,
 }
 
-impl<'a, T: serde::de::DeserializeOwned> Paginator<'a, T> {
+impl<'a, T> Paginator<'a, T> {
     /// Creates a new zero-clone paginator.
     pub fn new(
         client: &'a StripeClient,
@@ -166,7 +167,45 @@ impl<'a, T: serde::de::DeserializeOwned> Paginator<'a, T> {
             last_seen_cursor: None,
             ending_before: None,
             initial_error: None,
+            stripe_account: None,
         }
+    }
+
+    /// Attaches the `Stripe-Account` tenant header for multi-tenant connected account requests.
+    ///
+    /// When specified, all subsequent paginated requests dispatched over the wire
+    /// will include `Stripe-Account: <account_id>`.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use some_stripe_core::{StripeClient, SecretKey};
+    /// use some_stripe_core::patterns::pagination::Paginator;
+    ///
+    /// #[derive(serde::Deserialize)]
+    /// struct MockItem {
+    ///     id: String,
+    /// }
+    ///
+    /// let client = StripeClient::new(SecretKey::new("sk_test_123"));
+    /// let paginator: Paginator<'_, MockItem> = Paginator::new(
+    ///     &client,
+    ///     "/v1/accounts",
+    ///     10,
+    ///     |item: &MockItem| &item.id,
+    /// ).with_account("acct_123");
+    ///
+    /// assert_eq!(paginator.pages_fetched(), 0);
+    /// assert_eq!(paginator.stripe_account(), Some("acct_123"));
+    /// ```
+    #[must_use]
+    pub fn with_account(mut self, account: &'a str) -> Self {
+        self.stripe_account = Some(account);
+        self
+    }
+
+    /// Returns the configured connected account identifier, if any.
+    pub fn stripe_account(&self) -> Option<&'a str> {
+        self.stripe_account
     }
 
     /// Seeds the paginator with an initial `starting_after` cursor for forward pagination.
@@ -226,7 +265,9 @@ impl<'a, T: serde::de::DeserializeOwned> Paginator<'a, T> {
     pub fn pages_fetched(&self) -> usize {
         self.pages_fetched
     }
+}
 
+impl<'a, T: serde::de::DeserializeOwned> Paginator<'a, T> {
     async fn fetch_page(&mut self) -> Result<ListResponse<T>, StripeError> {
         let sep = if self.path.contains('?') { '&' } else { '?' };
         let mut url = format!(
@@ -243,7 +284,10 @@ impl<'a, T: serde::de::DeserializeOwned> Paginator<'a, T> {
             url.push_str(&format!("&starting_after={encoded_cursor}"));
         }
 
-        let req = self.client.http.get(&url);
+        let mut req = self.client.http.get(&url);
+        if let Some(account) = self.stripe_account {
+            req = req.header("Stripe-Account", account);
+        }
         let val = self.client.execute(req).await?;
         let page: ListResponse<T> = serde_json::from_value(val)?;
         self.pages_fetched += 1;
@@ -332,5 +376,15 @@ mod tests {
         assert_eq!(params.limit, Some(20));
         assert_eq!(params.starting_after.as_deref(), Some("item_1"));
         assert_eq!(params.ending_before.as_deref(), Some("item_0"));
+    }
+
+    #[test]
+    fn test_paginator_with_account_builder() {
+        let client = StripeClient::new("sk_test_123");
+        let paginator: Paginator<DummyItem> =
+            Paginator::new(&client, "v1/items", 10, |i: &DummyItem| &i.id)
+                .with_account("acct_test_connected_123");
+
+        assert_eq!(paginator.stripe_account(), Some("acct_test_connected_123"));
     }
 }
