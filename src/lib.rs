@@ -86,16 +86,17 @@ pub use resources::{
     AccountLinksResource, AccountSessionsResource, AccountsResource, ApplicationFeesResource,
     BalanceResource, BalanceTransactionsResource, BillingPortalResource, CalculationsResource,
     CheckoutResource, CheckoutSessionExt, CreditNotesResource, CustomersResource, DisputesResource,
-    IdentityResource, InvoicesResource, IssuingAuthorizationsResource, IssuingCardholdersResource,
-    IssuingCardsResource, IssuingResource, IssuingTransactionsResource, PaymentIntentsResource,
-    PaymentLinksResource, PayoutsResource, PersonsResource, QuotesResource, RedirectError,
-    RefundsResource, SessionsResource, SubscriptionItemsResource, SubscriptionSchedulesResource,
-    SubscriptionsResource, TaxRegistrationsResource, TaxResource, TaxSettingsResource,
-    TerminalConnectionTokensResource, TerminalLocationsResource, TerminalReadersResource,
-    TerminalResource, TransactionsResource, TransfersResource, TreasuryFinancialAccountsResource,
-    TreasuryResource, TreasuryTransfersResource, V2AccountsResource, VerificationReportsResource,
-    VerificationSessionsResource, WebhooksResource, credit_note_id, generate_uuid_v4,
-    is_fulfillment_ready, is_valid_uuid_v4, quote_id, tax_registration_id, validate_redirect_url,
+    EventDestinationsResource, IdentityResource, InvoicesResource, IssuingAuthorizationsResource,
+    IssuingCardholdersResource, IssuingCardsResource, IssuingResource, IssuingTransactionsResource,
+    PaymentIntentsResource, PaymentLinksResource, PayoutsResource, PersonsResource, QuotesResource,
+    RedirectError, RefundsResource, SessionsResource, SubscriptionItemsResource,
+    SubscriptionSchedulesResource, SubscriptionsResource, TaxRegistrationsResource, TaxResource,
+    TaxSettingsResource, TerminalConnectionTokensResource, TerminalLocationsResource,
+    TerminalReadersResource, TerminalResource, TransactionsResource, TransfersResource,
+    TreasuryFinancialAccountsResource, TreasuryResource, TreasuryTransfersResource, V2AccountsResource,
+    V2EventsResource, VerificationReportsResource, VerificationSessionsResource, WebhooksResource,
+    credit_note_id, generate_uuid_v4, is_fulfillment_ready, is_valid_uuid_v4, quote_id,
+    tax_registration_id, validate_redirect_url,
 };
 
 /// The main Stripe client used to interact with the Stripe API, modeled after `stripe-node`.
@@ -302,6 +303,16 @@ impl StripeClient {
     /// Access the Stripe API v2 Core Accounts resource (`stripe.v2_accounts`).
     pub fn v2_accounts(&self) -> V2AccountsResource<'_> {
         V2AccountsResource::new(&self.0)
+    }
+
+    /// Access the V2 Event Destinations resource namespace (`stripe.event_destinations`).
+    pub fn event_destinations(&self) -> EventDestinationsResource<'_> {
+        EventDestinationsResource::new(&self.0)
+    }
+
+    /// Access the Stripe API v2 Core Events resource (`stripe.v2_events()`).
+    pub fn v2_events(&self) -> V2EventsResource<'_> {
+        V2EventsResource::new(&self.0)
     }
 }
 

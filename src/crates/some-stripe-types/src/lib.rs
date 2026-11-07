@@ -141,6 +141,15 @@ pub mod terminal;
 pub use terminal::*;
 pub mod v2_account;
 pub use v2_account::*;
+pub mod v2_destination;
+pub use v2_destination::*;
+
+pub mod v2 {
+    pub mod core {
+        pub use crate::v2_account::*;
+        pub use crate::v2_destination::*;
+    }
+}
 
 /// Strongly typed Stripe Connect Account ID (`acct_...`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -728,6 +737,8 @@ pub mod connect_compliance;
 pub use connect_compliance::*;
 pub mod payout;
 pub use payout::*;
+pub mod v2_events;
+pub use v2_events::*;
 
 /// Strongly typed, discriminated union of Stripe event payload objects.
 ///
