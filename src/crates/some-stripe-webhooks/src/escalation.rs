@@ -109,6 +109,9 @@ pub async fn escalate_webhook_error<H: ErrorWorkflowHandler + ?Sized>(
         StripeWebhookError::BadKey => {
             "Webhook verification failed: invalid or blank webhook signing secret".to_string()
         }
+        StripeWebhookError::InvalidHeader(details) => {
+            format!("Webhook verification failed: invalid Stripe-Signature header: {details}")
+        }
     };
 
     handler.on_webhook_error(severity, &reason).await;
@@ -288,6 +291,26 @@ mod tests {
         let records = handler.escalations.lock().unwrap();
         assert_eq!(records.len(), 1);
         assert_eq!(records[0].0, ErrorSeverity::Error);
+    }
+
+    #[tokio::test]
+    async fn test_escalate_invalid_header_error() {
+        let handler = MockEscalationHandler::default();
+        let error = StripeWebhookError::InvalidHeader("header exceeds maximum allowed length");
+
+        assert!(!is_security_incident(&error));
+        assert_eq!(determine_severity(&error), ErrorSeverity::Error);
+
+        escalate_webhook_error(&handler, &error).await;
+
+        let records = handler.escalations.lock().unwrap();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].0, ErrorSeverity::Error);
+        assert!(
+            records[0]
+                .1
+                .contains("header exceeds maximum allowed length")
+        );
     }
 
     #[tokio::test]

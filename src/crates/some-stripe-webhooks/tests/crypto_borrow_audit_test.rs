@@ -14,7 +14,7 @@ use some_stripe_webhooks::{
 #[test]
 fn test_zero_clone_borrowed_slices_in_verification() {
     let secret = "whsec_test_borrow_discipline_secret_key_12345";
-    let timestamp = 1728345600;
+    let timestamp = chrono::Utc::now().timestamp();
 
     // Fixed immutable payload slice without dynamic allocation during verification
     let payload_data: &[u8] = br#"{"id":"evt_borrow_audit_001","object":"event","created":1728345600,"type":"payment_intent.succeeded","data":{"object":{"id":"pi_borrow_test_123","amount":9900,"currency":"usd","status":"succeeded"}}}"#;

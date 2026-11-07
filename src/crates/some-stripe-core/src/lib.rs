@@ -82,7 +82,8 @@ pub mod workflow;
 
 pub use bytes::Bytes;
 pub use client::{
-    ClientInner, RequestOptions, SecretKey, StripeClient, StripeConfig, StripeHeaderExt,
+    ClientInner, MAX_RETRY_AFTER_SECS, RequestOptions, SecretKey, StripeClient, StripeConfig,
+    StripeHeaderExt, retry_after_delay,
 };
 pub use error::{RedirectError, StripeError, StripeWebhookError};
 pub use patterns::{

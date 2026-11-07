@@ -4,7 +4,7 @@
 //! mark uncollectible, send, and list invoices, adhering to EU VAT Directive 2006/112/EC
 //! sequential numbering requirements and RFC 4122 UUID v4 idempotency.
 
-use some_stripe_core::patterns::{Paginator, to_form_params};
+use some_stripe_core::patterns::{Paginator, encode_form_pairs, to_form_params};
 use some_stripe_core::{StripeClient, StripeError, validate_and_encode_id};
 use some_stripe_types::{
     AddInvoiceLinesParams, CreateInvoiceParams, FinalizeInvoiceParams, Invoice, InvoiceLineItem,
@@ -344,42 +344,18 @@ impl<'a> InvoicesResource<'a> {
         &self,
         params: Option<&ListInvoicesParams>,
     ) -> Result<InvoiceList, StripeError> {
-        let mut url = format!("{}/v1/invoices", self.client.config.api_base);
-        let mut query_params = Vec::new();
-        let limit_str = params.and_then(|p| p.limit).map(|l| l.to_string());
-
-        if let Some(p) = params {
-            if let Some(ref c) = p.customer {
-                query_params.push(("customer", c.as_str()));
+        let url = match params {
+            Some(p) => {
+                let query_data = to_form_params(p)?;
+                if query_data.is_empty() {
+                    format!("{}/v1/invoices", self.client.config.api_base)
+                } else {
+                    let query_str = encode_form_pairs(&query_data);
+                    format!("{}/v1/invoices?{query_str}", self.client.config.api_base)
+                }
             }
-            if let Some(s) = p.status {
-                query_params.push(("status", s.as_str()));
-            }
-            if let Some(ref s) = p.subscription {
-                query_params.push(("subscription", s.as_str()));
-            }
-            if let Some(ref m) = p.collection_method {
-                query_params.push(("collection_method", m.as_str()));
-            }
-            if let Some(ref l) = limit_str {
-                query_params.push(("limit", l.as_str()));
-            }
-            if let Some(ref a) = p.starting_after {
-                query_params.push(("starting_after", a.as_str()));
-            }
-            if let Some(ref b) = p.ending_before {
-                query_params.push(("ending_before", b.as_str()));
-            }
-        }
-
-        if !query_params.is_empty() {
-            let encoded: Vec<String> = query_params
-                .iter()
-                .map(|(k, v)| format!("{k}={v}"))
-                .collect();
-            url.push('?');
-            url.push_str(&encoded.join("&"));
-        }
+            None => format!("{}/v1/invoices", self.client.config.api_base),
+        };
 
         let req = self.client.http.get(&url);
         let val = self.client.execute(req).await?;
@@ -391,14 +367,16 @@ impl<'a> InvoicesResource<'a> {
     ///
     /// Handles the upcoming invoice null-ID wire safety invariant (`invoice.id` is `None`).
     pub async fn upcoming(&self, params: &InvoiceUpcomingParams) -> Result<Invoice, StripeError> {
-        let mut url = format!("{}/v1/invoices/upcoming", self.client.config.api_base);
         let form_pairs = to_form_params(params)?;
-
-        if !form_pairs.is_empty() {
-            let encoded: Vec<String> = form_pairs.iter().map(|(k, v)| format!("{k}={v}")).collect();
-            url.push('?');
-            url.push_str(&encoded.join("&"));
-        }
+        let url = if form_pairs.is_empty() {
+            format!("{}/v1/invoices/upcoming", self.client.config.api_base)
+        } else {
+            let query_str = encode_form_pairs(&form_pairs);
+            format!(
+                "{}/v1/invoices/upcoming?{query_str}",
+                self.client.config.api_base
+            )
+        };
 
         let req = self.client.http.get(&url);
         let val = self.client.execute(req).await?;

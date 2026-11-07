@@ -62,7 +62,9 @@ pub use constants::{
 };
 pub use crypto::{compute_streaming_hmac_bytes, compute_streaming_hmac_hex};
 pub use error::StripeWebhookError;
-pub use header::{StripeSignatureHeader, parse_signature_header};
+pub use header::{
+    MAX_SIGNATURE_HEADER_BYTES, MAX_V1_SIGNATURES, StripeSignatureHeader, parse_signature_header,
+};
 
 use hmac::digest::KeyInit;
 use hmac::{Hmac, Mac};
@@ -104,7 +106,8 @@ pub fn streaming_hmac_sha256_hex(key: &[u8], timestamp: &[u8], payload: &[u8]) -
     compute_streaming_hmac_bytes(key, timestamp, payload).ok()
 }
 
-/// Verifies a Stripe webhook signature per the official Stripe signature specification.
+/// Verifies a Stripe webhook signature per the official Stripe signature specification,
+/// enforcing replay protection within the default timestamp tolerance window.
 ///
 /// Operates strictly on borrowed `&[u8]` and `&str` slices without copying or cloning
 /// the raw payload (Gate G-Borrow).
@@ -113,32 +116,7 @@ pub fn verify_stripe_signature(
     signature_header: &str,
     webhook_secret: &str,
 ) -> bool {
-    if is_blank_webhook_secret(webhook_secret)
-        || payload.is_empty()
-        || payload.len() > MAX_WEBHOOK_PAYLOAD_BYTES
-        || signature_header.trim().is_empty()
-    {
-        return false;
-    }
-
-    let parsed_header = match parse_signature_header(signature_header) {
-        Ok(h) => h,
-        Err(_) => return false,
-    };
-
-    let expected_hex = match compute_streaming_hmac_hex(
-        webhook_secret.as_bytes(),
-        parsed_header.timestamp,
-        payload,
-    ) {
-        Ok(hex) => hex,
-        Err(_) => return false,
-    };
-
-    parsed_header
-        .signatures
-        .iter()
-        .any(|sig| safe_constant_time_ascii_casecmp(expected_hex.as_bytes(), sig.as_bytes()))
+    Webhook::verify_header(payload, signature_header, webhook_secret, None).unwrap_or(false)
 }
 
 /// Namespace providing static webhook helper functions modeled after `stripe.webhooks`.
@@ -181,9 +159,6 @@ impl Webhook {
                 size: payload.len(),
                 max_allowed: MAX_WEBHOOK_PAYLOAD_BYTES,
             });
-        }
-        if header.trim().is_empty() {
-            return Err(StripeWebhookError::MissingSignatureHeader);
         }
 
         let parsed_header = parse_signature_header(header)?;
@@ -444,11 +419,11 @@ mod tests {
 
     #[test]
     fn test_valid_stripe_signature() {
+        let now = chrono::Utc::now().timestamp();
         let payload = b"{\"id\":\"evt_123\",\"type\":\"payment_intent.succeeded\"}";
         let secret = "whsec_test_secret_key_12345";
-        let timestamp = 1728345600;
 
-        let header = Webhook::generate_test_header_string(payload, secret, Some(timestamp));
+        let header = Webhook::generate_test_header_string(payload, secret, Some(now));
         assert!(verify_stripe_signature(payload, &header, secret));
     }
 
@@ -515,10 +490,11 @@ mod tests {
 
     #[test]
     fn test_rollover_dual_signatures_matches_secondary() {
+        let now = chrono::Utc::now().timestamp();
         let payload = b"{\"id\":\"evt_123\",\"type\":\"payment_intent.succeeded\"}";
         let secret_old = "whsec_old_test_secret_key_11111";
         let secret_new = "whsec_new_test_secret_key_22222";
-        let timestamp = 1728345600;
+        let timestamp = now;
 
         let sig_old = Webhook::generate_test_header_string(payload, secret_old, Some(timestamp));
         let sig_new = Webhook::generate_test_header_string(payload, secret_new, Some(timestamp));
@@ -538,6 +514,34 @@ mod tests {
             &combined_header,
             secret_old
         ));
+    }
+
+    #[test]
+    fn test_verify_stripe_signature_replay_protection() {
+        let now = chrono::Utc::now().timestamp();
+        let payload = b"{\"id\":\"evt_replay_guard\",\"type\":\"payment_intent.succeeded\"}";
+        let secret = "whsec_test_replay_guard_secret";
+
+        // 1. Expired signature (> 300s in past) is rejected
+        let expired_header = Webhook::generate_test_header_string(payload, secret, Some(now - 301));
+        assert!(
+            !verify_stripe_signature(payload, &expired_header, secret),
+            "verify_stripe_signature must reject expired signatures"
+        );
+
+        // 2. Future signature (> 60s in future) is rejected
+        let future_header = Webhook::generate_test_header_string(payload, secret, Some(now + 61));
+        assert!(
+            !verify_stripe_signature(payload, &future_header, secret),
+            "verify_stripe_signature must reject signatures beyond future drift allowance"
+        );
+
+        // 3. Valid recent signature within tolerance is accepted
+        let valid_header = Webhook::generate_test_header_string(payload, secret, Some(now - 10));
+        assert!(
+            verify_stripe_signature(payload, &valid_header, secret),
+            "verify_stripe_signature must accept authentic signatures within tolerance"
+        );
     }
 
     #[test]

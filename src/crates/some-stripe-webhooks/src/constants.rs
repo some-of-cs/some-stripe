@@ -14,3 +14,5 @@ pub const TIMESTAMP_PREFIX: &str = "t=";
 
 /// Stripe signature header v1 scheme prefix.
 pub const V1_SIGNATURE_PREFIX: &str = "v1=";
+
+pub use crate::header::{MAX_SIGNATURE_HEADER_BYTES, MAX_V1_SIGNATURES};
