@@ -116,6 +116,8 @@ pub mod settlement;
 pub use settlement::*;
 pub mod tax_calculation;
 pub use tax_calculation::*;
+pub mod tax_settings;
+pub use tax_settings::*;
 pub mod tax_transaction;
 pub use tax_transaction::*;
 
