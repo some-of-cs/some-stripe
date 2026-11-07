@@ -11,14 +11,14 @@
 //! - PersonsResource wire contracts: `create`, `retrieve`, `update`, `del`, `list`, `paginate`.
 
 use some_stripe::types::account::{
-    Account, AccountList, AccountType, CreateAccountParams, DeletedAccount, ListAccountsParams,
+    AccountList, AccountType, CreateAccountParams, DeletedAccount, ListAccountsParams,
     RejectAccountParams, UpdateAccountParams,
 };
 use some_stripe::types::account_link::{
     AccountLink, AccountLinkType, CreateAccountLinkParams,
 };
 use some_stripe::types::account_session::{
-    AccountSession, AccountSessionComponents, CreateAccountSessionParams,
+    AccountSession, CreateAccountSessionParams, PaymentsComponent,
 };
 use some_stripe::types::person::{
     CreatePersonParams, DeletedPerson, ListPersonsParams, Person, PersonDob, PersonList,
@@ -504,7 +504,7 @@ async fn test_account_sessions_resource_create() {
     let client = StripeClient::with_config(config);
 
     let params = CreateAccountSessionParams::for_account("acct_session_target_1")
-        .with_payments(true);
+        .with_payments(PaymentsComponent::enabled());
 
     let session: AccountSession = client.account_sessions().create(&params).await.unwrap();
     assert_eq!(session.client_secret(), "acc_sec_test_secret_xyz123");
@@ -647,9 +647,9 @@ async fn test_persons_resource_crud_lifecycle() {
         .create("acct_kyc_001", &create_params)
         .await
         .unwrap();
-    assert_eq!(created.id(), "person_alice_001");
-    assert_eq!(created.first_name(), Some("Alice"));
-    assert_eq!(created.last_name(), Some("Smith"));
+    assert_eq!(&created.id, "person_alice_001");
+    assert_eq!(created.first_name.as_deref(), Some("Alice"));
+    assert_eq!(created.last_name.as_deref(), Some("Smith"));
 
     // 2. Retrieve Person
     let retrieved = client
@@ -657,19 +657,19 @@ async fn test_persons_resource_crud_lifecycle() {
         .retrieve("acct_kyc_001", "person_alice_001")
         .await
         .unwrap();
-    assert_eq!(retrieved.id(), "person_alice_001");
+    assert_eq!(&retrieved.id, "person_alice_001");
 
     // 3. Update Person
     let update_params = UpdatePersonParams::new()
-        .last_name(Nullable::Value("Johnson".into()))
-        .email(Nullable::Value("alice.j@example.com".into()));
+        .last_name("Johnson")
+        .email("alice.j@example.com");
 
     let updated = client
         .persons()
         .update("acct_kyc_001", "person_alice_001", &update_params)
         .await
         .unwrap();
-    assert_eq!(updated.last_name(), Some("Johnson"));
+    assert_eq!(updated.last_name.as_deref(), Some("Johnson"));
 
     // 4. Delete Person
     let deleted: DeletedPerson = client
@@ -733,8 +733,8 @@ async fn test_persons_resource_list_and_paginate() {
     let params = ListPersonsParams::new().limit(2);
     let list: PersonList = client.persons().list("acct_list_001", &params).await.unwrap();
     assert_eq!(list.data.len(), 2);
-    assert_eq!(list.data[0].id(), "person_list_1");
-    assert_eq!(list.data[1].id(), "person_list_2");
+    assert_eq!(&list.data[0].id, "person_list_1");
+    assert_eq!(&list.data[1].id, "person_list_2");
 
     server.await.unwrap();
 }
