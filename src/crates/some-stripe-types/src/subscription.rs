@@ -3610,40 +3610,7 @@ impl CreateSubscriptionScheduleParams {
         }
 
         if let Some(ref phases) = self.phases {
-            if phases.is_empty() {
-                return Err(SubscriptionScheduleValidationError::EmptyPhases);
-            }
-            for phase in phases {
-                if phase.items.is_empty() {
-                    return Err(SubscriptionScheduleValidationError::EmptyPhaseItems);
-                }
-                for item in &phase.items {
-                    if item.price.trim().is_empty() {
-                        return Err(SubscriptionScheduleValidationError::EmptyPrice);
-                    }
-                    if let Some(qty) = item.quantity
-                        && qty == 0
-                    {
-                        return Err(SubscriptionScheduleValidationError::InvalidField {
-                            field: "items[].quantity",
-                            reason: "quantity must be greater than zero".into(),
-                        });
-                    }
-                }
-                if let Some(iterations) = phase.iterations
-                    && iterations == 0
-                {
-                    return Err(SubscriptionScheduleValidationError::InvalidIterationCount);
-                }
-                if let (Some(start), Some(end)) = (phase.start_date, phase.end_date)
-                    && end <= start
-                {
-                    return Err(SubscriptionScheduleValidationError::InvalidDateRange {
-                        start,
-                        end,
-                    });
-                }
-            }
+            validate_schedule_phases(phases)?;
         }
 
         Ok(())
@@ -3746,44 +3713,62 @@ impl UpdateSubscriptionScheduleParams {
     /// Validates parameter invariants prior to network dispatch.
     pub fn validate(&self) -> Result<(), SubscriptionScheduleValidationError> {
         if let Some(ref phases) = self.phases {
-            if phases.is_empty() {
-                return Err(SubscriptionScheduleValidationError::EmptyPhases);
-            }
-            for phase in phases {
-                if phase.items.is_empty() {
-                    return Err(SubscriptionScheduleValidationError::EmptyPhaseItems);
-                }
-                for item in &phase.items {
-                    if item.price.trim().is_empty() {
-                        return Err(SubscriptionScheduleValidationError::EmptyPrice);
-                    }
-                    if let Some(qty) = item.quantity
-                        && qty == 0
-                    {
-                        return Err(SubscriptionScheduleValidationError::InvalidField {
-                            field: "items[].quantity",
-                            reason: "quantity must be greater than zero".into(),
-                        });
-                    }
-                }
-                if let Some(iterations) = phase.iterations
-                    && iterations == 0
-                {
-                    return Err(SubscriptionScheduleValidationError::InvalidIterationCount);
-                }
-                if let (Some(start), Some(end)) = (phase.start_date, phase.end_date)
-                    && end <= start
-                {
-                    return Err(SubscriptionScheduleValidationError::InvalidDateRange {
-                        start,
-                        end,
-                    });
-                }
-            }
+            validate_schedule_phases(phases)?;
         }
 
         Ok(())
     }
+}
+
+fn validate_schedule_phases(
+    phases: &[CreateSubscriptionSchedulePhaseParams],
+) -> Result<(), SubscriptionScheduleValidationError> {
+    if phases.is_empty() {
+        return Err(SubscriptionScheduleValidationError::EmptyPhases);
+    }
+    for phase in phases {
+        validate_schedule_phase(phase)?;
+    }
+    Ok(())
+}
+
+fn validate_schedule_phase(
+    phase: &CreateSubscriptionSchedulePhaseParams,
+) -> Result<(), SubscriptionScheduleValidationError> {
+    if phase.items.is_empty() {
+        return Err(SubscriptionScheduleValidationError::EmptyPhaseItems);
+    }
+    for item in &phase.items {
+        validate_schedule_phase_item(item)?;
+    }
+    if let Some(iterations) = phase.iterations
+        && iterations == 0
+    {
+        return Err(SubscriptionScheduleValidationError::InvalidIterationCount);
+    }
+    if let (Some(start), Some(end)) = (phase.start_date, phase.end_date)
+        && end <= start
+    {
+        return Err(SubscriptionScheduleValidationError::InvalidDateRange { start, end });
+    }
+    Ok(())
+}
+
+fn validate_schedule_phase_item(
+    item: &SubscriptionSchedulePhaseItemParams,
+) -> Result<(), SubscriptionScheduleValidationError> {
+    if item.price.trim().is_empty() {
+        return Err(SubscriptionScheduleValidationError::EmptyPrice);
+    }
+    if let Some(qty) = item.quantity
+        && qty == 0
+    {
+        return Err(SubscriptionScheduleValidationError::InvalidField {
+            field: "items[].quantity",
+            reason: "quantity must be greater than zero".into(),
+        });
+    }
+    Ok(())
 }
 
 /// Request parameter schema for releasing a Subscription Schedule (`POST /v1/subscription_schedules/{schedule}/release`).
