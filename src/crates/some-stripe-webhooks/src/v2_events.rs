@@ -72,7 +72,7 @@ impl V2ThinEvent {
     pub fn related_object_type(&self) -> Option<&str> {
         self.related_object
             .as_ref()
-            .map(|ro| ro.object_type.as_str())
+            .map(|ro| ro.r#type.as_str())
     }
 
     /// Returns the hydration URL for the related object, if present.
@@ -84,19 +84,7 @@ impl V2ThinEvent {
 }
 
 /// Reference metadata pointing to a domain resource in a [`V2ThinEvent`].
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct V2RelatedObject {
-    /// Identifier of the related Stripe resource (e.g., `"meter_123"`).
-    pub id: String,
-
-    /// Object type name of the related resource (e.g., `"billing.meter"`).
-    #[serde(rename = "type")]
-    pub object_type: String,
-
-    /// Canonical REST API URL for hydrating the full resource object.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub url: Option<String>,
-}
+pub use some_stripe_types::v2_events::V2RelatedObject;
 
 /// Lightweight probe struct to detect Stripe API v2 thin events without full DOM allocation.
 ///
@@ -176,7 +164,8 @@ mod tests {
             .as_ref()
             .expect("related_object must be present");
         assert_eq!(related.id, "meter_abc");
-        assert_eq!(related.object_type, "billing.meter");
+        assert_eq!(related.r#type, "billing.meter");
+        assert_eq!(related.object_type(), "billing.meter");
         assert_eq!(
             related.url.as_deref(),
             Some("https://api.stripe.com/v2/billing/meters/meter_abc")
