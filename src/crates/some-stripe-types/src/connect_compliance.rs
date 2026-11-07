@@ -17,8 +17,8 @@
 //! - **Gate G-Borrow**: Zero-copy borrow discipline enforcing explicit lifetimes and zero unnecessary
 //!   clones on domain models.
 
-use std::fmt;
 use serde::{Deserialize, Serialize};
+use std::fmt;
 
 // ============================================================================
 // Constant-Time Byte Comparison (Gate G2)
@@ -446,7 +446,10 @@ impl fmt::Display for Dac7ComplianceError {
                 f,
                 "EU DAC7 Violation: Negative fees ({cents} cents) encountered"
             ),
-            Self::FeesExceedConsideration { fees, consideration } => write!(
+            Self::FeesExceedConsideration {
+                fees,
+                consideration,
+            } => write!(
                 f,
                 "EU DAC7 Violation: Platform fees ({fees} cents) exceed total consideration ({consideration} cents)"
             ),
@@ -536,7 +539,9 @@ pub fn evaluate_dac7_reporting_status(
 
     for act in activities {
         if act.quarter < 1 || act.quarter > 4 {
-            return Err(Dac7ComplianceError::InvalidQuarter { quarter: act.quarter });
+            return Err(Dac7ComplianceError::InvalidQuarter {
+                quarter: act.quarter,
+            });
         }
         if act.total_consideration_cents < 0 {
             return Err(Dac7ComplianceError::NegativeConsideration {
@@ -640,7 +645,10 @@ impl fmt::Display for MultiTenantError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::EmptyAccountId => {
-                write!(f, "Connect Multi-Tenancy Violation: Account ID cannot be empty")
+                write!(
+                    f,
+                    "Connect Multi-Tenancy Violation: Account ID cannot be empty"
+                )
             }
             Self::InvalidPrefix(id) => write!(
                 f,

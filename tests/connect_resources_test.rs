@@ -10,13 +10,12 @@
 //! - AccountSessionsResource wire contracts: `create`.
 //! - PersonsResource wire contracts: `create`, `retrieve`, `update`, `del`, `list`, `paginate`.
 
+use some_stripe::types::Nullable;
 use some_stripe::types::account::{
     AccountList, AccountType, CreateAccountParams, DeletedAccount, ListAccountsParams,
     RejectAccountParams, UpdateAccountParams,
 };
-use some_stripe::types::account_link::{
-    AccountLink, AccountLinkType, CreateAccountLinkParams,
-};
+use some_stripe::types::account_link::{AccountLink, AccountLinkType, CreateAccountLinkParams};
 use some_stripe::types::account_session::{
     AccountSession, CreateAccountSessionParams, PaymentsComponent,
 };
@@ -24,7 +23,6 @@ use some_stripe::types::person::{
     CreatePersonParams, DeletedPerson, ListPersonsParams, Person, PersonDob, PersonList,
     PersonRelationship, UpdatePersonParams,
 };
-use some_stripe::types::Nullable;
 use some_stripe::{StripeClient, StripeConfig, is_valid_uuid_v4};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
@@ -144,7 +142,10 @@ async fn test_accounts_resource_retrieve_current_and_tenant_header() {
             .lines()
             .find(|l| l.to_lowercase().starts_with("stripe-account:"))
             .expect("Stripe-Account header must be present");
-        assert_eq!(acct_header.split(':').nth(1).unwrap().trim(), "acct_connected_tenant_1");
+        assert_eq!(
+            acct_header.split(':').nth(1).unwrap().trim(),
+            "acct_connected_tenant_1"
+        );
 
         let resp = serde_json::json!({
             "id": "acct_connected_tenant_1",
@@ -423,7 +424,9 @@ async fn test_account_links_resource_create() {
             .lines()
             .find(|l| l.to_lowercase().starts_with("idempotency-key:"))
             .expect("Idempotency-Key must be present");
-        assert!(is_valid_uuid_v4(key_header.split(':').nth(1).unwrap().trim()));
+        assert!(is_valid_uuid_v4(
+            key_header.split(':').nth(1).unwrap().trim()
+        ));
 
         let resp = serde_json::json!({
             "object": "account_link",
@@ -479,7 +482,9 @@ async fn test_account_sessions_resource_create() {
             "object": "account_session",
             "account": "acct_session_target_1",
             "client_secret": "acc_sec_test_secret_xyz123",
+            "created": 1728345600,
             "expires_at": 1728345900,
+            "livemode": false,
             "components": {
                 "payments": {
                     "enabled": true,
@@ -557,7 +562,10 @@ async fn test_persons_resource_crud_lifecycle() {
             let n = socket.read(&mut buf).await.unwrap();
             let req_str = String::from_utf8(buf[..n].to_vec()).unwrap();
 
-            assert!(req_str.starts_with("GET /v1/accounts/acct_kyc_001/persons/person_alice_001 HTTP/1.1"));
+            assert!(
+                req_str
+                    .starts_with("GET /v1/accounts/acct_kyc_001/persons/person_alice_001 HTTP/1.1")
+            );
 
             let resp = serde_json::json!({
                 "id": "person_alice_001",
@@ -583,7 +591,11 @@ async fn test_persons_resource_crud_lifecycle() {
             let n = socket.read(&mut buf).await.unwrap();
             let req_str = String::from_utf8(buf[..n].to_vec()).unwrap();
 
-            assert!(req_str.starts_with("POST /v1/accounts/acct_kyc_001/persons/person_alice_001 HTTP/1.1"));
+            assert!(
+                req_str.starts_with(
+                    "POST /v1/accounts/acct_kyc_001/persons/person_alice_001 HTTP/1.1"
+                )
+            );
 
             let resp = serde_json::json!({
                 "id": "person_alice_001",
@@ -609,7 +621,11 @@ async fn test_persons_resource_crud_lifecycle() {
             let n = socket.read(&mut buf).await.unwrap();
             let req_str = String::from_utf8(buf[..n].to_vec()).unwrap();
 
-            assert!(req_str.starts_with("DELETE /v1/accounts/acct_kyc_001/persons/person_alice_001 HTTP/1.1"));
+            assert!(
+                req_str.starts_with(
+                    "DELETE /v1/accounts/acct_kyc_001/persons/person_alice_001 HTTP/1.1"
+                )
+            );
 
             let resp = serde_json::json!({
                 "id": "person_alice_001",
@@ -634,7 +650,7 @@ async fn test_persons_resource_crud_lifecycle() {
         .first_name("Alice")
         .last_name("Smith")
         .email("alice@example.com")
-        .dob(PersonDob::new(15, 6, 1985))
+        .dob(PersonDob::new(1985, 6, 15))
         .relationship(
             PersonRelationship::new()
                 .owner(true)
@@ -731,7 +747,11 @@ async fn test_persons_resource_list_and_paginate() {
     let client = StripeClient::with_config(config);
 
     let params = ListPersonsParams::new().limit(2);
-    let list: PersonList = client.persons().list("acct_list_001", &params).await.unwrap();
+    let list: PersonList = client
+        .persons()
+        .list("acct_list_001", &params)
+        .await
+        .unwrap();
     assert_eq!(list.data.len(), 2);
     assert_eq!(&list.data[0].id, "person_list_1");
     assert_eq!(&list.data[1].id, "person_list_2");
@@ -747,7 +767,13 @@ async fn test_path_traversal_validation_on_all_resources() {
     assert!(client.accounts().retrieve_by_id("../admin").await.is_err());
     assert!(client.accounts().retrieve_by_id("acct/evil").await.is_err());
     assert!(client.accounts().retrieve_by_id("").await.is_err());
-    assert!(client.accounts().retrieve_by_id("acct?param=1").await.is_err());
+    assert!(
+        client
+            .accounts()
+            .retrieve_by_id("acct?param=1")
+            .await
+            .is_err()
+    );
     assert!(client.accounts().del("acct#fragment").await.is_err());
     assert!(
         client
@@ -764,7 +790,13 @@ async fn test_path_traversal_validation_on_all_resources() {
         "https://example.com/return",
         AccountLinkType::AccountOnboarding,
     );
-    assert!(client.account_links().create(&bad_link_params).await.is_err());
+    assert!(
+        client
+            .account_links()
+            .create(&bad_link_params)
+            .await
+            .is_err()
+    );
 
     // Account Sessions
     let bad_session_params = CreateAccountSessionParams::for_account("../evil_acct");

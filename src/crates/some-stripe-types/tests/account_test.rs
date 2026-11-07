@@ -3,24 +3,44 @@
 
 use some_stripe_core::patterns::serializer::to_form_params;
 use some_stripe_types::{
-    Account, AccountCapabilities, AccountCapabilitiesParams, AccountRequirements,
-    AccountType, BusinessType, CapabilityStatus, CreateAccountParams, Nullable,
-    UpdateAccountParams,
+    Account, AccountCapabilities, AccountCapabilitiesParams, AccountRequirements, AccountType,
+    BusinessType, CapabilityStatus, CreateAccountParams, Nullable, UpdateAccountParams,
 };
 use std::collections::HashMap;
 
 #[test]
 fn test_account_type_serde_and_helpers() {
     // Assert lowercase serialization
-    assert_eq!(serde_json::to_string(&AccountType::Standard).unwrap(), r#""standard""#);
-    assert_eq!(serde_json::to_string(&AccountType::Express).unwrap(), r#""express""#);
-    assert_eq!(serde_json::to_string(&AccountType::Custom).unwrap(), r#""custom""#);
-    assert_eq!(serde_json::to_string(&AccountType::None).unwrap(), r#""none""#);
+    assert_eq!(
+        serde_json::to_string(&AccountType::Standard).unwrap(),
+        r#""standard""#
+    );
+    assert_eq!(
+        serde_json::to_string(&AccountType::Express).unwrap(),
+        r#""express""#
+    );
+    assert_eq!(
+        serde_json::to_string(&AccountType::Custom).unwrap(),
+        r#""custom""#
+    );
+    assert_eq!(
+        serde_json::to_string(&AccountType::None).unwrap(),
+        r#""none""#
+    );
 
     // Assert deserialization
-    assert_eq!(serde_json::from_str::<AccountType>(r#""standard""#).unwrap(), AccountType::Standard);
-    assert_eq!(serde_json::from_str::<AccountType>(r#""express""#).unwrap(), AccountType::Express);
-    assert_eq!(serde_json::from_str::<AccountType>(r#""custom""#).unwrap(), AccountType::Custom);
+    assert_eq!(
+        serde_json::from_str::<AccountType>(r#""standard""#).unwrap(),
+        AccountType::Standard
+    );
+    assert_eq!(
+        serde_json::from_str::<AccountType>(r#""express""#).unwrap(),
+        AccountType::Express
+    );
+    assert_eq!(
+        serde_json::from_str::<AccountType>(r#""custom""#).unwrap(),
+        AccountType::Custom
+    );
 
     // Helpers
     assert!(AccountType::Standard.is_standard());
@@ -92,11 +112,30 @@ fn test_create_account_params_form_serialization() {
 
     assert_eq!(form_map.get("type").map(String::as_str), Some("custom"));
     assert_eq!(form_map.get("country").map(String::as_str), Some("US"));
-    assert_eq!(form_map.get("email").map(String::as_str), Some("merchant@example.com"));
-    assert_eq!(form_map.get("business_type").map(String::as_str), Some("company"));
-    assert_eq!(form_map.get("default_currency").map(String::as_str), Some("usd"));
-    assert_eq!(form_map.get("capabilities[card_payments]").map(String::as_str), Some("requested"));
-    assert_eq!(form_map.get("metadata[platform_user_id]").map(String::as_str), Some("user_9918"));
+    assert_eq!(
+        form_map.get("email").map(String::as_str),
+        Some("merchant@example.com")
+    );
+    assert_eq!(
+        form_map.get("business_type").map(String::as_str),
+        Some("company")
+    );
+    assert_eq!(
+        form_map.get("default_currency").map(String::as_str),
+        Some("usd")
+    );
+    assert_eq!(
+        form_map
+            .get("capabilities[card_payments]")
+            .map(String::as_str),
+        Some("requested")
+    );
+    assert_eq!(
+        form_map
+            .get("metadata[platform_user_id]")
+            .map(String::as_str),
+        Some("user_9918")
+    );
 }
 
 #[test]
@@ -185,8 +224,12 @@ fn test_event_object_account_deserialization() {
         }
     }"#;
 
-    let event: some_stripe_types::Event = serde_json::from_str(payload).expect("Event parse must succeed");
-    match event.deserialize_object().expect("Deserializing object must succeed") {
+    let event: some_stripe_types::Event =
+        serde_json::from_str(payload).expect("Event parse must succeed");
+    match event
+        .deserialize_object()
+        .expect("Deserializing object must succeed")
+    {
         some_stripe_types::EventObject::Account(acct) => {
             assert_eq!(acct.id, "acct_hook123");
             assert_eq!(acct.account_type, Some(AccountType::Express));

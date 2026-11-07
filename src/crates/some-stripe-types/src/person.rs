@@ -290,7 +290,9 @@ impl PersonDob {
     /// Returns `true` if all components are present and within plausible human lifespans.
     pub fn is_valid(&self) -> bool {
         match (self.year, self.month, self.day) {
-            (Some(y), Some(m), Some(d)) => (1900..=2100).contains(&y) && (1..=12).contains(&m) && (1..=31).contains(&d),
+            (Some(y), Some(m), Some(d)) => {
+                (1900..=2100).contains(&y) && (1..=12).contains(&m) && (1..=31).contains(&d)
+            }
             _ => false,
         }
     }
@@ -422,7 +424,7 @@ impl PersonRelationship {
 
     /// Returns `true` if the equity ownership meets or exceeds the FinCEN CDD 25% threshold.
     pub fn meets_fincen_cdd_ownership_threshold(&self) -> bool {
-        self.percent_ownership.map_or(false, |pct| pct >= 25.0)
+        self.percent_ownership.is_some_and(|pct| pct >= 25.0)
     }
 
     /// Returns `true` if the person falls under the FinCEN CDD control prong
@@ -681,23 +683,28 @@ impl Person {
     /// assert!(person.validate_fincen_cdd_compliance().is_ok());
     /// ```
     pub fn validate_fincen_cdd_compliance(&self) -> Result<(), KycComplianceError> {
-        let is_owner = self.relationship.as_ref().map_or(false, |r| r.is_beneficial_owner());
-        let is_control = self.relationship.as_ref().map_or(false, |r| r.is_control_person());
+        let is_owner = self
+            .relationship
+            .as_ref()
+            .is_some_and(|r| r.is_beneficial_owner());
+        let is_control = self
+            .relationship
+            .as_ref()
+            .is_some_and(|r| r.is_control_person());
 
         if !is_owner && !is_control {
             return Ok(());
         }
 
         // Validate Ownership Percentage bounds if set
-        if let Some(rel) = &self.relationship {
-            if let Some(pct) = rel.percent_ownership {
-                if !(0.0..=100.0).contains(&pct) {
-                    return Err(KycComplianceError::InvalidOwnershipPercentage {
-                        percentage: pct.to_string(),
-                        reason: "Ownership percentage must be between 0.0 and 100.0%",
-                    });
-                }
-            }
+        if let Some(rel) = &self.relationship
+            && let Some(pct) = rel.percent_ownership
+            && !(0.0..=100.0).contains(&pct)
+        {
+            return Err(KycComplianceError::InvalidOwnershipPercentage {
+                percentage: pct.to_string(),
+                reason: "Ownership percentage must be between 0.0 and 100.0%",
+            });
         }
 
         // 1. Legal Name
@@ -720,13 +727,13 @@ impl Person {
             Some(_) => {
                 return Err(KycComplianceError::InvalidDateOfBirth {
                     reason: "FinCEN CDD requires a valid date of birth (day, month, year)",
-                })
+                });
             }
             None => {
                 return Err(KycComplianceError::MissingField {
                     field: "dob",
                     reason: "FinCEN CDD requires date of birth for beneficial owners and control persons",
-                })
+                });
             }
         }
 
@@ -759,7 +766,10 @@ impl Person {
             || self.ssn_last_4_provided.unwrap_or(false)
             || self.id_number.is_some()
             || self.ssn_last_4.is_some()
-            || self.verification.as_ref().map_or(false, |v| v.document.is_some());
+            || self
+                .verification
+                .as_ref()
+                .is_some_and(|v| v.document.is_some());
 
         if !has_id {
             return Err(KycComplianceError::MissingIdentification {
@@ -823,13 +833,13 @@ impl Person {
             Some(_) => {
                 return Err(KycComplianceError::InvalidDateOfBirth {
                     reason: "EU DAC7 requires a valid date of birth (day, month, year)",
-                })
+                });
             }
             None => {
                 return Err(KycComplianceError::MissingField {
                     field: "dob",
                     reason: "EU DAC7 requires date of birth for natural person sellers",
-                })
+                });
             }
         }
 
@@ -854,7 +864,10 @@ impl Person {
         // 4. Tax or National Identification
         let has_id = self.id_number_provided.unwrap_or(false)
             || self.id_number.is_some()
-            || self.verification.as_ref().map_or(false, |v| v.document.is_some());
+            || self
+                .verification
+                .as_ref()
+                .is_some_and(|v| v.document.is_some());
 
         if !has_id {
             return Err(KycComplianceError::MissingIdentification {
@@ -1116,37 +1129,36 @@ impl CreatePersonParams {
 
     /// Validates parameter bounds and constraints before submission.
     pub fn validate(&self) -> Result<(), KycComplianceError> {
-        if let Some(rel) = &self.relationship {
-            if let Some(pct) = rel.percent_ownership {
-                if !(0.0..=100.0).contains(&pct) {
-                    return Err(KycComplianceError::InvalidOwnershipPercentage {
-                        percentage: pct.to_string(),
-                        reason: "Ownership percentage must be between 0.0 and 100.0%",
-                    });
-                }
-            }
+        if let Some(rel) = &self.relationship
+            && let Some(pct) = rel.percent_ownership
+            && !(0.0..=100.0).contains(&pct)
+        {
+            return Err(KycComplianceError::InvalidOwnershipPercentage {
+                percentage: pct.to_string(),
+                reason: "Ownership percentage must be between 0.0 and 100.0%",
+            });
         }
         if let Some(dob) = &self.dob {
-            if let Some(m) = dob.month {
-                if !(1..=12).contains(&m) {
-                    return Err(KycComplianceError::InvalidDateOfBirth {
-                        reason: "Month must be between 1 and 12",
-                    });
-                }
+            if let Some(m) = dob.month
+                && !(1..=12).contains(&m)
+            {
+                return Err(KycComplianceError::InvalidDateOfBirth {
+                    reason: "Month must be between 1 and 12",
+                });
             }
-            if let Some(d) = dob.day {
-                if !(1..=31).contains(&d) {
-                    return Err(KycComplianceError::InvalidDateOfBirth {
-                        reason: "Day must be between 1 and 31",
-                    });
-                }
+            if let Some(d) = dob.day
+                && !(1..=31).contains(&d)
+            {
+                return Err(KycComplianceError::InvalidDateOfBirth {
+                    reason: "Day must be between 1 and 31",
+                });
             }
-            if let Some(y) = dob.year {
-                if !(1900..=2100).contains(&y) {
-                    return Err(KycComplianceError::InvalidDateOfBirth {
-                        reason: "Year must be between 1900 and 2100",
-                    });
-                }
+            if let Some(y) = dob.year
+                && !(1900..=2100).contains(&y)
+            {
+                return Err(KycComplianceError::InvalidDateOfBirth {
+                    reason: "Year must be between 1900 and 2100",
+                });
             }
         }
         Ok(())
@@ -1467,37 +1479,36 @@ impl UpdatePersonParams {
 
     /// Validates parameter bounds and constraints before submission.
     pub fn validate(&self) -> Result<(), KycComplianceError> {
-        if let Some(rel) = &self.relationship {
-            if let Some(pct) = rel.percent_ownership {
-                if !(0.0..=100.0).contains(&pct) {
-                    return Err(KycComplianceError::InvalidOwnershipPercentage {
-                        percentage: pct.to_string(),
-                        reason: "Ownership percentage must be between 0.0 and 100.0%",
-                    });
-                }
-            }
+        if let Some(rel) = &self.relationship
+            && let Some(pct) = rel.percent_ownership
+            && !(0.0..=100.0).contains(&pct)
+        {
+            return Err(KycComplianceError::InvalidOwnershipPercentage {
+                percentage: pct.to_string(),
+                reason: "Ownership percentage must be between 0.0 and 100.0%",
+            });
         }
         if let Some(dob) = &self.dob {
-            if let Some(m) = dob.month {
-                if !(1..=12).contains(&m) {
-                    return Err(KycComplianceError::InvalidDateOfBirth {
-                        reason: "Month must be between 1 and 12",
-                    });
-                }
+            if let Some(m) = dob.month
+                && !(1..=12).contains(&m)
+            {
+                return Err(KycComplianceError::InvalidDateOfBirth {
+                    reason: "Month must be between 1 and 12",
+                });
             }
-            if let Some(d) = dob.day {
-                if !(1..=31).contains(&d) {
-                    return Err(KycComplianceError::InvalidDateOfBirth {
-                        reason: "Day must be between 1 and 31",
-                    });
-                }
+            if let Some(d) = dob.day
+                && !(1..=31).contains(&d)
+            {
+                return Err(KycComplianceError::InvalidDateOfBirth {
+                    reason: "Day must be between 1 and 31",
+                });
             }
-            if let Some(y) = dob.year {
-                if !(1900..=2100).contains(&y) {
-                    return Err(KycComplianceError::InvalidDateOfBirth {
-                        reason: "Year must be between 1900 and 2100",
-                    });
-                }
+            if let Some(y) = dob.year
+                && !(1900..=2100).contains(&y)
+            {
+                return Err(KycComplianceError::InvalidDateOfBirth {
+                    reason: "Year must be between 1900 and 2100",
+                });
             }
         }
         Ok(())
@@ -1526,4 +1537,64 @@ pub struct VerificationDocumentParams {
     /// Back side file ID (`file_...`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub back: Option<String>,
+}
+
+/// Paginated list parameter block for listing Persons (`GET /v1/accounts/{account}/persons`).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListPersonsParams {
+    /// A limit on the number of objects to be returned, between 1 and 100.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u32>,
+
+    /// A cursor for use in pagination. An object ID defining your place in the list.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub starting_after: Option<String>,
+
+    /// A cursor for use in pagination. An object ID defining your place in the list.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ending_before: Option<String>,
+}
+
+impl ListPersonsParams {
+    /// Creates a new default parameter block for listing persons.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets limit.
+    pub fn limit(mut self, limit: u32) -> Self {
+        self.limit = Some(limit);
+        self
+    }
+
+    /// Sets starting_after cursor.
+    pub fn starting_after(mut self, cursor: impl Into<String>) -> Self {
+        self.starting_after = Some(cursor.into());
+        self
+    }
+
+    /// Sets ending_before cursor.
+    pub fn ending_before(mut self, cursor: impl Into<String>) -> Self {
+        self.ending_before = Some(cursor.into());
+        self
+    }
+}
+
+/// Confirmation object returned upon person deletion.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeletedPerson {
+    /// Unique identifier of deleted person (`person_...`).
+    pub id: String,
+
+    /// Object type, always `person`.
+    #[serde(default = "default_person_object")]
+    pub object: String,
+
+    /// Always `true` if deleted.
+    pub deleted: bool,
+}
+
+/// Function for paginator ID extraction.
+pub fn person_id(person: &Person) -> &str {
+    person.id.as_str()
 }

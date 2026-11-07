@@ -96,6 +96,7 @@ fn test_fee_request_params() {
     let create_refund_params = CreateFeeRefundParams {
         amount: Some(500),
         metadata: Some(metadata),
+        idempotency_key: None,
     };
 
     let json = serde_json::to_string(&create_refund_params).unwrap();

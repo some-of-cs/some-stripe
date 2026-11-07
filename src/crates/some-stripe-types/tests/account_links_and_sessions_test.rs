@@ -7,18 +7,18 @@
 //! - Serde JSON wire compatibility and round-trip verification.
 
 use some_stripe_types::account_link::{
-    default_account_link_object, validate_account_link_url, AccountLink,
-    AccountLinkCollectFields, AccountLinkCollectionOptions, AccountLinkFutureRequirements,
-    AccountLinkParseError, AccountLinkType, AccountLinkValidationError,
-    CreateAccountLinkParams,
+    AccountLink, AccountLinkCollectFields, AccountLinkCollectionOptions,
+    AccountLinkFutureRequirements, AccountLinkParseError, AccountLinkType,
+    AccountLinkValidationError, CreateAccountLinkParams, default_account_link_object,
+    validate_account_link_url,
 };
 use some_stripe_types::account_session::{
-    default_account_session_object, AccountManagementComponent, AccountOnboardingComponent,
-    AccountSession, AccountSessionComponents, AccountSessionValidationError, BalancesComponent,
-    BalancesFeatures, CreateAccountSessionParams, DocumentsComponent,
-    NotificationBannerComponent, PaymentDetailsComponent, PaymentDetailsFeatures,
-    PaymentsComponent, PaymentsFeatures, PayoutsComponent, PayoutsFeatures,
-    PayoutsListComponent, TaxRegistrationsComponent, TaxSettingsComponent,
+    AccountManagementComponent, AccountOnboardingComponent, AccountSession,
+    AccountSessionComponents, AccountSessionValidationError, BalancesComponent, BalancesFeatures,
+    CreateAccountSessionParams, DocumentsComponent, NotificationBannerComponent,
+    PaymentDetailsComponent, PaymentDetailsFeatures, PaymentsComponent, PaymentsFeatures,
+    PayoutsComponent, PayoutsFeatures, PayoutsListComponent, TaxRegistrationsComponent,
+    TaxSettingsComponent, default_account_session_object,
 };
 use std::str::FromStr;
 
@@ -168,7 +168,10 @@ fn test_account_link_serde_round_trip() {
 fn test_validate_account_link_url_security_invariants() {
     // Valid HTTPS URLs
     assert!(validate_account_link_url("https://example.com/return").is_ok());
-    assert!(validate_account_link_url("https://dashboard.example.com/onboarding/complete?session=123").is_ok());
+    assert!(
+        validate_account_link_url("https://dashboard.example.com/onboarding/complete?session=123")
+            .is_ok()
+    );
 
     // Valid local development URLs
     assert!(validate_account_link_url("http://localhost:3000/callback").is_ok());
@@ -193,7 +196,9 @@ fn test_validate_account_link_url_security_invariants() {
     assert!(validate_account_link_url("vbscript:MsgBox(1)").is_err());
 
     // CRLF Injection prevention
-    assert!(validate_account_link_url("https://example.com/path\r\nSet-Cookie: malicious").is_err());
+    assert!(
+        validate_account_link_url("https://example.com/path\r\nSet-Cookie: malicious").is_err()
+    );
     assert!(validate_account_link_url("https://example.com/path\nInjected").is_err());
 }
 
@@ -239,12 +244,10 @@ fn test_create_account_link_params_builder_and_validation() {
 
 #[test]
 fn test_create_account_link_params_for_account() {
-    let params = CreateAccountLinkParams::for_account(
-        "acct_update12345",
-        AccountLinkType::AccountUpdate,
-    )
-    .with_refresh_url("https://example.com/refresh")
-    .with_return_url("https://example.com/success");
+    let params =
+        CreateAccountLinkParams::for_account("acct_update12345", AccountLinkType::AccountUpdate)
+            .with_refresh_url("https://example.com/refresh")
+            .with_return_url("https://example.com/success");
 
     assert_eq!(params.type_, AccountLinkType::AccountUpdate);
     assert!(params.validate().is_ok());
@@ -333,11 +336,13 @@ fn test_account_session_embedded_components_configuration() {
     let components = AccountSessionComponents::new()
         .with_account_onboarding(AccountOnboardingComponent::enabled())
         .with_account_management(AccountManagementComponent::new(true))
-        .with_balances(BalancesComponent::enabled().with_features(BalancesFeatures {
-            instant_payouts: Some(true),
-            standard_payouts: Some(true),
-            edit_payout_schedule: Some(false),
-        }))
+        .with_balances(
+            BalancesComponent::enabled().with_features(BalancesFeatures {
+                instant_payouts: Some(true),
+                standard_payouts: Some(true),
+                edit_payout_schedule: Some(false),
+            }),
+        )
         .with_documents(DocumentsComponent::enabled())
         .with_notification_banner(NotificationBannerComponent::enabled())
         .with_payment_details(PaymentDetailsComponent::enabled().with_features(
@@ -347,11 +352,13 @@ fn test_account_session_embedded_components_configuration() {
                 capture_payments: Some(false),
             },
         ))
-        .with_payments(PaymentsComponent::enabled().with_features(PaymentsFeatures {
-            refund_payments: Some(true),
-            dispute_management: Some(false),
-            capture_payments: Some(true),
-        }))
+        .with_payments(
+            PaymentsComponent::enabled().with_features(PaymentsFeatures {
+                refund_payments: Some(true),
+                dispute_management: Some(false),
+                capture_payments: Some(true),
+            }),
+        )
         .with_payouts(PayoutsComponent::enabled().with_features(PayoutsFeatures {
             instant_payouts: Some(true),
             standard_payouts: Some(true),
@@ -456,8 +463,7 @@ fn test_account_session_serde_round_trip() {
         created: 1711111111,
         expires_at: 1711114711,
         livemode: false,
-        components: AccountSessionComponents::new()
-            .with_payments(PaymentsComponent::enabled()),
+        components: AccountSessionComponents::new().with_payments(PaymentsComponent::enabled()),
     };
 
     let serialized = serde_json::to_string(&session).unwrap();
@@ -540,10 +546,8 @@ fn test_create_account_session_params_validation_errors() {
     );
 
     // No components enabled
-    let no_comp = CreateAccountSessionParams::new(
-        "acct_valid_account",
-        AccountSessionComponents::new(),
-    );
+    let no_comp =
+        CreateAccountSessionParams::new("acct_valid_account", AccountSessionComponents::new());
     assert_eq!(
         no_comp.validate().unwrap_err(),
         AccountSessionValidationError::NoComponentsEnabled

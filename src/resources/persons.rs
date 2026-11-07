@@ -7,8 +7,8 @@ use some_stripe_core::patterns::pagination::Paginator;
 use some_stripe_core::patterns::serializer::to_form_params;
 use some_stripe_core::{StripeClient, StripeError, validate_and_encode_id};
 use some_stripe_types::person::{
-    CreatePersonParams, DeletedPerson, ListPersonsParams, Person, PersonList,
-    UpdatePersonParams, person_id,
+    CreatePersonParams, DeletedPerson, ListPersonsParams, Person, PersonList, UpdatePersonParams,
+    person_id,
 };
 
 /// Resource for managing Persons associated with a Stripe Connect Account (`stripe.accounts.persons`).
@@ -78,7 +78,10 @@ impl<'a> PersonsResource<'a> {
         params: &CreatePersonParams,
     ) -> Result<Person, StripeError> {
         let encoded_account = validate_and_encode_id(account_id)?;
-        let url = format!("{}/v1/accounts/{encoded_account}/persons", self.client.config.api_base);
+        let url = format!(
+            "{}/v1/accounts/{encoded_account}/persons",
+            self.client.config.api_base
+        );
         let form_data = to_form_params(params)?;
 
         let generated_key;
@@ -128,11 +131,7 @@ impl<'a> PersonsResource<'a> {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn retrieve(
-        &self,
-        account_id: &str,
-        person_id: &str,
-    ) -> Result<Person, StripeError> {
+    pub async fn retrieve(&self, account_id: &str, person_id: &str) -> Result<Person, StripeError> {
         let encoded_account = validate_and_encode_id(account_id)?;
         let encoded_person = validate_and_encode_id(person_id)?;
         let url = format!(
@@ -292,7 +291,10 @@ impl<'a> PersonsResource<'a> {
         let encoded_account = validate_and_encode_id(account_id)?;
         let query_data = to_form_params(params)?;
         let url = if query_data.is_empty() {
-            format!("{}/v1/accounts/{encoded_account}/persons", self.client.config.api_base)
+            format!(
+                "{}/v1/accounts/{encoded_account}/persons",
+                self.client.config.api_base
+            )
         } else {
             let query_str = some_stripe_core::patterns::serializer::encode_form_pairs(&query_data);
             format!(

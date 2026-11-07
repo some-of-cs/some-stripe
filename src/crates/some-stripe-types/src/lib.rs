@@ -112,6 +112,8 @@ pub mod transfer;
 pub use transfer::*;
 pub mod transfer_params;
 pub use transfer_params::*;
+pub mod settlement;
+pub use settlement::*;
 
 /// Strongly typed Stripe Connect Account ID (`acct_...`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]

@@ -9,9 +9,9 @@
 //! - **Gate G-Law**: EU AMLD5, DAC7, and FinCEN Customer Due Diligence (CDD) KYC compliance.
 //! - **Dual-Protocol**: API v1 form-encoded bracket notation and API v2 JSON serde support with [`Nullable`].
 
-use std::collections::HashMap;
-use serde::{Deserialize, Serialize};
 use crate::nullable::Nullable;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 /// Legal business entity type of a Stripe Connect account.
 ///
@@ -1082,7 +1082,7 @@ pub struct AccountControllerDashboard {
 /// assert!(account.is_charges_enabled());
 /// assert!(account.is_payouts_enabled());
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Account {
     /// Unique identifier for the account (`acct_...`).
     pub id: String,
@@ -1168,6 +1168,33 @@ fn default_account_object() -> String {
     "account".into()
 }
 
+impl Default for Account {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            object: default_account_object(),
+            account_type: None,
+            country: None,
+            default_currency: None,
+            email: None,
+            charges_enabled: None,
+            payouts_enabled: None,
+            details_submitted: None,
+            capabilities: None,
+            requirements: None,
+            business_profile: None,
+            business_type: None,
+            company: None,
+            individual: None,
+            settings: None,
+            tos_acceptance: None,
+            controller: None,
+            metadata: None,
+            created: None,
+        }
+    }
+}
+
 impl Account {
     /// Zero-clone borrowed slice accessor for the account ID.
     pub fn id(&self) -> &str {
@@ -1207,7 +1234,7 @@ impl Account {
     /// Returns `true` if onboarding is complete and no requirements are currently blocking.
     pub fn is_onboarding_complete(&self) -> bool {
         self.details_submitted.unwrap_or(false)
-            && self.requirements.as_ref().map_or(true, |r| r.is_complete())
+            && self.requirements.as_ref().is_none_or(|r| r.is_complete())
     }
 
     /// Borrowed reference to account capabilities.
@@ -1325,6 +1352,10 @@ pub struct CreateAccountParams {
     /// Custom key-value metadata.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<HashMap<String, String>>,
+
+    /// Optional idempotency key for safe request retries.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub idempotency_key: Option<String>,
 }
 
 impl CreateAccountParams {
@@ -1410,6 +1441,12 @@ impl CreateAccountParams {
         self.metadata = Some(m);
         self
     }
+
+    /// Sets the idempotency key for safe request retries.
+    pub fn idempotency_key(mut self, key: impl Into<String>) -> Self {
+        self.idempotency_key = Some(key.into());
+        self
+    }
 }
 
 /// Request parameters for updating an existing Connected Account (`POST /v1/accounts/{id}`).
@@ -1467,6 +1504,10 @@ pub struct UpdateAccountParams {
     /// Key-value metadata updates.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub metadata: Option<HashMap<String, String>>,
+
+    /// Optional idempotency key for safe request retries.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub idempotency_key: Option<String>,
 }
 
 impl UpdateAccountParams {
@@ -1534,4 +1575,128 @@ impl UpdateAccountParams {
         self.metadata = Some(m);
         self
     }
+
+    /// Sets the idempotency key for safe request retries.
+    pub fn idempotency_key(mut self, key: impl Into<String>) -> Self {
+        self.idempotency_key = Some(key.into());
+        self
+    }
+}
+
+/// Parameters for rejecting an account (`POST /v1/accounts/{id}/reject`).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RejectAccountParams {
+    /// The reason for rejecting the account. Can be `fraud`, `terms_of_service`, or `other`.
+    pub reason: String,
+
+    /// Optional idempotency key for safe request retries.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub idempotency_key: Option<String>,
+}
+
+impl RejectAccountParams {
+    /// Creates a new reject parameters block with the specified reason.
+    pub fn new(reason: impl Into<String>) -> Self {
+        Self {
+            reason: reason.into(),
+            idempotency_key: None,
+        }
+    }
+
+    /// Sets the idempotency key for safe request retries.
+    pub fn idempotency_key(mut self, key: impl Into<String>) -> Self {
+        self.idempotency_key = Some(key.into());
+        self
+    }
+}
+
+/// Parameters for listing connected accounts (`GET /v1/accounts`).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ListAccountsParams {
+    /// A limit on the number of objects to be returned, between 1 and 100.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u32>,
+
+    /// A cursor for use in pagination. An object ID defining your place in the list.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub starting_after: Option<String>,
+
+    /// A cursor for use in pagination. An object ID defining your place in the list.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ending_before: Option<String>,
+
+    /// Filter accounts created at this UNIX timestamp.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub created: Option<i64>,
+}
+
+impl ListAccountsParams {
+    /// Creates a new default parameter block for listing accounts.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Sets the maximum number of accounts to return.
+    pub fn limit(mut self, limit: u32) -> Self {
+        self.limit = Some(limit);
+        self
+    }
+
+    /// Sets starting_after cursor.
+    pub fn starting_after(mut self, cursor: impl Into<String>) -> Self {
+        self.starting_after = Some(cursor.into());
+        self
+    }
+
+    /// Sets ending_before cursor.
+    pub fn ending_before(mut self, cursor: impl Into<String>) -> Self {
+        self.ending_before = Some(cursor.into());
+        self
+    }
+
+    /// Sets created timestamp filter.
+    pub fn created(mut self, created: i64) -> Self {
+        self.created = Some(created);
+        self
+    }
+}
+
+/// Paginated list of Connect Account objects (`object = "list"`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct AccountList {
+    /// Object type, always `list`.
+    #[serde(default = "default_list_object")]
+    pub object: String,
+
+    /// List of accounts for this page.
+    pub data: Vec<Account>,
+
+    /// True if more items exist.
+    pub has_more: bool,
+
+    /// Request URL.
+    pub url: String,
+}
+
+fn default_list_object() -> String {
+    "list".into()
+}
+
+/// Confirmation object returned upon account deletion.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DeletedAccount {
+    /// Unique identifier of deleted account.
+    pub id: String,
+
+    /// Object type, always `account`.
+    #[serde(default = "default_account_object")]
+    pub object: String,
+
+    /// Always `true` if deleted.
+    pub deleted: bool,
+}
+
+/// Function for paginator ID extraction.
+pub fn account_id(account: &Account) -> &str {
+    account.id()
 }

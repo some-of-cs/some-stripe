@@ -3,14 +3,14 @@
 
 use some_stripe::StripeClient;
 use some_stripe_core::client::RequestOptions;
-use some_stripe_types::connect_compliance::{
-    audit_connect_entity_borrow, evaluate_dac7_reporting_status, validate_connect_account_id,
-    validate_fincen_cdd, Dac7ActivitySummary, Dac7ComplianceError, Dac7ReportingStatus,
-    Dac7SellerProfile, FinCenBeneficialOwner, FinCenCddError, FinCenCddRequirements,
-    MultiTenantContext, MultiTenantError, DAC7_ACTIVITY_COUNT_THRESHOLD,
-    DAC7_CONSIDERATION_THRESHOLD_CENTS,
-};
 use some_stripe_types::Account;
+use some_stripe_types::connect_compliance::{
+    DAC7_ACTIVITY_COUNT_THRESHOLD, DAC7_CONSIDERATION_THRESHOLD_CENTS, Dac7ActivitySummary,
+    Dac7ComplianceError, Dac7ReportingStatus, Dac7SellerProfile, FinCenBeneficialOwner,
+    FinCenCddError, FinCenCddRequirements, MultiTenantContext, MultiTenantError,
+    audit_connect_entity_borrow, evaluate_dac7_reporting_status, validate_connect_account_id,
+    validate_fincen_cdd,
+};
 
 // ============================================================================
 // 1. FinCEN Customer Due Diligence (CDD) Compliance Tests (31 CFR § 1010.230)
@@ -240,7 +240,10 @@ fn test_fincen_cdd_empty_account_id_rejected() {
         beneficial_owners: vec![],
     };
 
-    assert_eq!(validate_fincen_cdd(&cdd).unwrap_err(), FinCenCddError::EmptyAccountId);
+    assert_eq!(
+        validate_fincen_cdd(&cdd).unwrap_err(),
+        FinCenCddError::EmptyAccountId
+    );
 }
 
 // ============================================================================
@@ -290,7 +293,7 @@ fn test_dac7_reportable_due_to_activities_threshold() {
         reporting_year: 2026,
         quarter: 2,
         number_of_activities: DAC7_ACTIVITY_COUNT_THRESHOLD, // Exactly 30 activities
-        total_consideration_cents: 50_000,                  // €500 < €2,000 threshold
+        total_consideration_cents: 50_000,                   // €500 < €2,000 threshold
         fees_withheld_cents: 5_000,
         taxes_withheld_cents: 0,
     }];
@@ -601,8 +604,14 @@ fn test_multi_tenant_boundary_isolation_and_assertions() {
     assert!(ctx_b.is_isolated_from(ctx_a.account_id()));
     assert!(!ctx_a.is_isolated_from(ctx_a.account_id()));
 
-    assert!(ctx_a.assert_tenant_boundary("acct_1032D82eZvKYlo2C").is_ok());
-    let mismatch = ctx_a.assert_tenant_boundary("acct_9999D82eZvKYlo2C").unwrap_err();
+    assert!(
+        ctx_a
+            .assert_tenant_boundary("acct_1032D82eZvKYlo2C")
+            .is_ok()
+    );
+    let mismatch = ctx_a
+        .assert_tenant_boundary("acct_9999D82eZvKYlo2C")
+        .unwrap_err();
     assert_eq!(
         mismatch,
         MultiTenantError::TenantMismatch {
@@ -630,7 +639,10 @@ fn test_stripe_client_multi_tenant_header_injection() {
 
     // Multi-tenant boundary between requests: client remains immutable
     let accounts_resource = client.accounts();
-    assert_eq!(accounts_resource.client().config.api_base, "https://api.stripe.com");
+    assert_eq!(
+        accounts_resource.client().config.api_base,
+        "https://api.stripe.com"
+    );
 }
 
 // ============================================================================
@@ -647,6 +659,7 @@ fn test_zero_clone_borrowing_audit_across_connect_entities() {
         payouts_enabled: Some(true),
         country: Some("US".into()),
         default_currency: Some("usd".into()),
+        ..Default::default()
     };
 
     let acct_ref: &Account = &account;
@@ -687,12 +700,12 @@ fn test_zero_clone_borrowing_audit_across_connect_entities() {
     assert_eq!(seller.legal_name(), "Apollo Navigation Systems");
 
     // Audit MultiTenantContext zero-copy lifetime
-    let raw_id = String::from("acct_lifetime_guard_1");
+    let raw_id = String::from("acct_1032D82eZvKYlo2C");
     {
         let ctx = MultiTenantContext::new(&raw_id).unwrap();
-        assert_eq!(ctx.account_id(), "acct_lifetime_guard_1");
-        assert!(ctx.matches_header("acct_lifetime_guard_1"));
+        assert_eq!(ctx.account_id(), "acct_1032D82eZvKYlo2C");
+        assert!(ctx.matches_header("acct_1032D82eZvKYlo2C"));
     }
     // raw_id was borrowed, not consumed
-    assert_eq!(raw_id, "acct_lifetime_guard_1");
+    assert_eq!(raw_id, "acct_1032D82eZvKYlo2C");
 }

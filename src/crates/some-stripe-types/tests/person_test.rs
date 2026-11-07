@@ -6,9 +6,8 @@ use some_stripe_types::customer::CustomerAddress;
 use some_stripe_types::nullable::Nullable;
 use some_stripe_types::person::{
     CreatePersonParams, KycComplianceError, Person, PersonDob, PersonDocumentFiles,
-    PersonDocuments, PersonList, PersonRelationship, PersonVerification,
-    PersonVerificationParams, UpdatePersonParams, VerificationDocument,
-    VerificationDocumentParams,
+    PersonDocuments, PersonList, PersonRelationship, PersonVerification, PersonVerificationParams,
+    UpdatePersonParams, VerificationDocument, VerificationDocumentParams,
 };
 use std::collections::HashMap;
 
@@ -327,15 +326,17 @@ fn test_fincen_cdd_control_prong_mandate() {
 #[test]
 fn test_fincen_cdd_non_beneficial_owner_exempt() {
     // An individual with 5% ownership who is not an owner/control person is exempt
-    let mut person = Person::default();
-    person.relationship = Some(PersonRelationship {
-        representative: Some(false),
-        owner: Some(false),
-        executive: Some(false),
-        director: Some(false),
-        percent_ownership: Some(5.0),
-        title: Some("Minority Shareholder".into()),
-    });
+    let person = Person {
+        relationship: Some(PersonRelationship {
+            representative: Some(false),
+            owner: Some(false),
+            executive: Some(false),
+            director: Some(false),
+            percent_ownership: Some(5.0),
+            title: Some("Minority Shareholder".into()),
+        }),
+        ..Default::default()
+    };
 
     assert!(person.validate_fincen_cdd_compliance().is_ok());
 }
@@ -346,23 +347,27 @@ fn test_fincen_cdd_non_beneficial_owner_exempt() {
 
 #[test]
 fn test_dac7_compliance_success() {
-    let mut person = Person::default();
-    person.first_name = Some("Marie".into());
-    person.last_name = Some("Curie".into());
-    person.dob = Some(PersonDob::new(1975, 11, 7));
-    person.address = Some(make_valid_address("FR", "16 Rue Pierre", "Paris", "75005"));
-    person.id_number_provided = Some(true);
+    let person = Person {
+        first_name: Some("Marie".into()),
+        last_name: Some("Curie".into()),
+        dob: Some(PersonDob::new(1975, 11, 7)),
+        address: Some(make_valid_address("FR", "16 Rue Pierre", "Paris", "75005")),
+        id_number_provided: Some(true),
+        ..Default::default()
+    };
 
     assert!(person.validate_dac7_compliance().is_ok());
 }
 
 #[test]
 fn test_dac7_missing_address_fail() {
-    let mut person = Person::default();
-    person.first_name = Some("Marie".into());
-    person.last_name = Some("Curie".into());
-    person.dob = Some(PersonDob::new(1975, 11, 7));
-    person.id_number_provided = Some(true);
+    let person = Person {
+        first_name: Some("Marie".into()),
+        last_name: Some("Curie".into()),
+        dob: Some(PersonDob::new(1975, 11, 7)),
+        id_number_provided: Some(true),
+        ..Default::default()
+    };
 
     let err = person.validate_dac7_compliance().unwrap_err();
     assert_eq!(
@@ -376,11 +381,13 @@ fn test_dac7_missing_address_fail() {
 
 #[test]
 fn test_dac7_missing_tin_identification_fail() {
-    let mut person = Person::default();
-    person.first_name = Some("Marie".into());
-    person.last_name = Some("Curie".into());
-    person.dob = Some(PersonDob::new(1975, 11, 7));
-    person.address = Some(make_valid_address("FR", "16 Rue Pierre", "Paris", "75005"));
+    let person = Person {
+        first_name: Some("Marie".into()),
+        last_name: Some("Curie".into()),
+        dob: Some(PersonDob::new(1975, 11, 7)),
+        address: Some(make_valid_address("FR", "16 Rue Pierre", "Paris", "75005")),
+        ..Default::default()
+    };
 
     let err = person.validate_dac7_compliance().unwrap_err();
     assert_eq!(
@@ -491,8 +498,17 @@ fn test_create_person_params_builder() {
         .email("ada@analyticalengine.org")
         .phone("+442071234567")
         .dob(PersonDob::new(1985, 12, 10))
-        .address(make_valid_address("GB", "10 St James's Square", "London", "SW1Y 4LE"))
-        .relationship(PersonRelationship::new().representative(true).title("Inventor"))
+        .address(make_valid_address(
+            "GB",
+            "10 St James's Square",
+            "London",
+            "SW1Y 4LE",
+        ))
+        .relationship(
+            PersonRelationship::new()
+                .representative(true)
+                .title("Inventor"),
+        )
         .verification(PersonVerificationParams {
             document: Some(VerificationDocumentParams {
                 front: Some("file_front_doc".into()),
@@ -536,7 +552,10 @@ fn test_create_person_params_validation_failure() {
         day: Some(1),
     });
     let err_dob = params_invalid_dob.validate().unwrap_err();
-    assert!(matches!(err_dob, KycComplianceError::InvalidDateOfBirth { .. }));
+    assert!(matches!(
+        err_dob,
+        KycComplianceError::InvalidDateOfBirth { .. }
+    ));
 }
 
 // =========================================================================

@@ -115,7 +115,9 @@ impl FromStr for AccountLinkCollectFields {
         match s {
             "currently_due" => Ok(Self::CurrentlyDue),
             "eventually_due" => Ok(Self::EventuallyDue),
-            other => Err(AccountLinkParseError::InvalidCollectField(other.to_string())),
+            other => Err(AccountLinkParseError::InvalidCollectField(
+                other.to_string(),
+            )),
         }
     }
 }
@@ -212,7 +214,10 @@ impl AccountLinkCollectionOptions {
 
     /// Sets the future requirements collection behavior.
     #[must_use]
-    pub fn with_future_requirements(mut self, future_requirements: AccountLinkFutureRequirements) -> Self {
+    pub fn with_future_requirements(
+        mut self,
+        future_requirements: AccountLinkFutureRequirements,
+    ) -> Self {
         self.future_requirements = Some(future_requirements);
         self
     }
@@ -304,7 +309,9 @@ pub fn validate_account_link_url(url: &str) -> Result<(), &'static str> {
     let is_local = url.starts_with("http://localhost") || url.starts_with("http://127.0.0.1");
 
     if !is_https && !is_local {
-        return Err("Account link URL must strictly use HTTPS protocol (or localhost for development)");
+        return Err(
+            "Account link URL must strictly use HTTPS protocol (or localhost for development)",
+        );
     }
 
     let lower = url.to_ascii_lowercase();
@@ -513,7 +520,9 @@ impl CreateAccountLinkParams {
             return Err(AccountLinkValidationError::EmptyAccount);
         }
         if !self.account.starts_with("acct_") {
-            return Err(AccountLinkValidationError::InvalidAccount(self.account.clone()));
+            return Err(AccountLinkValidationError::InvalidAccount(
+                self.account.clone(),
+            ));
         }
 
         if let Some(ref refresh) = self.refresh_url {

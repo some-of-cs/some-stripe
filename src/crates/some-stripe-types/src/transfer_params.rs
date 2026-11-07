@@ -430,10 +430,10 @@ impl CreateTransferReversalParams {
 
     /// Validates parameters against ISO 4217 integer rules (Gate G-Law).
     pub fn validate(&self) -> Result<(), TransferValidationError> {
-        if let Some(amount) = self.amount {
-            if amount <= 0 {
-                return Err(TransferValidationError::InvalidAmount { amount });
-            }
+        if let Some(amount) = self.amount
+            && amount <= 0
+        {
+            return Err(TransferValidationError::InvalidAmount { amount });
         }
         Ok(())
     }
@@ -550,13 +550,13 @@ impl ListTransfersParams {
 
     /// Validates list parameters.
     pub fn validate(&self) -> Result<(), TransferValidationError> {
-        if let Some(limit) = self.limit {
-            if limit == 0 || limit > 100 {
-                return Err(TransferValidationError::InvalidParameter {
-                    field: "limit",
-                    reason: "Limit must be between 1 and 100".into(),
-                });
-            }
+        if let Some(limit) = self.limit
+            && (limit == 0 || limit > 100)
+        {
+            return Err(TransferValidationError::InvalidParameter {
+                field: "limit",
+                reason: "Limit must be between 1 and 100".into(),
+            });
         }
         Ok(())
     }
@@ -638,13 +638,13 @@ impl ListTransferReversalsParams {
 
     /// Validates list parameters.
     pub fn validate(&self) -> Result<(), TransferValidationError> {
-        if let Some(limit) = self.limit {
-            if limit == 0 || limit > 100 {
-                return Err(TransferValidationError::InvalidParameter {
-                    field: "limit",
-                    reason: "Limit must be between 1 and 100".into(),
-                });
-            }
+        if let Some(limit) = self.limit
+            && (limit == 0 || limit > 100)
+        {
+            return Err(TransferValidationError::InvalidParameter {
+                field: "limit",
+                reason: "Limit must be between 1 and 100".into(),
+            });
         }
         Ok(())
     }

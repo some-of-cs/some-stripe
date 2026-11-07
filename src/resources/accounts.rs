@@ -320,7 +320,10 @@ impl<'a> AccountsResource<'a> {
         params: &RejectAccountParams,
     ) -> Result<Account, StripeError> {
         let encoded = validate_and_encode_id(account_id)?;
-        let url = format!("{}/v1/accounts/{encoded}/reject", self.client.config.api_base);
+        let url = format!(
+            "{}/v1/accounts/{encoded}/reject",
+            self.client.config.api_base
+        );
         let form_data = to_form_params(params)?;
 
         let generated_key;
@@ -403,11 +406,6 @@ impl<'a> AccountsResource<'a> {
     /// # }
     /// ```
     pub fn paginate(&self, limit: Option<u32>) -> Paginator<'a, Account> {
-        Paginator::new(
-            self.client,
-            "v1/accounts",
-            limit.unwrap_or(10),
-            account_id,
-        )
+        Paginator::new(self.client, "v1/accounts", limit.unwrap_or(10), account_id)
     }
 }
