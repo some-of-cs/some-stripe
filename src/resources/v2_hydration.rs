@@ -9,10 +9,12 @@
 //! - **Gate G-Complexity**: Decomposed validation helpers keeping cyclomatic complexity $CC \le 5$.
 //! - **Gate G-Docs**: Comprehensive rustdoc documentation and runnable doctests.
 
-use super::events::V2EventsResource;
 use some_stripe_core::{StripeClient, StripeError};
-use some_stripe_types::{V2Event, V2RelatedObject, V2ThinEvent};
+use some_stripe_types::v2_events::{V2Event, V2RelatedObject};
 use some_stripe_webhooks::DEFAULT_TOLERANCE_SECONDS;
+use some_stripe_webhooks::v2_events::V2ThinEvent;
+
+use super::v2_events::V2EventsResource;
 
 /// Errors that can occur during thin event hydration.
 #[derive(Debug, thiserror::Error)]
@@ -26,7 +28,9 @@ pub enum HydrationError {
     Deserialization(#[from] serde_json::Error),
 
     /// Inbound event timestamp is older than permitted tolerance (stale replay attempt).
-    #[error("Stale thin event rejected (replay protection): created={created}, current={current}, tolerance={tolerance}s")]
+    #[error(
+        "Stale thin event rejected (replay protection): created={created}, current={current}, tolerance={tolerance}s"
+    )]
     StaleEventReplay {
         /// Timestamp on the incoming thin event.
         created: i64,
@@ -64,7 +68,9 @@ pub enum HydrationError {
     },
 
     /// The related object ID in the retrieved event does not match the thin envelope reference.
-    #[error("Related object ID mismatch: envelope referenced '{envelope_id}', retrieved '{retrieved_id:?}'")]
+    #[error(
+        "Related object ID mismatch: envelope referenced '{envelope_id}', retrieved '{retrieved_id:?}'"
+    )]
     RelatedObjectIdMismatch {
         /// Related object ID from the inbound envelope.
         envelope_id: String,
@@ -73,7 +79,9 @@ pub enum HydrationError {
     },
 
     /// The related object type in the retrieved event does not match the thin envelope reference.
-    #[error("Related object type mismatch: envelope referenced '{envelope_type}', retrieved '{retrieved_type:?}'")]
+    #[error(
+        "Related object type mismatch: envelope referenced '{envelope_type}', retrieved '{retrieved_type:?}'"
+    )]
     RelatedObjectTypeMismatch {
         /// Related object type from the inbound envelope.
         envelope_type: String,
@@ -90,31 +98,7 @@ pub enum HydrationError {
 ///
 /// Ingests lightweight notification envelopes, validates timestamp drift to prevent
 /// stale replay vulnerabilities (Gate G2), and retrieves the authoritative live state
-/// via `stripe.v2().core().events().retrieve()`.
-///
-/// # Example
-/// ```no_run
-/// use some_stripe::{StripeClient, V2ThinEvent};
-///
-/// # async fn run() -> Result<(), Box<dyn std::error::Error>> {
-/// let client = StripeClient::new("sk_test_123");
-/// let hydrator = client.v2().core().hydrator();
-///
-/// let thin_event = V2ThinEvent {
-///     id: "v2_evt_abc123".into(),
-///     object: "v2.core.event".into(),
-///     event_type: "v1.billing.meter.error_report_triggered".into(),
-///     created: chrono::Utc::now().timestamp(),
-///     livemode: false,
-///     related_object: None,
-///     context: None,
-/// };
-///
-/// let live_event = hydrator.hydrate(&thin_event).await?;
-/// println!("Hydrated live event: {}", live_event.id());
-/// # Ok(())
-/// # }
-/// ```
+/// via `stripe.v2_core().events().retrieve()`.
 #[derive(Clone, Copy)]
 pub struct ThinEventHydrator<'a> {
     client: &'a StripeClient,
@@ -126,7 +110,7 @@ pub struct ThinEventHydrator<'a> {
 impl<'a> ThinEventHydrator<'a> {
     /// Creates a new `ThinEventHydrator` with default 300-second tolerance.
     #[must_use]
-    pub fn new(client: &'a StripeClient) -> Self {
+    pub const fn new(client: &'a StripeClient) -> Self {
         Self {
             client,
             tolerance_seconds: DEFAULT_TOLERANCE_SECONDS,
@@ -137,28 +121,28 @@ impl<'a> ThinEventHydrator<'a> {
 
     /// Configures the timestamp drift tolerance window in seconds.
     #[must_use]
-    pub fn with_tolerance_seconds(mut self, secs: u64) -> Self {
+    pub const fn with_tolerance_seconds(mut self, secs: u64) -> Self {
         self.tolerance_seconds = secs;
         self
     }
 
     /// Disables timestamp drift verification (caution: replay protection disabled).
     #[must_use]
-    pub fn without_freshness_check(mut self) -> Self {
+    pub const fn without_freshness_check(mut self) -> Self {
         self.enforce_freshness = false;
         self
     }
 
     /// Overrides current clock timestamp for deterministic testing.
     #[must_use]
-    pub fn with_clock_timestamp(mut self, timestamp: i64) -> Self {
+    pub const fn with_clock_timestamp(mut self, timestamp: i64) -> Self {
         self.mock_clock = Some(timestamp);
         self
     }
 
     /// Returns the configured tolerance window in seconds.
     #[must_use]
-    pub fn tolerance_seconds(&self) -> u64 {
+    pub const fn tolerance_seconds(&self) -> u64 {
         self.tolerance_seconds
     }
 
@@ -180,6 +164,16 @@ impl<'a> ThinEventHydrator<'a> {
         Ok(live_event)
     }
 
+    /// Validates an inbound thin event notification and hydrates the authoritative live resource.
+    ///
+    /// Alias for [`ThinEventHydrator::hydrate`].
+    pub async fn hydrate_thin_event(
+        &self,
+        thin_event: &V2ThinEvent,
+    ) -> Result<V2Event, HydrationError> {
+        self.hydrate(thin_event).await
+    }
+
     /// Parses a JSON thin event notification payload string and hydrates the live resource.
     pub async fn hydrate_from_json(&self, json_payload: &str) -> Result<V2Event, HydrationError> {
         let thin_event: V2ThinEvent = serde_json::from_str(json_payload)?;
@@ -190,13 +184,6 @@ impl<'a> ThinEventHydrator<'a> {
     pub async fn hydrate_from_slice(&self, payload: &[u8]) -> Result<V2Event, HydrationError> {
         let thin_event: V2ThinEvent = serde_json::from_slice(payload)?;
         self.hydrate(&thin_event).await
-    }
-
-    /// Validates an inbound thin event notification and hydrates the authoritative live resource.
-    ///
-    /// Alias for [`ThinEventHydrator::hydrate`].
-    pub async fn hydrate_thin_event(&self, thin_event: &V2ThinEvent) -> Result<V2Event, HydrationError> {
-        self.hydrate(thin_event).await
     }
 
     fn verify_timestamp_freshness(&self, created: i64) -> Result<(), HydrationError> {
@@ -235,10 +222,10 @@ impl<'a> ThinEventHydrator<'a> {
             });
         }
 
-        if envelope.event_type != retrieved.event_type {
+        if envelope.event_type != retrieved.event_type() {
             return Err(HydrationError::EventTypeMismatch {
                 envelope_type: envelope.event_type.clone(),
-                retrieved_type: retrieved.event_type.clone(),
+                retrieved_type: retrieved.event_type().to_string(),
             });
         }
 
@@ -265,10 +252,10 @@ impl<'a> ThinEventHydrator<'a> {
             });
         }
 
-        if thin_ro.object_type != live_ro.object_type {
+        if thin_ro.r#type != live_ro.r#type {
             return Err(HydrationError::RelatedObjectTypeMismatch {
-                envelope_type: thin_ro.object_type.clone(),
-                retrieved_type: Some(live_ro.object_type.clone()),
+                envelope_type: thin_ro.r#type.clone(),
+                retrieved_type: Some(live_ro.r#type.clone()),
             });
         }
 

@@ -65,6 +65,7 @@ pub use some_stripe_core::client::{
 };
 pub use some_stripe_core::error::{StripeError, StripeWebhookError};
 pub use some_stripe_core::patterns;
+pub use some_stripe_core::v2_pagination::{V2Paginator, resolve_v2_url};
 pub use some_stripe_core::validate_and_encode_id;
 pub use some_stripe_core::workflow;
 pub use some_stripe_core::workflow::{
@@ -86,23 +87,33 @@ pub use resources::{
     AccountLinksResource, AccountSessionsResource, AccountsResource, ApplicationFeesResource,
     BalanceResource, BalanceTransactionsResource, BillingPortalResource, CalculationsResource,
     CheckoutResource, CheckoutSessionExt, CreditNotesResource, CustomersResource, DisputesResource,
-    IdentityResource, InvoicesResource, IssuingAuthorizationsResource, IssuingCardholdersResource,
-    IssuingCardsResource, IssuingResource, IssuingTransactionsResource, PaymentIntentsResource,
-    PaymentLinksResource, PayoutsResource, PersonsResource, QuotesResource, RedirectError,
-    RefundsResource, SessionsResource, SubscriptionItemsResource, SubscriptionSchedulesResource,
+    EventDestinationsResource, HydrationError, IdentityResource, InvoicesResource,
+    IssuingAuthorizationsResource, IssuingCardholdersResource, IssuingCardsResource,
+    IssuingResource, IssuingTransactionsResource, PaymentIntentsResource, PaymentLinksResource,
+    PayoutsResource, PersonsResource, QuotesResource, RedirectError, RefundsResource,
+    SessionsResource, SubscriptionItemsResource, SubscriptionSchedulesResource,
     SubscriptionsResource, TaxRegistrationsResource, TaxResource, TaxSettingsResource,
     TerminalConnectionTokensResource, TerminalLocationsResource, TerminalReadersResource,
-    TerminalResource, TransactionsResource, TransfersResource, TreasuryFinancialAccountsResource,
-    TreasuryResource, TreasuryTransfersResource, V2AccountsResource, V2Core,
-    V2EventsResource, V2Resource, VerificationReportsResource, VerificationSessionsResource,
-    WebhooksResource, credit_note_id, generate_uuid_v4, is_fulfillment_ready,
-    is_valid_uuid_v4, quote_id, tax_registration_id, validate_redirect_url,
-    EventDestinationsResource, HydrationError, ThinEventHydrator, EventNotification,
+    TerminalResource, ThinEventHydrator, TransactionsResource, TransfersResource,
+    TreasuryFinancialAccountsResource, TreasuryResource, TreasuryTransfersResource,
+    V2AccountsResource, V2Core, V2EventsResource, V2Resource, VerificationReportsResource,
+    VerificationSessionsResource, WebhooksResource, credit_note_id, generate_uuid_v4,
+    is_fulfillment_ready, is_valid_uuid_v4, quote_id, tax_registration_id, validate_redirect_url,
 };
 
 /// Stripe API v2 namespace and sub-resources.
 pub mod v2 {
-    pub use crate::resources::v2::*;
+    pub mod core {
+        pub use crate::resources::v2_accounts::V2AccountsResource;
+        pub use crate::resources::v2_core::V2Core;
+        pub use crate::resources::v2_destinations::EventDestinationsResource;
+        pub use crate::resources::v2_events::V2EventsResource;
+        pub use crate::resources::v2_hydration::{HydrationError, ThinEventHydrator};
+        pub use some_stripe_webhooks::v2_events::V2ThinEvent;
+        pub use some_stripe_webhooks::v2_events::V2ThinEvent as EventNotification;
+    }
+    pub use crate::resources::v2_core::V2Resource;
+    pub use core::*;
 }
 
 /// The main Stripe client used to interact with the Stripe API, modeled after `stripe-node`.
@@ -306,6 +317,21 @@ impl StripeClient {
         TerminalResource::new(&self.0)
     }
 
+    /// Access the Stripe API v2 Core Accounts resource (`stripe.v2_accounts`).
+    pub fn v2_accounts(&self) -> V2AccountsResource<'_> {
+        V2AccountsResource::new(&self.0)
+    }
+
+    /// Access the V2 Event Destinations resource namespace (`stripe.event_destinations`).
+    pub fn event_destinations(&self) -> EventDestinationsResource<'_> {
+        EventDestinationsResource::new(&self.0)
+    }
+
+    /// Access the Stripe API v2 Core Events resource (`stripe.v2_events()`).
+    pub fn v2_events(&self) -> V2EventsResource<'_> {
+        V2EventsResource::new(&self.0)
+    }
+
     /// Access the API v2 resource namespace (`stripe.v2`).
     pub fn v2(&self) -> V2Resource<'_> {
         V2Resource::new(&self.0)
@@ -322,7 +348,7 @@ impl StripeClient {
     /// Returns [`HydrationError`] if timestamp freshness fails or event retrieval fails.
     pub async fn hydrate_thin_event(
         &self,
-        notification: &some_stripe_types::V2ThinEvent,
+        notification: &some_stripe_webhooks::v2_events::V2ThinEvent,
     ) -> Result<some_stripe_types::V2Event, HydrationError> {
         self.v2_core().hydrate_thin_event(notification).await
     }
@@ -416,6 +442,9 @@ pub trait StripeClientExt {
 
     /// Access the Tax Transactions resource namespace (`stripe.tax_transactions`).
     fn tax_transactions(&self) -> TransactionsResource<'_>;
+
+    /// Access the Stripe API v2 Core Accounts resource (`stripe.v2_accounts`).
+    fn v2_accounts(&self) -> V2AccountsResource<'_>;
 }
 
 impl StripeClientExt for some_stripe_core::StripeClient {
@@ -485,6 +514,10 @@ impl StripeClientExt for some_stripe_core::StripeClient {
 
     fn tax_transactions(&self) -> TransactionsResource<'_> {
         TransactionsResource::new(self)
+    }
+
+    fn v2_accounts(&self) -> V2AccountsResource<'_> {
+        V2AccountsResource::new(self)
     }
 }
 

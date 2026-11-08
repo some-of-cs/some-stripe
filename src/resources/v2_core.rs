@@ -1,4 +1,4 @@
-//! Stripe API v2 Core Resource Facade (`stripe.v2().core()`).
+//! Stripe API v2 Core Resource Facade (`stripe.v2().core()` and `stripe.v2_core()`).
 //!
 //! Exposes access to v2 Core Events, Event Destinations, Core Accounts, and the Thin Event Hydrator.
 //!
@@ -8,14 +8,41 @@
 //! - **Gate G-Docs**: Comprehensive rustdoc documentation and runnable doctests.
 
 use some_stripe_core::StripeClient;
-use some_stripe_types::{V2Event, V2ThinEvent};
+use some_stripe_types::v2_events::V2Event;
+use some_stripe_webhooks::v2_events::V2ThinEvent;
 
-use super::accounts::V2AccountsResource;
-use super::event_destinations::EventDestinationsResource;
-use super::events::V2EventsResource;
-use super::hydration::{HydrationError, ThinEventHydrator};
+use super::v2_accounts::V2AccountsResource;
+use super::v2_destinations::EventDestinationsResource;
+use super::v2_events::V2EventsResource;
+use super::v2_hydration::{HydrationError, ThinEventHydrator};
 
-/// Facade resource for Stripe API v2 Core operations (`stripe.v2().core()`).
+/// Top-level facade resource for Stripe API v2 operations (`stripe.v2()`).
+#[derive(Clone, Copy)]
+pub struct V2Resource<'a> {
+    client: &'a StripeClient,
+}
+
+impl<'a> V2Resource<'a> {
+    /// Creates a new `V2Resource` bound to the provided [`StripeClient`].
+    #[must_use]
+    pub const fn new(client: &'a StripeClient) -> Self {
+        Self { client }
+    }
+
+    /// Access reference to the underlying [`StripeClient`].
+    #[must_use]
+    pub const fn client(&self) -> &'a StripeClient {
+        self.client
+    }
+
+    /// Access the API v2 Core namespace (`stripe.v2().core()`).
+    #[must_use]
+    pub const fn core(&self) -> V2Core<'a> {
+        V2Core::new(self.client)
+    }
+}
+
+/// Facade resource for Stripe API v2 Core operations (`stripe.v2().core()` or `stripe.v2_core()`).
 ///
 /// Mounts resources for:
 /// - [`V2EventsResource`] (`events()`): authenticated event retrieval and listing.
@@ -47,7 +74,7 @@ pub struct V2Core<'a> {
 impl<'a> V2Core<'a> {
     /// Creates a new `V2Core` facade bound to the underlying [`StripeClient`].
     #[must_use]
-    pub fn new(client: &'a StripeClient) -> Self {
+    pub const fn new(client: &'a StripeClient) -> Self {
         Self {
             client,
             account: None,
@@ -56,20 +83,20 @@ impl<'a> V2Core<'a> {
 
     /// Access reference to the underlying [`StripeClient`].
     #[must_use]
-    pub fn client(&self) -> &'a StripeClient {
+    pub const fn client(&self) -> &'a StripeClient {
         self.client
     }
 
     /// Scopes this facade and all child resources to a specific connected account.
     #[must_use]
-    pub fn with_account(&self, account: &'a str) -> Self {
+    pub const fn with_account(&self, account: &'a str) -> Self {
         Self {
             client: self.client,
             account: Some(account),
         }
     }
 
-    /// Access the V2 Events resource (`stripe.v2().core().events()`).
+    /// Access the V2 Events resource (`stripe.v2().core().events()` or `stripe.v2_core().events()`).
     #[must_use]
     pub fn events(&self) -> V2EventsResource<'a> {
         let res = V2EventsResource::new(self.client);
@@ -80,7 +107,7 @@ impl<'a> V2Core<'a> {
         }
     }
 
-    /// Access the V2 Event Destinations resource (`stripe.v2().core().event_destinations()`).
+    /// Access the V2 Event Destinations resource (`stripe.v2().core().event_destinations()` or `stripe.v2_core().event_destinations()`).
     #[must_use]
     pub fn event_destinations(&self) -> EventDestinationsResource<'a> {
         let res = EventDestinationsResource::new(self.client);
@@ -91,7 +118,7 @@ impl<'a> V2Core<'a> {
         }
     }
 
-    /// Access the V2 Core Accounts resource (`stripe.v2().core().accounts()`).
+    /// Access the V2 Core Accounts resource (`stripe.v2().core().accounts()` or `stripe.v2_core().accounts()`).
     #[must_use]
     pub fn accounts(&self) -> V2AccountsResource<'a> {
         let res = V2AccountsResource::new(self.client);
@@ -102,9 +129,9 @@ impl<'a> V2Core<'a> {
         }
     }
 
-    /// Access the Thin Event Hydrator (`stripe.v2().core().hydrator()`).
+    /// Access the Thin Event Hydrator (`stripe.v2().core().hydrator()` or `stripe.v2_core().hydrator()`).
     #[must_use]
-    pub fn hydrator(&self) -> ThinEventHydrator<'a> {
+    pub const fn hydrator(&self) -> ThinEventHydrator<'a> {
         ThinEventHydrator::new(self.client)
     }
 
@@ -116,6 +143,6 @@ impl<'a> V2Core<'a> {
         &self,
         notification: &V2ThinEvent,
     ) -> Result<V2Event, HydrationError> {
-        self.hydrator().hydrate(notification).await
+        self.hydrator().hydrate_thin_event(notification).await
     }
 }

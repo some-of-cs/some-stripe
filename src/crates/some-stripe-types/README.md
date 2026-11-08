@@ -10,6 +10,10 @@ Strongly Typed Domain Models, Events & Request DTOs for [`some-stripe`](https://
 
 ## Architectural Highlights
 
+- **HATEOAS API V2 Collection Envelopes (`V2List<T>` & `V2PageInfo`)**:
+  - Strongly typed envelopes for Stripe API v2 collection responses containing `data`, `next_page_url`, `previous_page_url`, and `page_info`.
+  - Zero-clone slice borrowing (`items()`) and by-value ownership transfer (`into_items()`).
+  - HATEOAS navigation query helpers (`has_next_page()`, `next_url()`, `has_previous_page()`, `previous_url()`).
 - **Strongly Typed Domain Entities**:
   - Full serde JSON serialization and deserialization for core Stripe resources: `PaymentIntent`, `PaymentIntentStatus`, `CaptureMethod`, `PaymentMethodOptions`, `CheckoutSession`, `Account`, `Invoice`, `Dispute`, `Refund`, `Balance`, `BalanceTransaction`, `Event`, and `EventData`.
   - Strongly typed status and lifecycle enums: `PaymentIntentStatus`, `CaptureMethod`, `DisputeStatus`, `RefundReason`.

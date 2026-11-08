@@ -4,8 +4,85 @@
 //! V2 thin events deliver lightweight notifications containing event metadata and
 //! references to related domain objects, requiring consumers to hydrate the full resource.
 
-use serde::Deserialize;
-pub use some_stripe_types::{V2RelatedObject, V2ThinEvent};
+use serde::{Deserialize, Serialize};
+
+/// Lightweight envelope for Stripe API v2 thin events.
+///
+/// Unlike API v1 events that embed full snapshots under a `data.object` wrapper,
+/// v2 thin events contain metadata and a [`V2RelatedObject`] reference pointing to
+/// the resource identifier and hydration URL.
+///
+/// # Example
+///
+/// ```
+/// use some_stripe_webhooks::v2_events::V2ThinEvent;
+///
+/// let json = r#"{
+///     "id": "v2_evt_abc123",
+///     "object": "v2.core.event",
+///     "type": "v1.billing.meter.error_report_triggered",
+///     "created": 1728345600,
+///     "livemode": false,
+///     "related_object": {
+///         "id": "meter_001",
+///         "type": "billing.meter",
+///         "url": "https://api.stripe.com/v2/billing/meters/meter_001"
+///     }
+/// }"#;
+///
+/// let event: V2ThinEvent = serde_json::from_str(json).unwrap();
+/// assert_eq!(event.id, "v2_evt_abc123");
+/// assert_eq!(event.event_type, "v1.billing.meter.error_report_triggered");
+/// assert_eq!(event.related_object_id(), Some("meter_001"));
+/// ```
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct V2ThinEvent {
+    /// Unique identifier for the v2 event (`v2_evt_...`).
+    pub id: String,
+
+    /// Object type descriptor, typically `"v2.core.event"`.
+    pub object: String,
+
+    /// Event type identifier (e.g., `"v1.billing.meter.error_report_triggered"`).
+    #[serde(rename = "type")]
+    pub event_type: String,
+
+    /// Time at which the event occurred (UNIX epoch seconds).
+    pub created: i64,
+
+    /// Whether this event was generated in live mode (`true`) or test mode (`false`).
+    pub livemode: bool,
+
+    /// Reference to the underlying Stripe resource associated with this event.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub related_object: Option<V2RelatedObject>,
+
+    /// Optional event context or operational reason provided by Stripe API v2.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub context: Option<String>,
+}
+
+impl V2ThinEvent {
+    /// Returns the ID of the related object, if present.
+    pub fn related_object_id(&self) -> Option<&str> {
+        self.related_object.as_ref().map(|ro| ro.id.as_str())
+    }
+
+    /// Returns the type identifier of the related object, if present.
+    pub fn related_object_type(&self) -> Option<&str> {
+        self.related_object.as_ref().map(|ro| ro.r#type.as_str())
+    }
+
+    /// Returns the hydration URL for the related object, if present.
+    pub fn related_object_url(&self) -> Option<&str> {
+        self.related_object
+            .as_ref()
+            .and_then(|ro| ro.url.as_deref())
+    }
+}
+
+/// Reference metadata pointing to a domain resource in a [`V2ThinEvent`].
+pub use some_stripe_types::v2_events::V2RelatedObject;
 
 /// Lightweight probe struct to detect Stripe API v2 thin events without full DOM allocation.
 ///
@@ -85,7 +162,8 @@ mod tests {
             .as_ref()
             .expect("related_object must be present");
         assert_eq!(related.id, "meter_abc");
-        assert_eq!(related.object_type, "billing.meter");
+        assert_eq!(related.r#type, "billing.meter");
+        assert_eq!(related.object_type(), "billing.meter");
         assert_eq!(
             related.url.as_deref(),
             Some("https://api.stripe.com/v2/billing/meters/meter_abc")

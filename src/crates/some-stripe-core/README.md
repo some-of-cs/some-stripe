@@ -28,6 +28,12 @@ Microkernel Core Runtime, Dual-Protocol Serialization & Thread-Safe Concurrency 
   - **3-State `Nullable<T>`**: Distinguishes between `Value(T)`, `Null` (clears remote fields via `field=""` in v1 form-encoded or `"field": null` in v2 JSON), and `Omit` (skipped on wire).
   - **Zero-Indexed Bracket Notation**: Strictly encodes nested object arrays as `items[0][id]=...&items[1][id]=...`, preventing Stripe backend index confusion.
   - **RFC 3986 Percent-Encoding**: Strict character escape set (`%5B`, `%5D`, `%20`) with bounded stack recursion (max depth 16) to prevent denial of service.
+- **URL-Driven Stripe API v2 Pagination Engine (`V2Paginator<T>` / `V2List<T>`)**:
+  - HATEOAS-driven navigation consuming `next_page_url` without manual query cursor construction.
+  - Zero-clone streaming iteration via [`VecDeque<T>`] buffer moves.
+  - SSRF-isolated URL resolution preserving configured `api_base` host and scheme.
+  - Cyclic URL loop detection intercepting infinite pagination loops.
+  - Seamless stream pattern matching stripe-node `auto_paging_each()`.
 - **Zero-Clone Async Pagination Stream Engine (`Paginator<T>`)**:
   - Consumes items via `VecDeque<T>` move semantics without requiring `T: Clone`.
   - Supports cursor resumption via `with_starting_after`.
@@ -133,6 +139,29 @@ let paginator: Paginator<'_, Customer> = Paginator::new(
     25,
     |c: &Customer| &c.id,
 ).with_starting_after("cus_checkpoint_xyz");
+
+assert_eq!(paginator.pages_fetched(), 0);
+```
+
+---
+
+## URL-Driven API V2 Pagination Example
+
+```rust
+use some_stripe_core::{StripeClient, SecretKey};
+use some_stripe_core::v2_pagination::{V2List, V2PageInfo, V2Paginator};
+
+#[derive(serde::Deserialize)]
+struct V2Event {
+    id: String,
+    r#type: String,
+}
+
+let client = StripeClient::new(SecretKey::new("sk_test_123"));
+
+// Create paginator targeting an API v2 collection endpoint:
+let paginator: V2Paginator<'_, V2Event> = V2Paginator::new(&client, "/v2/core/events")
+    .auto_paging_each();
 
 assert_eq!(paginator.pages_fetched(), 0);
 ```
