@@ -3,6 +3,7 @@
 pub mod builder;
 pub mod crud;
 pub mod idempotency;
+pub mod meter_serializer;
 pub mod nullable;
 pub mod pagination;
 pub mod serializer;
@@ -15,6 +16,7 @@ pub use crud::{
     try_resource_sub_url, try_resource_url_with_id, validate_and_encode_id,
 };
 pub use idempotency::IdempotencyKeyManager;
+pub use meter_serializer::{ESTIMATED_EVENT_BYTES, MeterBatchSerializer};
 pub use nullable::Nullable;
 pub use pagination::{CursorLoopDetector, ListParams, ListResponse, Paginator};
 pub use serializer::{

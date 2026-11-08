@@ -139,6 +139,14 @@ pub mod treasury_transfer;
 pub use treasury_transfer::*;
 pub mod terminal;
 pub use terminal::*;
+pub mod billing_meters;
+pub use billing_meters::*;
+pub mod meter_session;
+pub use meter_session::*;
+pub mod meter_stream;
+pub use meter_stream::*;
+pub mod meter_adjustments;
+pub use meter_adjustments::*;
 pub mod v2_account;
 pub use v2_account::*;
 pub mod v2_destination;
@@ -152,6 +160,12 @@ pub mod v2 {
         pub use crate::v2_destination::*;
         pub use crate::v2_events::*;
         pub use crate::v2_list::*;
+    }
+    pub mod billing {
+        pub use crate::billing_meters::*;
+        pub use crate::meter_adjustments::*;
+        pub use crate::meter_session::*;
+        pub use crate::meter_stream::*;
     }
 }
 
@@ -884,6 +898,10 @@ pub enum EventObject {
     /// Stripe Terminal ConnectionToken payload (`object = "terminal.connection_token"`).
     #[serde(rename = "terminal.connection_token")]
     TerminalConnectionToken(ConnectionToken),
+
+    /// Stripe V2 Billing Meter payload (`object = "billing.meter"`).
+    #[serde(rename = "billing.meter")]
+    BillingMeter(V2BillingMeter),
 
     /// Stripe API v2 Core Event payload (`object = "v2.core.event"`).
     #[serde(rename = "v2.core.event")]

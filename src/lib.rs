@@ -65,6 +65,7 @@ pub use some_stripe_core::client::{
 };
 pub use some_stripe_core::error::{StripeError, StripeWebhookError};
 pub use some_stripe_core::patterns;
+pub use some_stripe_core::patterns::MeterBatchSerializer;
 pub use some_stripe_core::v2_pagination::{V2Paginator, resolve_v2_url};
 pub use some_stripe_core::validate_and_encode_id;
 pub use some_stripe_core::workflow;
@@ -83,22 +84,28 @@ pub use some_stripe_webhooks::{
 };
 
 pub mod resources;
+pub use resources::v2::{
+    CollectorStats, IngestionEngineOptions, MeterIngestionEngine, MeterStreamCollector, V2Billing,
+    V2Namespace,
+};
 pub use resources::{
     AccountLinksResource, AccountSessionsResource, AccountsResource, ApplicationFeesResource,
-    BalanceResource, BalanceTransactionsResource, BillingPortalResource, CalculationsResource,
-    CheckoutResource, CheckoutSessionExt, CreditNotesResource, CustomersResource, DisputesResource,
-    EventDestinationsResource, HydrationError, IdentityResource, InvoicesResource,
-    IssuingAuthorizationsResource, IssuingCardholdersResource, IssuingCardsResource,
-    IssuingResource, IssuingTransactionsResource, PaymentIntentsResource, PaymentLinksResource,
-    PayoutsResource, PersonsResource, QuotesResource, RedirectError, RefundsResource,
-    SessionsResource, SubscriptionItemsResource, SubscriptionSchedulesResource,
-    SubscriptionsResource, TaxRegistrationsResource, TaxResource, TaxSettingsResource,
-    TerminalConnectionTokensResource, TerminalLocationsResource, TerminalReadersResource,
-    TerminalResource, ThinEventHydrator, TransactionsResource, TransfersResource,
-    TreasuryFinancialAccountsResource, TreasuryResource, TreasuryTransfersResource,
-    V2AccountsResource, V2Core, V2EventsResource, V2Resource, VerificationReportsResource,
-    VerificationSessionsResource, WebhooksResource, credit_note_id, generate_uuid_v4,
-    is_fulfillment_ready, is_valid_uuid_v4, quote_id, tax_registration_id, validate_redirect_url,
+    BalanceResource, BalanceTransactionsResource, BillingMetersResource, BillingPortalResource,
+    CalculationsResource, CheckoutResource, CheckoutSessionExt, CreditNotesResource,
+    CustomersResource, DisputesResource, EventDestinationsResource, HydrationError,
+    IdentityResource, InvoicesResource, IssuingAuthorizationsResource, IssuingCardholdersResource,
+    IssuingCardsResource, IssuingResource, IssuingTransactionsResource,
+    MeterEventAdjustmentsResource, MeterEventSessionResource, MeterEventStreamResource,
+    MeterEventsResource, PaymentIntentsResource, PaymentLinksResource, PayoutsResource,
+    PersonsResource, QuotesResource, RedirectError, RefundsResource, SessionsResource,
+    SubscriptionItemsResource, SubscriptionSchedulesResource, SubscriptionsResource,
+    TaxRegistrationsResource, TaxResource, TaxSettingsResource, TerminalConnectionTokensResource,
+    TerminalLocationsResource, TerminalReadersResource, TerminalResource, ThinEventHydrator,
+    TransactionsResource, TransfersResource, TreasuryFinancialAccountsResource, TreasuryResource,
+    TreasuryTransfersResource, V2AccountsResource, V2BillingResource, V2Core, V2EventsResource,
+    V2Resource, VerificationReportsResource, VerificationSessionsResource, WebhooksResource,
+    credit_note_id, generate_uuid_v4, is_fulfillment_ready, is_valid_uuid_v4, quote_id,
+    tax_registration_id, validate_redirect_url,
 };
 
 /// Stripe API v2 namespace and sub-resources.
@@ -112,7 +119,17 @@ pub mod v2 {
         pub use some_stripe_webhooks::v2_events::V2ThinEvent;
         pub use some_stripe_webhooks::v2_events::V2ThinEvent as EventNotification;
     }
+    pub mod billing {
+        pub use crate::resources::v2::{
+            BillingMetersResource, CollectorStats, IngestionEngineOptions,
+            MeterEventAdjustmentsResource, MeterEventSessionResource, MeterEventStreamResource,
+            MeterEventsResource, MeterIngestionEngine, MeterStreamCollector, V2Billing,
+            V2BillingResource,
+        };
+    }
+    pub use crate::resources::v2::V2Namespace;
     pub use crate::resources::v2_core::V2Resource;
+    pub use billing::*;
     pub use core::*;
 }
 
@@ -317,6 +334,31 @@ impl StripeClient {
         TerminalResource::new(&self.0)
     }
 
+    /// Access the V2 Billing Meters resource namespace (`stripe.v2.billing.meters`).
+    pub fn billing_meters(&self) -> BillingMetersResource<'_> {
+        BillingMetersResource::new(&self.0)
+    }
+
+    /// Access the Meter Event Sessions resource namespace (`POST /v2/billing/meter_event_session`).
+    pub fn meter_event_sessions(&self) -> MeterEventSessionResource<'_> {
+        MeterEventSessionResource::new(&self.0)
+    }
+
+    /// Access the V2 Meter Event Stream resource (`stripe.meter_event_stream`).
+    pub fn meter_event_stream(&self) -> MeterEventStreamResource<'_> {
+        MeterEventStreamResource::new(&self.0)
+    }
+
+    /// Access the V2 Meter Events resource (`stripe.meter_events`).
+    pub fn meter_events(&self) -> MeterEventsResource<'_> {
+        MeterEventsResource::new(&self.0)
+    }
+
+    /// Access the Meter Event Adjustments resource namespace (`stripe.meter_event_adjustments`).
+    pub fn meter_event_adjustments(&self) -> MeterEventAdjustmentsResource<'_> {
+        MeterEventAdjustmentsResource::new(&self.0)
+    }
+
     /// Access the Stripe API v2 Core Accounts resource (`stripe.v2_accounts`).
     pub fn v2_accounts(&self) -> V2AccountsResource<'_> {
         V2AccountsResource::new(&self.0)
@@ -335,6 +377,11 @@ impl StripeClient {
     /// Access the API v2 resource namespace (`stripe.v2`).
     pub fn v2(&self) -> V2Resource<'_> {
         V2Resource::new(&self.0)
+    }
+
+    /// Access the Stripe API V2 Billing resource namespace (`stripe.v2_billing`).
+    pub fn v2_billing(&self) -> V2Billing<'_> {
+        V2Billing::new(&self.0)
     }
 
     /// Access the API v2 Core namespace directly (`stripe.v2_core()`).
@@ -443,8 +490,20 @@ pub trait StripeClientExt {
     /// Access the Tax Transactions resource namespace (`stripe.tax_transactions`).
     fn tax_transactions(&self) -> TransactionsResource<'_>;
 
+    /// Access the V2 Meter Event Stream resource (`stripe.meter_event_stream`).
+    fn meter_event_stream(&self) -> MeterEventStreamResource<'_>;
+
+    /// Access the Meter Event Adjustments resource namespace (`stripe.meter_event_adjustments`).
+    fn meter_event_adjustments(&self) -> MeterEventAdjustmentsResource<'_>;
+
     /// Access the Stripe API v2 Core Accounts resource (`stripe.v2_accounts`).
     fn v2_accounts(&self) -> V2AccountsResource<'_>;
+
+    /// Access the Stripe API V2 namespace (`stripe.v2`).
+    fn v2(&self) -> V2Resource<'_>;
+
+    /// Access the Stripe API V2 Billing resource namespace (`stripe.v2_billing`).
+    fn v2_billing(&self) -> V2Billing<'_>;
 }
 
 impl StripeClientExt for some_stripe_core::StripeClient {
@@ -516,8 +575,24 @@ impl StripeClientExt for some_stripe_core::StripeClient {
         TransactionsResource::new(self)
     }
 
+    fn meter_event_stream(&self) -> MeterEventStreamResource<'_> {
+        MeterEventStreamResource::new(self)
+    }
+
+    fn meter_event_adjustments(&self) -> MeterEventAdjustmentsResource<'_> {
+        MeterEventAdjustmentsResource::new(self)
+    }
+
     fn v2_accounts(&self) -> V2AccountsResource<'_> {
         V2AccountsResource::new(self)
+    }
+
+    fn v2(&self) -> V2Resource<'_> {
+        V2Resource::new(self)
+    }
+
+    fn v2_billing(&self) -> V2Billing<'_> {
+        V2Billing::new(self)
     }
 }
 

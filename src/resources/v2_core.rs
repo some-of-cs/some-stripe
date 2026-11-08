@@ -16,31 +16,7 @@ use super::v2_destinations::EventDestinationsResource;
 use super::v2_events::V2EventsResource;
 use super::v2_hydration::{HydrationError, ThinEventHydrator};
 
-/// Top-level facade resource for Stripe API v2 operations (`stripe.v2()`).
-#[derive(Clone, Copy)]
-pub struct V2Resource<'a> {
-    client: &'a StripeClient,
-}
-
-impl<'a> V2Resource<'a> {
-    /// Creates a new `V2Resource` bound to the provided [`StripeClient`].
-    #[must_use]
-    pub const fn new(client: &'a StripeClient) -> Self {
-        Self { client }
-    }
-
-    /// Access reference to the underlying [`StripeClient`].
-    #[must_use]
-    pub const fn client(&self) -> &'a StripeClient {
-        self.client
-    }
-
-    /// Access the API v2 Core namespace (`stripe.v2().core()`).
-    #[must_use]
-    pub const fn core(&self) -> V2Core<'a> {
-        V2Core::new(self.client)
-    }
-}
+pub use super::v2::V2Resource;
 
 /// Facade resource for Stripe API v2 Core operations (`stripe.v2().core()` or `stripe.v2_core()`).
 ///

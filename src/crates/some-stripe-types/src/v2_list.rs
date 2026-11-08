@@ -198,7 +198,7 @@ impl<T> V2List<T> {
     /// ```rust
     /// use some_stripe_types::V2List;
     ///
-    /// let mut list = V2List::empty();
+    /// let mut list: V2List<i32> = V2List::empty();
     /// assert!(!list.has_next_page());
     ///
     /// list.next_page_url = Some("/v2/core/events?page=2".into());
@@ -221,7 +221,7 @@ impl<T> V2List<T> {
     /// ```rust
     /// use some_stripe_types::V2List;
     ///
-    /// let mut list = V2List::empty();
+    /// let mut list: V2List<i32> = V2List::empty();
     /// list.next_page_url = Some("/v2/core/events?page=2".into());
     /// assert_eq!(list.next_url(), Some("/v2/core/events?page=2"));
     /// ```
@@ -238,7 +238,7 @@ impl<T> V2List<T> {
     /// ```rust
     /// use some_stripe_types::V2List;
     ///
-    /// let mut list = V2List::empty();
+    /// let mut list: V2List<i32> = V2List::empty();
     /// assert!(!list.has_previous_page());
     ///
     /// list.previous_page_url = Some("/v2/core/events?page=1".into());
@@ -258,7 +258,7 @@ impl<T> V2List<T> {
     /// ```rust
     /// use some_stripe_types::V2List;
     ///
-    /// let mut list = V2List::empty();
+    /// let mut list: V2List<i32> = V2List::empty();
     /// list.previous_page_url = Some("/v2/core/events?page=1".into());
     /// assert_eq!(list.previous_url(), Some("/v2/core/events?page=1"));
     /// ```
@@ -336,7 +336,7 @@ impl<T> V2List<T> {
     /// ```rust
     /// use some_stripe_types::{V2List, V2PageInfo};
     ///
-    /// let mut list = V2List::empty();
+    /// let mut list: V2List<i32> = V2List::empty();
     /// assert_eq!(list.total_count(), None);
     ///
     /// list.page_info = Some(V2PageInfo::new(Some(100), Some(true)));

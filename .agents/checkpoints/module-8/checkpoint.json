@@ -69,10 +69,11 @@
     "us-8.2.0": {
       "title": "High-Throughput Usage Meter Ingestion & Event Stream Billing",
       "leader_role": "US-8.2.0 Story Leader",
-      "leader_profile": "agent-a",
+      "leader_profile": "agent-b",
       "branch": "feat/us-8.2.0-v2-high-throughput-meter-billing",
       "worktree": "/workspaces/some-stripe/.worktrees/feat-us-820-v2-high-throughput-meter-billing",
-      "status": "in_progress",
+      "status": "in_review",
+      "pr": 135,
       "units": {
         "unit-1": {
           "title": "Meter Event Sessions & Token Lifecycles",
@@ -93,7 +94,7 @@
         },
         "unit-3": {
           "title": "Meter Event Adjustments & Cancelations",
-          "status": "in_review",
+          "status": "merged",
           "pr": 129,
           "branch": "feat/us-8.2.0/unit-3-meter-adjustments-resource",
           "worktree": "/workspaces/some-stripe/.worktrees/feat-us-8.2.0-unit-3-meter-adjustments-resource",
@@ -101,7 +102,7 @@
         },
         "unit-4": {
           "title": "V2 Billing Meters Management",
-          "status": "in_review",
+          "status": "merged",
           "pr": 131,
           "branch": "feat/us-8.2.0/unit-4-billing-meters-resource",
           "worktree": "/workspaces/some-stripe/.worktrees/feat-us-8.2.0-unit-4-billing-meters-resource",
@@ -109,7 +110,8 @@
         },
         "unit-5": {
           "title": "V2 Billing Facade & Ingestion Engine",
-          "status": "in_progress",
+          "status": "merged",
+          "pr": 134,
           "branch": "feat/us-8.2.0/unit-5-v2-billing-facade-engine",
           "worktree": "/workspaces/some-stripe/.worktrees/feat-us-8.2.0-unit-5-v2-billing-facade-engine",
           "profile": "agent-a"
