@@ -386,10 +386,10 @@ impl CreateV2AccountParams {
                 return Err("contact_email must be a valid non-empty email address");
             }
         }
-        if let Some(name) = &self.display_name {
-            if name.trim().is_empty() {
-                return Err("display_name cannot be empty or whitespace");
-            }
+        if let Some(name) = &self.display_name
+            && name.trim().is_empty()
+        {
+            return Err("display_name cannot be empty or whitespace");
         }
         Ok(())
     }
@@ -468,10 +468,10 @@ impl UpdateV2AccountParams {
                 return Err("contact_email must be a valid non-empty email address");
             }
         }
-        if let Some(name) = &self.display_name {
-            if name.trim().is_empty() {
-                return Err("display_name cannot be empty or whitespace");
-            }
+        if let Some(name) = &self.display_name
+            && name.trim().is_empty()
+        {
+            return Err("display_name cannot be empty or whitespace");
         }
         Ok(())
     }

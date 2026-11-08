@@ -150,6 +150,7 @@ pub mod v2 {
     pub mod core {
         pub use crate::v2_account::*;
         pub use crate::v2_destination::*;
+        pub use crate::v2_events::*;
         pub use crate::v2_list::*;
     }
 }
@@ -883,6 +884,10 @@ pub enum EventObject {
     /// Stripe Terminal ConnectionToken payload (`object = "terminal.connection_token"`).
     #[serde(rename = "terminal.connection_token")]
     TerminalConnectionToken(ConnectionToken),
+
+    /// Stripe API v2 Core Event payload (`object = "v2.core.event"`).
+    #[serde(rename = "v2.core.event")]
+    V2Event(V2Event),
 
     /// Stripe V2 Core Account payload (`object = "v2.core.account"`).
     #[serde(rename = "v2.core.account")]

@@ -532,6 +532,7 @@ impl CreateEventDestinationParams {
             amazon_eventbridge: Some(AmazonEventBridgeDetails::new(aws_account_id, aws_region)),
             azure_event_grid: None,
             webhook_endpoint: None,
+            cloudwatch: None,
             name: None,
             description: None,
             event_payload: None,
@@ -558,6 +559,7 @@ impl CreateEventDestinationParams {
                 azure_event_grid_topic_name,
             )),
             webhook_endpoint: None,
+            cloudwatch: None,
             name: None,
             description: None,
             event_payload: None,
@@ -820,10 +822,10 @@ impl UpdateEventDestinationParams {
 
     /// Validates the updated parameter payload.
     pub fn validate(&self) -> Result<(), EventDestinationValidationError> {
-        if let Some(events) = &self.events {
-            if events.is_empty() {
-                return Err(EventDestinationValidationError::EmptyEvents);
-            }
+        if let Some(events) = &self.events
+            && events.is_empty()
+        {
+            return Err(EventDestinationValidationError::EmptyEvents);
         }
         if let Some(eb) = &self.amazon_eventbridge {
             if !is_valid_aws_account_id(&eb.aws_account_id) {
@@ -837,12 +839,12 @@ impl UpdateEventDestinationParams {
                 ));
             }
         }
-        if let Some(wh) = &self.webhook_endpoint {
-            if !is_valid_webhook_url(&wh.url) {
-                return Err(EventDestinationValidationError::InvalidWebhookUrl(
-                    wh.url.clone(),
-                ));
-            }
+        if let Some(wh) = &self.webhook_endpoint
+            && !is_valid_webhook_url(&wh.url)
+        {
+            return Err(EventDestinationValidationError::InvalidWebhookUrl(
+                wh.url.clone(),
+            ));
         }
         if let Some(cw) = &self.cloudwatch {
             if !is_valid_aws_account_id(&cw.aws_account_id) {
@@ -856,16 +858,15 @@ impl UpdateEventDestinationParams {
                 ));
             }
         }
-        if let Some(az) = &self.azure_event_grid {
-            if !is_valid_azure_detail(&az.azure_tenant_id)
+        if let Some(az) = &self.azure_event_grid
+            && (!is_valid_azure_detail(&az.azure_tenant_id)
                 || !is_valid_azure_detail(&az.azure_subscription_id)
                 || !is_valid_azure_detail(&az.azure_resource_group)
-                || !is_valid_azure_detail(&az.azure_event_grid_topic_name)
-            {
-                return Err(EventDestinationValidationError::InvalidAzureDetails(
-                    "Azure Event Grid fields must be non-empty strings".to_string(),
-                ));
-            }
+                || !is_valid_azure_detail(&az.azure_event_grid_topic_name))
+        {
+            return Err(EventDestinationValidationError::InvalidAzureDetails(
+                "Azure Event Grid fields must be non-empty strings".to_string(),
+            ));
         }
         Ok(())
     }
