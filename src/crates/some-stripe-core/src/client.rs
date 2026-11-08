@@ -108,12 +108,20 @@ pub struct RequestOptions {
     pub stripe_version: Option<String>,
     /// Per-request execution timeout override.
     pub timeout: Option<Duration>,
+    /// Ephemeral bearer token override (e.g. for Meter Event Sessions: `Authorization: Bearer <token>`).
+    pub bearer_token: Option<String>,
 }
 
 impl RequestOptions {
     /// Creates empty, default [`RequestOptions`].
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Attaches an ephemeral bearer token override for authentication.
+    pub fn bearer_token(mut self, token: impl Into<String>) -> Self {
+        self.bearer_token = Some(token.into());
+        self
     }
 
     /// Attaches a `Stripe-Account` connected account header for Connect multi-tenancy.
@@ -376,6 +384,7 @@ impl StripeClient {
         mut request: reqwest::RequestBuilder,
         options: Option<&RequestOptions>,
     ) -> Result<reqwest::Request, StripeError> {
+        let mut bearer = None;
         if let Some(opts) = options {
             if let Some(acct) = &opts.stripe_account {
                 request = request.header("Stripe-Account", acct);
@@ -389,9 +398,16 @@ impl StripeClient {
             if let Some(to) = opts.timeout {
                 request = request.timeout(to);
             }
+            if let Some(tok) = &opts.bearer_token {
+                bearer = Some(tok.as_str());
+            }
         }
 
-        request = request.basic_auth(self.config.secret_key.expose_secret(), None::<&str>);
+        if let Some(tok) = bearer {
+            request = request.bearer_auth(tok);
+        } else {
+            request = request.basic_auth(self.config.secret_key.expose_secret(), None::<&str>);
+        }
         request.build().map_err(StripeError::Http)
     }
 

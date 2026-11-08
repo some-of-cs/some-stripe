@@ -1,0 +1,123 @@
+{
+  "module_id": "module-8",
+  "module_title": "API V2 Next-Gen Services",
+  "module_branch": "feat/module-8-v2-next-gen-services",
+  "module_worktree": "/workspaces/some-stripe/.worktrees/feat-module-8-v2-next-gen-services",
+  "status": "in_review",
+  "current_stage": "module_pr_review_and_promotion",
+  "last_updated": "2026-11-08T08:39:00Z",
+  "lead_role": "Module 8 Lead Architect",
+  "lead_profile": "agent-a",
+  "stories": {
+    "us-8.1.0": {
+      "title": "Stripe API V2 Core, Event Destinations & Thin Event Hydration",
+      "leader_role": "US-8.1.0 Story Leader",
+      "leader_profile": "agent-b",
+      "branch": "feat/us-8.1.0-v2-core-events-and-thin-hydration",
+      "worktree": "/workspaces/some-stripe/.worktrees/feat-us-810-v2-core-events-and-thin-hydration",
+      "status": "merged",
+      "pr": 133,
+      "merge_commit": "969f25fc60383b59123026aceadced70e270a53a",
+      "units": {
+        "unit-1": {
+          "title": "V2 Core Events & Thin Event Notifications",
+          "status": "merged",
+          "pr": 124,
+          "commit": "5b97eb46d2268d11223fbc590515ece225aa6686",
+          "branch": "feat/us-8.1.0/unit-1-v2-events-resource",
+          "worktree": "/workspaces/some-stripe/.worktrees/feat-us-8.1.0-unit-1-v2-events-resource",
+          "profile": "agent-a"
+        },
+        "unit-2": {
+          "title": "V2 Event Destinations",
+          "status": "merged",
+          "pr": 125,
+          "commit": "e546b6b101b6d4d94fa47dc9c804a031a3f8a503",
+          "branch": "feat/us-8.1.0/unit-2-v2-event-destinations-resource",
+          "worktree": "/workspaces/some-stripe/.worktrees/feat-us-8.1.0-unit-2-v2-event-destinations-resource",
+          "profile": "agent-a"
+        },
+        "unit-3": {
+          "title": "V2 Core Accounts & Access Tokens",
+          "status": "merged",
+          "pr": 126,
+          "commit": "e26b2e0f8ce2ce3b5445f69faf7ccfdbac65e9d5",
+          "branch": "feat/us-8.1.0/unit-3-v2-accounts-resource",
+          "worktree": "/workspaces/some-stripe/.worktrees/feat-us-8.1.0-unit-3-v2-accounts-resource",
+          "profile": "agent-b"
+        },
+        "unit-4": {
+          "title": "URL-Driven V2List Pagination Engine",
+          "status": "merged",
+          "pr": 128,
+          "commit": "b86a701da0427d73ee765e6ff9885bbc98e8b8c2",
+          "branch": "feat/us-8.1.0/unit-4-v2-pagination-engine",
+          "worktree": "/workspaces/some-stripe/.worktrees/feat-us-8.1.0-unit-4-v2-pagination-engine",
+          "profile": "agent-b"
+        },
+        "unit-5": {
+          "title": "V2 Core Facade & Thin Hydrator",
+          "status": "merged",
+          "pr": 132,
+          "commit": "e8e37fc",
+          "branch": "feat/us-8.1.0/unit-5-v2-core-facade-hydrator",
+          "worktree": "/workspaces/some-stripe/.worktrees/feat-us-8.1.0-unit-5-v2-core-facade-hydrator",
+          "profile": "agent-b"
+        }
+      }
+    },
+    "us-8.2.0": {
+      "title": "High-Throughput Usage Meter Ingestion & Event Stream Billing",
+      "leader_role": "US-8.2.0 Story Leader",
+      "leader_profile": "agent-b",
+      "branch": "feat/us-8.2.0-v2-high-throughput-meter-billing",
+      "worktree": "/workspaces/some-stripe/.worktrees/feat-us-820-v2-high-throughput-meter-billing",
+      "status": "merged",
+      "pr": 135,
+      "merge_commit": "6d010805305ec2a2bc3e078ab4fbde28dc1365b3",
+      "units": {
+        "unit-1": {
+          "title": "Meter Event Sessions & Token Lifecycles",
+          "status": "merged",
+          "merge_commit": "bd13a7d",
+          "pr": 127,
+          "branch": "feat/us-8.2.0/unit-1-meter-session-resource",
+          "worktree": "/workspaces/some-stripe/.worktrees/feat-us-8.2.0-unit-1-meter-session-resource",
+          "profile": "agent-a"
+        },
+        "unit-2": {
+          "title": "Batch Meter Event Streams & Serializer",
+          "status": "merged",
+          "pr": 130,
+          "branch": "feat/us-8.2.0/unit-2-meter-stream-resource",
+          "worktree": "/workspaces/some-stripe/.worktrees/feat-us-8.2.0-unit-2-meter-stream-resource",
+          "profile": "agent-b"
+        },
+        "unit-3": {
+          "title": "Meter Event Adjustments & Cancelations",
+          "status": "merged",
+          "pr": 129,
+          "branch": "feat/us-8.2.0/unit-3-meter-adjustments-resource",
+          "worktree": "/workspaces/some-stripe/.worktrees/feat-us-8.2.0-unit-3-meter-adjustments-resource",
+          "profile": "agent-a"
+        },
+        "unit-4": {
+          "title": "V2 Billing Meters Management",
+          "status": "merged",
+          "pr": 131,
+          "branch": "feat/us-8.2.0/unit-4-billing-meters-resource",
+          "worktree": "/workspaces/some-stripe/.worktrees/feat-us-8.2.0-unit-4-billing-meters-resource",
+          "profile": "agent-b"
+        },
+        "unit-5": {
+          "title": "V2 Billing Facade & Ingestion Engine",
+          "status": "merged",
+          "pr": 134,
+          "branch": "feat/us-8.2.0/unit-5-v2-billing-facade-engine",
+          "worktree": "/workspaces/some-stripe/.worktrees/feat-us-8.2.0-unit-5-v2-billing-facade-engine",
+          "profile": "agent-a"
+        }
+      }
+    }
+  }
+}

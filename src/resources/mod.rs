@@ -36,6 +36,16 @@ pub mod transfers;
 pub mod treasury;
 pub mod treasury_financial_accounts;
 pub mod treasury_transfers;
+pub mod v2;
+pub mod v2_accounts;
+pub mod v2_billing_meters;
+pub mod v2_core;
+pub mod v2_destinations;
+pub mod v2_events;
+pub mod v2_hydration;
+pub mod v2_meter_event_session;
+pub mod v2_meter_event_stream;
+pub mod v2_meter_events;
 pub mod webhooks;
 
 pub use account_links::AccountLinksResource;
@@ -83,6 +93,16 @@ pub use treasury_transfers::{
     OutboundPaymentsResource, OutboundTransfersResource, ReceivedCreditsResource,
     TreasuryTransfersResource,
 };
+pub use v2::{
+    BillingMetersResource, CollectorStats, IngestionEngineOptions, MeterEventAdjustmentsResource,
+    MeterEventSessionResource, MeterEventStreamResource, MeterEventsResource, MeterIngestionEngine,
+    MeterStreamCollector, V2Billing, V2BillingResource, V2Namespace, V2Resource,
+};
+pub use v2_accounts::V2AccountsResource;
+pub use v2_core::V2Core;
+pub use v2_destinations::EventDestinationsResource;
+pub use v2_events::V2EventsResource;
+pub use v2_hydration::{HydrationError, ThinEventHydrator};
 pub use webhooks::WebhooksResource;
 
 /// Resolves an idempotency key for state-mutating requests.
