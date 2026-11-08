@@ -87,7 +87,10 @@ pub use treasury_transfers::{
     OutboundPaymentsResource, OutboundTransfersResource, ReceivedCreditsResource,
     TreasuryTransfersResource,
 };
-pub use v2::{MeterEventSessionResource, MeterEventStreamResource, MeterEventsResource};
+pub use v2::{
+    MeterEventAdjustmentsResource, MeterEventSessionResource, MeterEventStreamResource,
+    MeterEventsResource, V2BillingResource, V2Resource,
+};
 pub use webhooks::WebhooksResource;
 
 /// Resolves an idempotency key for state-mutating requests.
