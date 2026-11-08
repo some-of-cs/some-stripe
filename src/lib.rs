@@ -65,6 +65,7 @@ pub use some_stripe_core::client::{
 };
 pub use some_stripe_core::error::{StripeError, StripeWebhookError};
 pub use some_stripe_core::patterns;
+pub use some_stripe_core::patterns::MeterBatchSerializer;
 pub use some_stripe_core::validate_and_encode_id;
 pub use some_stripe_core::workflow;
 pub use some_stripe_core::workflow::{

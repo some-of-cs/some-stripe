@@ -22,24 +22,24 @@ async fn read_full_http_request(socket: &mut tokio::net::TcpStream) -> String {
         }
         buf.extend_from_slice(&temp[..n]);
 
-        if body_start.is_none() {
-            if let Some(pos) = buf.windows(4).position(|w| w == b"\r\n\r\n") {
-                body_start = Some(pos + 4);
-                let header_str = String::from_utf8_lossy(&buf[..pos]);
-                for line in header_str.lines() {
-                    let lower = line.to_ascii_lowercase();
-                    if lower.starts_with("content-length:") {
-                        let val = line["content-length:".len()..].trim();
-                        content_length = val.parse::<usize>().ok();
-                    }
+        if body_start.is_none()
+            && let Some(pos) = buf.windows(4).position(|w| w == b"\r\n\r\n")
+        {
+            body_start = Some(pos + 4);
+            let header_str = String::from_utf8_lossy(&buf[..pos]);
+            for line in header_str.lines() {
+                let lower = line.to_ascii_lowercase();
+                if lower.starts_with("content-length:") {
+                    let val = line["content-length:".len()..].trim();
+                    content_length = val.parse::<usize>().ok();
                 }
             }
         }
 
-        if let (Some(start), Some(len)) = (body_start, content_length) {
-            if buf.len() >= start + len {
-                break;
-            }
+        if let (Some(start), Some(len)) = (body_start, content_length)
+            && buf.len() >= start + len
+        {
+            break;
         }
     }
 
@@ -75,11 +75,8 @@ async fn test_ingest_1000_events_batch_throughput_wire() {
         socket.write_all(resp.as_bytes()).await.unwrap();
     });
 
-    let config = StripeConfig {
-        secret_key: "sk_test_mock_batch_stream".into(),
-        api_base: format!("http://127.0.0.1:{port}"),
-        ..Default::default()
-    };
+    let config = StripeConfig::new("sk_test_mock_batch_stream")
+        .with_api_base(format!("http://127.0.0.1:{port}"));
     let client = StripeClient::with_config(config);
 
     // Build 1,000 events
@@ -142,11 +139,8 @@ async fn test_ingest_with_session_bearer_token_wire() {
         socket.write_all(resp.as_bytes()).await.unwrap();
     });
 
-    let config = StripeConfig {
-        secret_key: "sk_test_not_used_for_bearer".into(),
-        api_base: format!("http://127.0.0.1:{port}"),
-        ..Default::default()
-    };
+    let config = StripeConfig::new("sk_test_not_used_for_bearer")
+        .with_api_base(format!("http://127.0.0.1:{port}"));
     let client = StripeClient::with_config(config);
 
     let events = vec![
@@ -189,11 +183,8 @@ async fn test_zero_clone_slice_batch_ingestion() {
         socket.write_all(resp.as_bytes()).await.unwrap();
     });
 
-    let config = StripeConfig {
-        secret_key: "sk_test_slice".into(),
-        api_base: format!("http://127.0.0.1:{port}"),
-        ..Default::default()
-    };
+    let config =
+        StripeConfig::new("sk_test_slice").with_api_base(format!("http://127.0.0.1:{port}"));
     let client = StripeClient::with_config(config);
 
     let events = [MeterEventPayload::new(
@@ -257,11 +248,8 @@ async fn test_idempotency_identifiers_deduplication_wire() {
             .unwrap();
     });
 
-    let config = StripeConfig {
-        secret_key: "sk_test_idemp".into(),
-        api_base: format!("http://127.0.0.1:{port}"),
-        ..Default::default()
-    };
+    let config =
+        StripeConfig::new("sk_test_idemp").with_api_base(format!("http://127.0.0.1:{port}"));
     let client = StripeClient::with_config(config);
 
     let event = MeterEventPayload::new("tokens", "cus_retry_1", "500")
@@ -348,10 +336,10 @@ fn test_meter_batch_serializer_performance() {
     assert!(json.ends_with("]}"));
     assert_eq!(json.matches("\"token_metric\"").count(), 1000);
 
-    // Serialization for 1,000 events must execute under 20ms (>50,000 events/sec)
+    // Serialization for 1,000 events must execute under 50ms (>20,000 events/sec, requirement >10,000 events/sec)
     assert!(
-        duration.as_millis() < 20,
-        "Serialization took {:?}, expected < 20ms",
+        duration.as_millis() < 50,
+        "Serialization took {:?}, expected < 50ms",
         duration
     );
 

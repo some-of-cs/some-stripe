@@ -230,10 +230,10 @@ impl MeterBatchSerializer {
     /// assert_eq!(chunks[1].len(), 100);
     /// assert_eq!(chunks[2].len(), 50);
     /// ```
-    pub fn chunk_events<'a>(
-        events: &'a [MeterEventPayload],
+    pub fn chunk_events(
+        events: &[MeterEventPayload],
         chunk_size: usize,
-    ) -> impl Iterator<Item = &'a [MeterEventPayload]> {
+    ) -> impl Iterator<Item = &[MeterEventPayload]> {
         assert!(chunk_size > 0, "chunk_size must be greater than zero");
         events.chunks(chunk_size)
     }
