@@ -37,6 +37,7 @@ pub mod treasury;
 pub mod treasury_financial_accounts;
 pub mod treasury_transfers;
 pub mod v2;
+pub mod v2_billing_meters;
 pub mod v2_meter_event_session;
 pub mod v2_meter_event_stream;
 pub mod v2_meter_events;
@@ -88,8 +89,8 @@ pub use treasury_transfers::{
     TreasuryTransfersResource,
 };
 pub use v2::{
-    MeterEventAdjustmentsResource, MeterEventSessionResource, MeterEventStreamResource,
-    MeterEventsResource, V2BillingResource, V2Resource,
+    BillingMetersResource, MeterEventAdjustmentsResource, MeterEventSessionResource,
+    MeterEventStreamResource, MeterEventsResource, V2BillingResource, V2Resource,
 };
 pub use webhooks::WebhooksResource;
 

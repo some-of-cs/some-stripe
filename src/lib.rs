@@ -85,20 +85,21 @@ pub use some_stripe_webhooks::{
 pub mod resources;
 pub use resources::{
     AccountLinksResource, AccountSessionsResource, AccountsResource, ApplicationFeesResource,
-    BalanceResource, BalanceTransactionsResource, BillingPortalResource, CalculationsResource,
-    CheckoutResource, CheckoutSessionExt, CreditNotesResource, CustomersResource, DisputesResource,
-    IdentityResource, InvoicesResource, IssuingAuthorizationsResource, IssuingCardholdersResource,
-    IssuingCardsResource, IssuingResource, IssuingTransactionsResource,
-    MeterEventAdjustmentsResource, MeterEventSessionResource, MeterEventStreamResource,
-    MeterEventsResource, PaymentIntentsResource, PaymentLinksResource, PayoutsResource,
-    PersonsResource, QuotesResource, RedirectError, RefundsResource, SessionsResource,
-    SubscriptionItemsResource, SubscriptionSchedulesResource, SubscriptionsResource,
-    TaxRegistrationsResource, TaxResource, TaxSettingsResource, TerminalConnectionTokensResource,
-    TerminalLocationsResource, TerminalReadersResource, TerminalResource, TransactionsResource,
-    TransfersResource, TreasuryFinancialAccountsResource, TreasuryResource,
-    TreasuryTransfersResource, V2BillingResource, V2Resource, VerificationReportsResource,
-    VerificationSessionsResource, WebhooksResource, credit_note_id, generate_uuid_v4,
-    is_fulfillment_ready, is_valid_uuid_v4, quote_id, tax_registration_id, validate_redirect_url,
+    BalanceResource, BalanceTransactionsResource, BillingMetersResource, BillingPortalResource,
+    CalculationsResource, CheckoutResource, CheckoutSessionExt, CreditNotesResource,
+    CustomersResource, DisputesResource, IdentityResource, InvoicesResource,
+    IssuingAuthorizationsResource, IssuingCardholdersResource, IssuingCardsResource,
+    IssuingResource, IssuingTransactionsResource, MeterEventAdjustmentsResource,
+    MeterEventSessionResource, MeterEventStreamResource, MeterEventsResource,
+    PaymentIntentsResource, PaymentLinksResource, PayoutsResource, PersonsResource, QuotesResource,
+    RedirectError, RefundsResource, SessionsResource, SubscriptionItemsResource,
+    SubscriptionSchedulesResource, SubscriptionsResource, TaxRegistrationsResource, TaxResource,
+    TaxSettingsResource, TerminalConnectionTokensResource, TerminalLocationsResource,
+    TerminalReadersResource, TerminalResource, TransactionsResource, TransfersResource,
+    TreasuryFinancialAccountsResource, TreasuryResource, TreasuryTransfersResource,
+    V2BillingResource, V2Resource, VerificationReportsResource, VerificationSessionsResource,
+    WebhooksResource, credit_note_id, generate_uuid_v4, is_fulfillment_ready, is_valid_uuid_v4,
+    quote_id, tax_registration_id, validate_redirect_url,
 };
 
 /// The main Stripe client used to interact with the Stripe API, modeled after `stripe-node`.
@@ -300,6 +301,11 @@ impl StripeClient {
     /// Access the Terminal resource namespace (`stripe.terminal`).
     pub fn terminal(&self) -> TerminalResource<'_> {
         TerminalResource::new(&self.0)
+    }
+
+    /// Access the V2 Billing Meters resource namespace (`stripe.v2.billing.meters`).
+    pub fn billing_meters(&self) -> BillingMetersResource<'_> {
+        BillingMetersResource::new(&self.0)
     }
 
     /// Access the Meter Event Sessions resource namespace (`POST /v2/billing/meter_event_session`).
