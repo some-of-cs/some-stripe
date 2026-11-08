@@ -10,10 +10,10 @@
 //! - Gate G2: Token secret zeroization on drop and `[REDACTED]` debug masking.
 
 use some_stripe::{
-    AggregationFormula, CancelAdjustment, CreateBillingMeterParams,
-    CreateMeterEventAdjustmentParams, CreateMeterEventStreamParams, CustomerMappingSettings,
-    MeterEventPayload, MeterEventSession, MeterEventSessionStatus, MeterIngestionEngine,
-    MeterPayload, MeterStatus, StripeClient, StripeConfig, ValueSettings,
+    AdjustmentReason, AggregationFormula, CancelAdjustment, CreateBillingMeterParams,
+    CreateMeterEventAdjustmentParams, CreateMeterEventSessionParams, CreateMeterEventStreamParams,
+    CustomerMappingSettings, MeterEventPayload, MeterEventSession, MeterEventSessionStatus,
+    MeterIngestionEngine, MeterPayload, MeterStatus, StripeClient, StripeConfig, ValueSettings,
     validate_statutory_meter_event_accuracy,
 };
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -75,17 +75,7 @@ async fn test_ac_scenario_01_initialize_meter_session_and_ingest_batch() {
 
             let stream_json = r#"{
                 "object": "v2.billing.meter_event_stream",
-                "events": [
-                    {
-                        "event_name": "tokens",
-                        "payload": {
-                            "stripe_customer_id": "cus_123",
-                            "value": "15400"
-                        },
-                        "timestamp": 1700000000,
-                        "identifier": "req_gen_1"
-                    }
-                ],
+                "events_ingested": 1,
                 "status": "accepted"
             }"#;
             write_response(&mut socket, "200 OK", stream_json).await;
@@ -101,12 +91,12 @@ async fn test_ac_scenario_01_initialize_meter_session_and_ingest_batch() {
         .v2()
         .billing()
         .meter_event_session()
-        .create()
+        .create(&CreateMeterEventSessionParams::default())
         .await
         .unwrap();
     assert_eq!(session.id, "sess_tok_abc_123");
     assert_eq!(
-        session.authentication_token,
+        session.authentication_token.expose_token(),
         "sess_tok_live_ephemeral_token_xyz"
     );
     assert_eq!(session.status, MeterEventSessionStatus::Active);
@@ -131,9 +121,7 @@ async fn test_ac_scenario_01_initialize_meter_session_and_ingest_batch() {
         .await
         .unwrap();
     assert_eq!(stream_resp.status, "accepted");
-    assert_eq!(stream_resp.events.len(), 1);
-    assert_eq!(stream_resp.events[0].event_name, "tokens");
-    assert_eq!(stream_resp.events[0].payload.value, "15400");
+    assert_eq!(stream_resp.events_ingested, 1);
 
     server.await.unwrap();
 }
@@ -181,11 +169,12 @@ async fn test_ac_scenario_02_meter_event_adjustment_canceling_usage() {
 
     let adjustment_params = CreateMeterEventAdjustmentParams {
         event_name: "tokens".into(),
-        r#type: "cancel".into(),
+        adjustment_type: "cancel".into(),
         cancel: Some(CancelAdjustment {
             identifier: "req_gen_1".into(),
         }),
-        reason: Some("Duplicate inference call cancellation".into()),
+        reason: Some(AdjustmentReason::DuplicateUsage),
+        idempotency_key: None,
     };
 
     let adjustment = client
@@ -295,18 +284,13 @@ async fn test_billing_meters_lifecycle_facade() {
     let client = StripeClient::with_config(config);
 
     // Create meter
-    let create_params = CreateBillingMeterParams {
-        display_name: "AI LLM Inference Tokens".into(),
-        event_name: "tokens".into(),
-        default_aggregation: Some(AggregationFormula::Sum),
-        value_settings: Some(ValueSettings {
-            event_payload_key: "value".into(),
-        }),
-        customer_mapping: Some(CustomerMappingSettings {
-            event_payload_key: "stripe_customer_id".into(),
-            mapping_type: "by_id".into(),
-        }),
-    };
+    let create_params = CreateBillingMeterParams::new(
+        "AI LLM Inference Tokens",
+        "tokens",
+        AggregationFormula::Sum,
+        ValueSettings::new("value"),
+        CustomerMappingSettings::by_id("stripe_customer_id"),
+    );
     let meter = client
         .v2()
         .billing()
@@ -358,7 +342,7 @@ async fn test_ingestion_engine_deduplication_and_batch_flush() {
 
         let stream_json = r#"{
             "object": "v2.billing.meter_event_stream",
-            "events": [],
+            "events_ingested": 1,
             "status": "accepted"
         }"#;
         write_response(&mut socket, "200 OK", stream_json).await;
@@ -379,7 +363,7 @@ async fn test_ingestion_engine_deduplication_and_batch_flush() {
         authentication_token: "preloaded_sess_tok_123".into(),
         expires_at: 1999999999, // far future
         created: 1700000000,
-        livemode: false,
+        livemode: Some(false),
         status: MeterEventSessionStatus::Active,
     };
     engine.set_session(session).await;
@@ -500,7 +484,7 @@ fn test_statutory_and_gate_g2_security_invariants() {
         authentication_token: "super_secret_bearer_token".into(),
         expires_at: 1700000000,
         created: 1699999000,
-        livemode: false,
+        livemode: Some(false),
         status: MeterEventSessionStatus::Active,
     };
     let debug_output = format!("{session:?}");
@@ -569,7 +553,7 @@ async fn test_meter_stream_collector_time_interval_flush() {
 
         let stream_json = r#"{
             "object": "v2.billing.meter_event_stream",
-            "events": [],
+            "events_ingested": 1,
             "status": "accepted"
         }"#;
         write_response(&mut socket, "200 OK", stream_json).await;
@@ -589,7 +573,7 @@ async fn test_meter_stream_collector_time_interval_flush() {
         authentication_token: "collector_sess_tok".into(),
         expires_at: 1999999999,
         created: 1700000000,
-        livemode: false,
+        livemode: Some(false),
         status: MeterEventSessionStatus::Active,
     };
     engine.set_session(session).await;
@@ -639,7 +623,7 @@ async fn test_engine_periodic_flusher_and_manual_flush() {
 
         let stream_json = r#"{
             "object": "v2.billing.meter_event_stream",
-            "events": [],
+            "events_ingested": 1,
             "status": "accepted"
         }"#;
         write_response(&mut socket, "200 OK", stream_json).await;
@@ -659,7 +643,7 @@ async fn test_engine_periodic_flusher_and_manual_flush() {
         authentication_token: "flusher_sess_tok".into(),
         expires_at: 1999999999,
         created: 1700000000,
-        livemode: false,
+        livemode: Some(false),
         status: MeterEventSessionStatus::Active,
     };
     engine.set_session(session).await;

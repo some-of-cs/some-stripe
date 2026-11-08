@@ -25,11 +25,11 @@
 
 use some_stripe_core::StripeClient;
 
+use super::billing_meters::BillingMetersResource;
 use super::ingestion_engine::MeterIngestionEngine;
 use super::meter_adjustments::MeterEventAdjustmentsResource;
 use super::meter_session::MeterEventSessionResource;
 use super::meter_stream::MeterEventStreamResource;
-use super::meters::BillingMetersResource;
 
 /// Facade resource for Stripe API V2 Billing operations (`stripe.v2.billing`).
 ///

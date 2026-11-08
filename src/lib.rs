@@ -65,6 +65,7 @@ pub use some_stripe_core::client::{
 };
 pub use some_stripe_core::error::{StripeError, StripeWebhookError};
 pub use some_stripe_core::patterns;
+pub use some_stripe_core::patterns::MeterBatchSerializer;
 pub use some_stripe_core::validate_and_encode_id;
 pub use some_stripe_core::workflow;
 pub use some_stripe_core::workflow::{
@@ -83,24 +84,26 @@ pub use some_stripe_webhooks::{
 
 pub mod resources;
 pub use resources::v2::{
-    BillingMetersResource, CollectorStats, IngestionEngineOptions, MeterEventAdjustmentsResource,
-    MeterEventSessionResource, MeterEventStreamResource, MeterIngestionEngine,
-    MeterStreamCollector, V2Billing, V2Namespace,
+    CollectorStats, IngestionEngineOptions, MeterIngestionEngine, MeterStreamCollector, V2Billing,
+    V2Namespace,
 };
 pub use resources::{
     AccountLinksResource, AccountSessionsResource, AccountsResource, ApplicationFeesResource,
-    BalanceResource, BalanceTransactionsResource, BillingPortalResource, CalculationsResource,
-    CheckoutResource, CheckoutSessionExt, CreditNotesResource, CustomersResource, DisputesResource,
-    IdentityResource, InvoicesResource, IssuingAuthorizationsResource, IssuingCardholdersResource,
-    IssuingCardsResource, IssuingResource, IssuingTransactionsResource, PaymentIntentsResource,
-    PaymentLinksResource, PayoutsResource, PersonsResource, QuotesResource, RedirectError,
-    RefundsResource, SessionsResource, SubscriptionItemsResource, SubscriptionSchedulesResource,
-    SubscriptionsResource, TaxRegistrationsResource, TaxResource, TaxSettingsResource,
-    TerminalConnectionTokensResource, TerminalLocationsResource, TerminalReadersResource,
-    TerminalResource, TransactionsResource, TransfersResource, TreasuryFinancialAccountsResource,
-    TreasuryResource, TreasuryTransfersResource, VerificationReportsResource,
-    VerificationSessionsResource, WebhooksResource, credit_note_id, generate_uuid_v4,
-    is_fulfillment_ready, is_valid_uuid_v4, quote_id, tax_registration_id, validate_redirect_url,
+    BalanceResource, BalanceTransactionsResource, BillingMetersResource, BillingPortalResource,
+    CalculationsResource, CheckoutResource, CheckoutSessionExt, CreditNotesResource,
+    CustomersResource, DisputesResource, IdentityResource, InvoicesResource,
+    IssuingAuthorizationsResource, IssuingCardholdersResource, IssuingCardsResource,
+    IssuingResource, IssuingTransactionsResource, MeterEventAdjustmentsResource,
+    MeterEventSessionResource, MeterEventStreamResource, MeterEventsResource,
+    PaymentIntentsResource, PaymentLinksResource, PayoutsResource, PersonsResource, QuotesResource,
+    RedirectError, RefundsResource, SessionsResource, SubscriptionItemsResource,
+    SubscriptionSchedulesResource, SubscriptionsResource, TaxRegistrationsResource, TaxResource,
+    TaxSettingsResource, TerminalConnectionTokensResource, TerminalLocationsResource,
+    TerminalReadersResource, TerminalResource, TransactionsResource, TransfersResource,
+    TreasuryFinancialAccountsResource, TreasuryResource, TreasuryTransfersResource,
+    V2BillingResource, V2Resource, VerificationReportsResource, VerificationSessionsResource,
+    WebhooksResource, credit_note_id, generate_uuid_v4, is_fulfillment_ready, is_valid_uuid_v4,
+    quote_id, tax_registration_id, validate_redirect_url,
 };
 
 /// The main Stripe client used to interact with the Stripe API, modeled after `stripe-node`.
@@ -304,9 +307,34 @@ impl StripeClient {
         TerminalResource::new(&self.0)
     }
 
-    /// Access the Stripe API V2 services namespace (`stripe.v2`).
-    pub fn v2(&self) -> V2Namespace<'_> {
-        V2Namespace::new(&self.0)
+    /// Access the V2 Billing Meters resource namespace (`stripe.v2.billing.meters`).
+    pub fn billing_meters(&self) -> BillingMetersResource<'_> {
+        BillingMetersResource::new(&self.0)
+    }
+
+    /// Access the Meter Event Sessions resource namespace (`POST /v2/billing/meter_event_session`).
+    pub fn meter_event_sessions(&self) -> MeterEventSessionResource<'_> {
+        MeterEventSessionResource::new(&self.0)
+    }
+
+    /// Access the V2 Meter Event Stream resource (`stripe.meter_event_stream`).
+    pub fn meter_event_stream(&self) -> MeterEventStreamResource<'_> {
+        MeterEventStreamResource::new(&self.0)
+    }
+
+    /// Access the V2 Meter Events resource (`stripe.meter_events`).
+    pub fn meter_events(&self) -> MeterEventsResource<'_> {
+        MeterEventsResource::new(&self.0)
+    }
+
+    /// Access the Meter Event Adjustments resource namespace (`stripe.meter_event_adjustments`).
+    pub fn meter_event_adjustments(&self) -> MeterEventAdjustmentsResource<'_> {
+        MeterEventAdjustmentsResource::new(&self.0)
+    }
+
+    /// Access the Stripe API V2 namespace (`stripe.v2`).
+    pub fn v2(&self) -> V2Resource<'_> {
+        V2Resource::new(&self.0)
     }
 
     /// Access the Stripe API V2 Billing resource namespace (`stripe.v2_billing`).
@@ -404,8 +432,14 @@ pub trait StripeClientExt {
     /// Access the Tax Transactions resource namespace (`stripe.tax_transactions`).
     fn tax_transactions(&self) -> TransactionsResource<'_>;
 
-    /// Access the Stripe API V2 services namespace (`stripe.v2`).
-    fn v2(&self) -> V2Namespace<'_>;
+    /// Access the V2 Meter Event Stream resource (`stripe.meter_event_stream`).
+    fn meter_event_stream(&self) -> MeterEventStreamResource<'_>;
+
+    /// Access the Meter Event Adjustments resource namespace (`stripe.meter_event_adjustments`).
+    fn meter_event_adjustments(&self) -> MeterEventAdjustmentsResource<'_>;
+
+    /// Access the Stripe API V2 namespace (`stripe.v2`).
+    fn v2(&self) -> V2Resource<'_>;
 
     /// Access the Stripe API V2 Billing resource namespace (`stripe.v2_billing`).
     fn v2_billing(&self) -> V2Billing<'_>;
@@ -480,8 +514,16 @@ impl StripeClientExt for some_stripe_core::StripeClient {
         TransactionsResource::new(self)
     }
 
-    fn v2(&self) -> V2Namespace<'_> {
-        V2Namespace::new(self)
+    fn meter_event_stream(&self) -> MeterEventStreamResource<'_> {
+        MeterEventStreamResource::new(self)
+    }
+
+    fn meter_event_adjustments(&self) -> MeterEventAdjustmentsResource<'_> {
+        MeterEventAdjustmentsResource::new(self)
+    }
+
+    fn v2(&self) -> V2Resource<'_> {
+        V2Resource::new(self)
     }
 
     fn v2_billing(&self) -> V2Billing<'_> {

@@ -356,7 +356,7 @@ impl MeterIngestionEngine {
             if let Some(session) = lock.as_ref()
                 && session.expires_at - now > self.refresh_threshold_secs
             {
-                return Ok(session.authentication_token.clone());
+                return Ok(session.authentication_token.expose_token().to_string());
             }
         }
 
@@ -364,11 +364,11 @@ impl MeterIngestionEngine {
         if let Some(session) = write_lock.as_ref()
             && session.expires_at - now > self.refresh_threshold_secs
         {
-            return Ok(session.authentication_token.clone());
+            return Ok(session.authentication_token.expose_token().to_string());
         }
 
         let new_session = self.fetch_new_session().await?;
-        let token = new_session.authentication_token.clone();
+        let token = new_session.authentication_token.expose_token().to_string();
         *write_lock = Some(new_session);
         Ok(token)
     }
