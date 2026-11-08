@@ -3,9 +3,9 @@
   "module_title": "API V2 Next-Gen Services",
   "module_branch": "feat/module-8-v2-next-gen-services",
   "module_worktree": "/workspaces/some-stripe/.worktrees/feat-module-8-v2-next-gen-services",
-  "status": "in_progress",
-  "current_stage": "resumed_after_server_restart_with_fresh_quotas",
-  "last_updated": "2026-11-08T07:38:00Z",
+  "status": "in_review",
+  "current_stage": "module_pr_review_and_promotion",
+  "last_updated": "2026-11-08T08:39:00Z",
   "lead_role": "Module 8 Lead Architect",
   "lead_profile": "agent-a",
   "stories": {
@@ -72,8 +72,9 @@
       "leader_profile": "agent-b",
       "branch": "feat/us-8.2.0-v2-high-throughput-meter-billing",
       "worktree": "/workspaces/some-stripe/.worktrees/feat-us-820-v2-high-throughput-meter-billing",
-      "status": "in_review",
+      "status": "merged",
       "pr": 135,
+      "merge_commit": "6d010805305ec2a2bc3e078ab4fbde28dc1365b3",
       "units": {
         "unit-1": {
           "title": "Meter Event Sessions & Token Lifecycles",

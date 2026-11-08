@@ -23,8 +23,9 @@ kanban
   todo[📋 Backlog / Ready]
   in_progress[🔄 In Progress]
   in_review[🔍 In Review / PR Open]
-    us82_story[US-8.2.0: High-Throughput Meter Billing Promotion]@{ ticket: '135', assigned: 'agent-b', priority: 'Very High' }
+    m8_promo[Module 8: API V2 Next-Gen Services Promotion]@{ ticket: '136', assigned: 'agent-a', priority: 'Very High' }
   done[✅ Merged]
+    us82_story[US-8.2.0: High-Throughput Meter Billing Promotion]@{ ticket: '135', assigned: 'agent-b', priority: 'Very High' }
     us81_story[US-8.1.0: Stripe API V2 Core Promotion]@{ ticket: '133', assigned: 'agent-b', priority: 'Very High' }
     us82_u5[US-8.2.0 Unit 5: V2 Billing Facade & Ingestion Engine]@{ ticket: '134', assigned: 'agent-b', priority: 'High' }
     us81_u5[US-8.1.0 Unit 5: V2 Core Facade & Thin Hydrator]@{ ticket: '132', assigned: 'agent-b', priority: 'High' }
