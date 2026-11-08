@@ -38,6 +38,8 @@ pub mod treasury_financial_accounts;
 pub mod treasury_transfers;
 pub mod v2;
 pub mod v2_meter_event_session;
+pub mod v2_meter_event_stream;
+pub mod v2_meter_events;
 pub mod webhooks;
 
 pub use account_links::AccountLinksResource;
@@ -85,7 +87,7 @@ pub use treasury_transfers::{
     OutboundPaymentsResource, OutboundTransfersResource, ReceivedCreditsResource,
     TreasuryTransfersResource,
 };
-pub use v2::MeterEventSessionResource;
+pub use v2::{MeterEventSessionResource, MeterEventStreamResource, MeterEventsResource};
 pub use webhooks::WebhooksResource;
 
 /// Resolves an idempotency key for state-mutating requests.
