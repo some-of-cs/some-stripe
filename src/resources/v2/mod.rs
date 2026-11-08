@@ -20,6 +20,12 @@ pub use meter_stream::MeterEventStreamResource;
 
 use some_stripe_core::StripeClient;
 
+use super::v2_accounts::V2AccountsResource;
+use super::v2_core::V2Core;
+use super::v2_destinations::EventDestinationsResource;
+use super::v2_events::V2EventsResource;
+use super::v2_hydration::ThinEventHydrator;
+
 /// Stripe API V2 Billing namespace resource (`stripe.v2.billing`).
 pub type V2BillingResource<'a> = V2Billing<'a>;
 
@@ -32,20 +38,50 @@ pub struct V2Resource<'a> {
 impl<'a> V2Resource<'a> {
     /// Creates a new `V2Resource` bound to the provided [`StripeClient`].
     #[must_use]
-    pub fn new(client: &'a StripeClient) -> Self {
+    pub const fn new(client: &'a StripeClient) -> Self {
         Self { client }
     }
 
     /// Access reference to the underlying [`StripeClient`].
     #[must_use]
-    pub fn client(&self) -> &'a StripeClient {
+    pub const fn client(&self) -> &'a StripeClient {
         self.client
+    }
+
+    /// Access the API v2 Core namespace (`stripe.v2().core()`).
+    #[must_use]
+    pub const fn core(&self) -> V2Core<'a> {
+        V2Core::new(self.client)
     }
 
     /// Access the V2 Billing resource namespace (`stripe.v2.billing`).
     #[must_use]
     pub fn billing(&self) -> V2Billing<'a> {
         V2Billing::new(self.client)
+    }
+
+    /// Access the V2 Events resource (`stripe.v2().events()`).
+    #[must_use]
+    pub fn events(&self) -> V2EventsResource<'a> {
+        self.core().events()
+    }
+
+    /// Access the V2 Event Destinations resource (`stripe.v2().event_destinations()`).
+    #[must_use]
+    pub fn event_destinations(&self) -> EventDestinationsResource<'a> {
+        self.core().event_destinations()
+    }
+
+    /// Access the V2 Core Accounts resource (`stripe.v2().accounts()`).
+    #[must_use]
+    pub fn accounts(&self) -> V2AccountsResource<'a> {
+        self.core().accounts()
+    }
+
+    /// Access the Thin Event Hydrator (`stripe.v2().hydrator()`).
+    #[must_use]
+    pub const fn hydrator(&self) -> ThinEventHydrator<'a> {
+        self.core().hydrator()
     }
 }
 

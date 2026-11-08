@@ -22,18 +22,20 @@ config:
 kanban
   todo[📋 Backlog / Ready]
   in_progress[🔄 In Progress]
-    us81_u1[US-8.1.0 Unit 1: V2 Core Events & Thin Notifications]@{ ticket: 'feat/us-8.1.0/unit-1-v2-events-resource', assigned: 'agent-a', priority: 'Very High' }
-    us81_u2[US-8.1.0 Unit 2: V2 Event Destinations]@{ ticket: 'feat/us-8.2.0/unit-2-v2-event-destinations-resource', assigned: 'agent-b', priority: 'High' }
-    us81_u3[US-8.1.0 Unit 3: V2 Core Accounts & Access Tokens]@{ ticket: 'feat/us-8.1.0/unit-3-v2-accounts-resource', assigned: 'agent-c', priority: 'High' }
-    us81_u4[US-8.1.0 Unit 4: URL-Driven V2List Pagination Engine]@{ ticket: 'feat/us-8.1.0/unit-4-v2-pagination-engine', assigned: 'agent-a', priority: 'Very High' }
-    us81_u5[US-8.1.0 Unit 5: V2 Core Facade & Thin Hydrator]@{ ticket: 'feat/us-8.1.0/unit-5-v2-core-facade-hydrator', assigned: 'agent-b', priority: 'High' }
-    us82_u1[US-8.2.0 Unit 1: Meter Event Sessions & Token Lifecycles]@{ ticket: 'feat/us-8.2.0/unit-1-meter-session-resource', assigned: 'agent-c', priority: 'Very High' }
-    us82_u2[US-8.2.0 Unit 2: Batch Meter Event Streams & Serializer]@{ ticket: 'feat/us-8.2.0/unit-2-meter-stream-resource', assigned: 'agent-a', priority: 'High' }
-    us82_u3[US-8.2.0 Unit 3: Meter Event Adjustments & Cancelations]@{ ticket: 'feat/us-8.2.0/unit-3-meter-adjustments-resource', assigned: 'agent-b', priority: 'High' }
-    us82_u4[US-8.2.0 Unit 4: V2 Billing Meters Management]@{ ticket: 'feat/us-8.2.0/unit-4-billing-meters-resource', assigned: 'agent-c', priority: 'Very High' }
-    us82_u5[US-8.2.0 Unit 5: V2 Billing Facade & Ingestion Engine]@{ ticket: 'feat/us-8.2.0/unit-5-v2-billing-facade-engine', assigned: 'agent-b', priority: 'High' }
   in_review[🔍 In Review / PR Open]
+    us82_story[US-8.2.0: High-Throughput Meter Billing Promotion]@{ ticket: '135', assigned: 'agent-b', priority: 'Very High' }
   done[✅ Merged]
+    us81_story[US-8.1.0: Stripe API V2 Core Promotion]@{ ticket: '133', assigned: 'agent-b', priority: 'Very High' }
+    us82_u5[US-8.2.0 Unit 5: V2 Billing Facade & Ingestion Engine]@{ ticket: '134', assigned: 'agent-b', priority: 'High' }
+    us81_u5[US-8.1.0 Unit 5: V2 Core Facade & Thin Hydrator]@{ ticket: '132', assigned: 'agent-b', priority: 'High' }
+    us82_u4[US-8.2.0 Unit 4: V2 Billing Meters Management]@{ ticket: '131', assigned: 'agent-c', priority: 'Very High' }
+    us82_u2[US-8.2.0 Unit 2: Batch Meter Event Streams & Serializer]@{ ticket: '130', assigned: 'agent-a', priority: 'High' }
+    us82_u3[US-8.2.0 Unit 3: Meter Event Adjustments & Cancelations]@{ ticket: '129', assigned: 'agent-c', priority: 'High' }
+    us81_u4[US-8.1.0 Unit 4: URL-Driven V2List Pagination Engine]@{ ticket: '128', assigned: 'agent-c', priority: 'Very High' }
+    us82_u1[US-8.2.0 Unit 1: Meter Event Sessions & Token Lifecycles]@{ ticket: '127', assigned: 'agent-a', priority: 'Very High' }
+    us81_u3[US-8.1.0 Unit 3: V2 Core Accounts & Access Tokens]@{ ticket: '126', assigned: 'agent-b', priority: 'High' }
+    us81_u2[US-8.1.0 Unit 2: V2 Event Destinations]@{ ticket: '125', assigned: 'agent-a', priority: 'High' }
+    us81_u1[US-8.1.0 Unit 1: V2 Core Events & Thin Notifications]@{ ticket: '124', assigned: 'agent-a', priority: 'Very High' }
     m8_init[Module 8 Architecture & Kanban Decomposed]@{ ticket: 'main', assigned: 'agent-a', priority: 'High' }
 ```
 
