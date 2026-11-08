@@ -82,6 +82,11 @@ pub use some_stripe_webhooks::{
 };
 
 pub mod resources;
+pub use resources::v2::{
+    BillingMetersResource, CollectorStats, IngestionEngineOptions, MeterEventAdjustmentsResource,
+    MeterEventSessionResource, MeterEventStreamResource, MeterIngestionEngine,
+    MeterStreamCollector, V2Billing, V2Namespace,
+};
 pub use resources::{
     AccountLinksResource, AccountSessionsResource, AccountsResource, ApplicationFeesResource,
     BalanceResource, BalanceTransactionsResource, BillingPortalResource, CalculationsResource,
@@ -298,6 +303,16 @@ impl StripeClient {
     pub fn terminal(&self) -> TerminalResource<'_> {
         TerminalResource::new(&self.0)
     }
+
+    /// Access the Stripe API V2 services namespace (`stripe.v2`).
+    pub fn v2(&self) -> V2Namespace<'_> {
+        V2Namespace::new(&self.0)
+    }
+
+    /// Access the Stripe API V2 Billing resource namespace (`stripe.v2_billing`).
+    pub fn v2_billing(&self) -> V2Billing<'_> {
+        V2Billing::new(&self.0)
+    }
 }
 
 /// Validates compliance with EU Omnibus Directive 2019/2161 Article 6a regarding price reductions.
@@ -388,6 +403,12 @@ pub trait StripeClientExt {
 
     /// Access the Tax Transactions resource namespace (`stripe.tax_transactions`).
     fn tax_transactions(&self) -> TransactionsResource<'_>;
+
+    /// Access the Stripe API V2 services namespace (`stripe.v2`).
+    fn v2(&self) -> V2Namespace<'_>;
+
+    /// Access the Stripe API V2 Billing resource namespace (`stripe.v2_billing`).
+    fn v2_billing(&self) -> V2Billing<'_>;
 }
 
 impl StripeClientExt for some_stripe_core::StripeClient {
@@ -457,6 +478,14 @@ impl StripeClientExt for some_stripe_core::StripeClient {
 
     fn tax_transactions(&self) -> TransactionsResource<'_> {
         TransactionsResource::new(self)
+    }
+
+    fn v2(&self) -> V2Namespace<'_> {
+        V2Namespace::new(self)
+    }
+
+    fn v2_billing(&self) -> V2Billing<'_> {
+        V2Billing::new(self)
     }
 }
 
