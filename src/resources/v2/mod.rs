@@ -1,8 +1,14 @@
 //! Stripe API V2 resource implementations and namespace hierarchies.
 
 pub mod meter_adjustments;
+pub mod meter_events;
+pub mod meter_session;
+pub mod meter_stream;
 
 pub use meter_adjustments::MeterEventAdjustmentsResource;
+pub use meter_events::MeterEventsResource;
+pub use meter_session::MeterEventSessionResource;
+pub use meter_stream::MeterEventStreamResource;
 
 use some_stripe_core::StripeClient;
 
@@ -29,6 +35,24 @@ impl<'a> V2BillingResource<'a> {
     #[must_use]
     pub fn meter_event_adjustments(&self) -> MeterEventAdjustmentsResource<'a> {
         MeterEventAdjustmentsResource::new(self.client)
+    }
+
+    /// Access the Meter Event Session resource (`stripe.v2.billing.meter_event_session`).
+    #[must_use]
+    pub fn meter_event_session(&self) -> MeterEventSessionResource<'a> {
+        MeterEventSessionResource::new(self.client)
+    }
+
+    /// Access the Meter Event Stream resource (`stripe.v2.billing.meter_event_stream`).
+    #[must_use]
+    pub fn meter_event_stream(&self) -> MeterEventStreamResource<'a> {
+        MeterEventStreamResource::new(self.client)
+    }
+
+    /// Access the Meter Events resource (`stripe.v2.billing.meter_events`).
+    #[must_use]
+    pub fn meter_events(&self) -> MeterEventsResource<'a> {
+        MeterEventsResource::new(self.client)
     }
 }
 

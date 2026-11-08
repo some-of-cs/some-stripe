@@ -139,6 +139,10 @@ pub mod treasury_transfer;
 pub use treasury_transfer::*;
 pub mod terminal;
 pub use terminal::*;
+pub mod meter_session;
+pub use meter_session::*;
+pub mod meter_stream;
+pub use meter_stream::*;
 pub mod meter_adjustments;
 pub use meter_adjustments::*;
 
