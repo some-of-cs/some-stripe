@@ -9,7 +9,7 @@ exclude = [".worktrees"]
 
 [package]
 name = "some-stripe"
-version = "0.1.0"
+version = "0.8.0"
 edition = "2024"
 authors = ["Maher Aladdin", "Some(CS)"]
 license = "Apache-2.0"
