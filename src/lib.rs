@@ -65,6 +65,7 @@ pub use some_stripe_core::client::{
 };
 pub use some_stripe_core::error::{StripeError, StripeWebhookError};
 pub use some_stripe_core::patterns;
+pub use some_stripe_core::patterns::MeterBatchSerializer;
 pub use some_stripe_core::validate_and_encode_id;
 pub use some_stripe_core::workflow;
 pub use some_stripe_core::workflow::{
@@ -88,13 +89,15 @@ pub use resources::{
     CalculationsResource, CheckoutResource, CheckoutSessionExt, CreditNotesResource,
     CustomersResource, DisputesResource, IdentityResource, InvoicesResource,
     IssuingAuthorizationsResource, IssuingCardholdersResource, IssuingCardsResource,
-    IssuingResource, IssuingTransactionsResource, PaymentIntentsResource, PaymentLinksResource,
-    PayoutsResource, PersonsResource, QuotesResource, RedirectError, RefundsResource,
-    SessionsResource, SubscriptionItemsResource, SubscriptionSchedulesResource,
-    SubscriptionsResource, TaxRegistrationsResource, TaxResource, TaxSettingsResource,
-    TerminalConnectionTokensResource, TerminalLocationsResource, TerminalReadersResource,
-    TerminalResource, TransactionsResource, TransfersResource, TreasuryFinancialAccountsResource,
-    TreasuryResource, TreasuryTransfersResource, VerificationReportsResource,
+    IssuingResource, IssuingTransactionsResource, MeterEventAdjustmentsResource,
+    MeterEventSessionResource, MeterEventStreamResource, MeterEventsResource,
+    PaymentIntentsResource, PaymentLinksResource, PayoutsResource, PersonsResource, QuotesResource,
+    RedirectError, RefundsResource, SessionsResource, SubscriptionItemsResource,
+    SubscriptionSchedulesResource, SubscriptionsResource, TaxRegistrationsResource, TaxResource,
+    TaxSettingsResource, TerminalConnectionTokensResource, TerminalLocationsResource,
+    TerminalReadersResource, TerminalResource, TransactionsResource, TransfersResource,
+    TreasuryFinancialAccountsResource, TreasuryResource, TreasuryTransfersResource,
+    V2BillingResource, V2Resource, VerificationReportsResource,
     VerificationSessionsResource, WebhooksResource, credit_note_id, generate_uuid_v4,
     is_fulfillment_ready, is_valid_uuid_v4, quote_id, tax_registration_id, validate_redirect_url,
 };
@@ -304,6 +307,31 @@ impl StripeClient {
     pub fn billing_meters(&self) -> BillingMetersResource<'_> {
         BillingMetersResource::new(&self.0)
     }
+
+    /// Access the Meter Event Sessions resource namespace (`POST /v2/billing/meter_event_session`).
+    pub fn meter_event_sessions(&self) -> MeterEventSessionResource<'_> {
+        MeterEventSessionResource::new(&self.0)
+    }
+
+    /// Access the V2 Meter Event Stream resource (`stripe.meter_event_stream`).
+    pub fn meter_event_stream(&self) -> MeterEventStreamResource<'_> {
+        MeterEventStreamResource::new(&self.0)
+    }
+
+    /// Access the V2 Meter Events resource (`stripe.meter_events`).
+    pub fn meter_events(&self) -> MeterEventsResource<'_> {
+        MeterEventsResource::new(&self.0)
+    }
+
+    /// Access the Meter Event Adjustments resource namespace (`stripe.meter_event_adjustments`).
+    pub fn meter_event_adjustments(&self) -> MeterEventAdjustmentsResource<'_> {
+        MeterEventAdjustmentsResource::new(&self.0)
+    }
+
+    /// Access the Stripe API V2 namespace (`stripe.v2`).
+    pub fn v2(&self) -> V2Resource<'_> {
+        V2Resource::new(&self.0)
+    }
 }
 
 /// Validates compliance with EU Omnibus Directive 2019/2161 Article 6a regarding price reductions.
@@ -394,6 +422,15 @@ pub trait StripeClientExt {
 
     /// Access the Tax Transactions resource namespace (`stripe.tax_transactions`).
     fn tax_transactions(&self) -> TransactionsResource<'_>;
+
+    /// Access the V2 Meter Event Stream resource (`stripe.meter_event_stream`).
+    fn meter_event_stream(&self) -> MeterEventStreamResource<'_>;
+
+    /// Access the Meter Event Adjustments resource namespace (`stripe.meter_event_adjustments`).
+    fn meter_event_adjustments(&self) -> MeterEventAdjustmentsResource<'_>;
+
+    /// Access the Stripe API V2 namespace (`stripe.v2`).
+    fn v2(&self) -> V2Resource<'_>;
 }
 
 impl StripeClientExt for some_stripe_core::StripeClient {
@@ -463,6 +500,18 @@ impl StripeClientExt for some_stripe_core::StripeClient {
 
     fn tax_transactions(&self) -> TransactionsResource<'_> {
         TransactionsResource::new(self)
+    }
+
+    fn meter_event_stream(&self) -> MeterEventStreamResource<'_> {
+        MeterEventStreamResource::new(self)
+    }
+
+    fn meter_event_adjustments(&self) -> MeterEventAdjustmentsResource<'_> {
+        MeterEventAdjustmentsResource::new(self)
+    }
+
+    fn v2(&self) -> V2Resource<'_> {
+        V2Resource::new(self)
     }
 }
 

@@ -141,6 +141,12 @@ pub mod terminal;
 pub use terminal::*;
 pub mod billing_meters;
 pub use billing_meters::*;
+pub mod meter_session;
+pub use meter_session::*;
+pub mod meter_stream;
+pub use meter_stream::*;
+pub mod meter_adjustments;
+pub use meter_adjustments::*;
 
 /// Strongly typed Stripe Connect Account ID (`acct_...`).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
