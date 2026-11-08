@@ -78,6 +78,7 @@
 pub mod client;
 pub mod error;
 pub mod patterns;
+pub mod v2_pagination;
 pub mod workflow;
 
 pub use bytes::Bytes;
@@ -90,4 +91,5 @@ pub use patterns::{
     Nullable, percent_encode, serialize_v1_form, serialize_v2_json, to_form_params,
     to_form_urlencoded, validate_and_encode_id,
 };
+pub use v2_pagination::{V2List, V2PageInfo, V2Paginator, resolve_v2_url};
 pub use workflow::{DefaultErrorWorkflow, ErrorAction, ErrorSeverity, ErrorWorkflowHandler};
