@@ -793,3 +793,48 @@ mod tests {
         assert!(json.contains("\"identifier\":\"id_test_123\""));
     }
 }
+
+/// Statutory error indicating an invalid meter event calculation or missing coordinates.
+#[derive(Debug, thiserror::Error, PartialEq, Eq, Clone)]
+pub enum StatutoryMeterError {
+    /// The event name is empty or whitespace.
+    #[error("Event name cannot be empty or whitespace")]
+    EmptyEventName,
+
+    /// The customer ID is empty or whitespace.
+    #[error("Customer ID cannot be empty or whitespace")]
+    EmptyCustomerId,
+
+    /// The consumption value cannot be parsed as a valid numeric decimal.
+    #[error("Invalid consumption metric value '{0}': must parse as numeric decimal")]
+    InvalidConsumptionValue(String),
+
+    /// Missing required audit coordinates (both timestamp and identifier are omitted).
+    #[error("Statutory audit compliance requires at least a timestamp or unique client identifier")]
+    MissingAuditCoordinates,
+}
+
+/// Enforces FTC Section 5 and EU Consumer Rights Directive commercial transparency
+/// on individual meter event payloads prior to wire transmission.
+///
+/// # Errors
+/// Returns [`StatutoryMeterError`] if any invariant is violated.
+pub fn validate_statutory_meter_event_accuracy(
+    event: &MeterEventPayload,
+) -> Result<(), StatutoryMeterError> {
+    if event.event_name.trim().is_empty() {
+        return Err(StatutoryMeterError::EmptyEventName);
+    }
+    if event.payload.stripe_customer_id.trim().is_empty() {
+        return Err(StatutoryMeterError::EmptyCustomerId);
+    }
+    if event.payload.value.trim().parse::<f64>().is_err() {
+        return Err(StatutoryMeterError::InvalidConsumptionValue(
+            event.payload.value.clone(),
+        ));
+    }
+    if event.identifier.is_none() && event.timestamp.is_none() {
+        return Err(StatutoryMeterError::MissingAuditCoordinates);
+    }
+    Ok(())
+}

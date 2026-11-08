@@ -89,8 +89,9 @@ pub use treasury_transfers::{
     TreasuryTransfersResource,
 };
 pub use v2::{
-    BillingMetersResource, MeterEventAdjustmentsResource, MeterEventSessionResource,
-    MeterEventStreamResource, MeterEventsResource, V2BillingResource, V2Resource,
+    BillingMetersResource, CollectorStats, IngestionEngineOptions, MeterEventAdjustmentsResource,
+    MeterEventSessionResource, MeterEventStreamResource, MeterEventsResource, MeterIngestionEngine,
+    MeterStreamCollector, V2Billing, V2BillingResource, V2Namespace, V2Resource,
 };
 pub use webhooks::WebhooksResource;
 
