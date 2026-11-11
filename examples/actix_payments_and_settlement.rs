@@ -24,7 +24,6 @@ use some_stripe::{
     ConfirmPaymentIntentParams, CreatePaymentIntentParams, CreateRefundParams, DisputeEvidence,
     SecretKey, StripeClient, StripeError, UpdateDisputeParams, UpdateRefundParams,
 };
-use std::collections::HashMap;
 use std::fmt;
 
 /// Shared Actix-Web error wrapper converting `StripeError` into structured JSON responses.
@@ -51,23 +50,16 @@ impl ResponseError for ServiceError {
     }
 }
 
-/// Request DTO for `POST /payments/intents/{id}/dispute-evidence`.
+/// Request DTO for `POST /payments/disputes/{id}/update`.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct SubmitDisputeEvidenceRequest {
-    pub customer_Name: Option<String>,
+    pub customer_name: Option<String>,
     pub product_description: Option<String>,
     pub uncategorized_text: Option<String>,
     pub submit: Option<bool>,
 }
 
-/// Request DTO for `POST /payments/refunds/{id}/metadata`.
-#[derive(Debug, Deserialize, Serialize)]
-pub struct UpdateRefundMetadataRequest {
-    pub metadata: HashMap<String, String>,
-    pub idempotency_key: Option<String>,
-}
-
-/// `POST /payments/intents` — Creates a new [` some_stripe::PaymentIntent`] using borrowed params.
+/// `POST /payments/intents` — Creates a new [`some_stripe::PaymentIntent`] using borrowed params.
 #[post("/payments/intents")]
 pub async fn create_payment_intent(
     stripe: web::Data<StripeClient>,
@@ -196,7 +188,7 @@ pub async fn update_dispute(
     let req = body.into_inner();
     let params = UpdateDisputeParams {
         evidence: Some(DisputeEvidence {
-            customer_name: req.customer_Name,
+            customer_name: req.customer_name,
             product_description: req.product_description,
             uncategorized_text: req.uncategorized_text,
             ..Default::default()
