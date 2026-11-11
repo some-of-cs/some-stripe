@@ -39,3 +39,40 @@ tokio = { version = "1.54.1", features = ["sync", "time", "rt", "macros"] }
 
 [dev-dependencies]
 tokio = { version = "1.54.1", features = ["full"] }
+actix-web = "4"
+
+[[example]]
+name = "actix_core_and_webhooks"
+path = "examples/actix_core_and_webhooks.rs"
+
+[[example]]
+name = "actix_payments_and_settlement"
+path = "examples/actix_payments_and_settlement.rs"
+
+[[example]]
+name = "actix_checkout_and_payment_links"
+path = "examples/actix_checkout_and_payment_links.rs"
+
+[[example]]
+name = "actix_customers_and_subscriptions"
+path = "examples/actix_customers_and_subscriptions.rs"
+
+[[example]]
+name = "actix_invoicing_and_billing_portal"
+path = "examples/actix_invoicing_and_billing_portal.rs"
+
+[[example]]
+name = "actix_connect_marketplace"
+path = "examples/actix_connect_marketplace.rs"
+
+[[example]]
+name = "actix_specialized_products"
+path = "examples/actix_specialized_products.rs"
+
+[[example]]
+name = "actix_v2_next_gen_services"
+path = "examples/actix_v2_next_gen_services.rs"
+
+[[example]]
+name = "actix_full_sdk_server"
+path = "examples/actix_full_sdk_server.rs"
