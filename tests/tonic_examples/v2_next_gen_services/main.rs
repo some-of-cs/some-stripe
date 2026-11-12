@@ -236,7 +236,7 @@ async fn scenario_2_v2_billing_meters_sessions_streams_adjustments_and_ingestion
         .await
         .expect("enqueue_meter_event")
         .into_inner();
-    assert!(enqueue_resp.json_data.contains(""pending_events":1"));
+    assert!(enqueue_resp.json_data.contains(r#""pending_events":1"#));
 
     let flush_resp = server
         .flush_ingestion_engine(Request::new(V2RpcRequest {
@@ -246,7 +246,7 @@ async fn scenario_2_v2_billing_meters_sessions_streams_adjustments_and_ingestion
         .await
         .expect("flush_ingestion_engine")
         .into_inner();
-    assert!(flush_resp.json_data.contains(""flushed":1"));
+    assert!(flush_resp.json_data.contains(r#""flushed":1"#));
 
     let adj_create = CreateMeterEventAdjustmentParams::new("llm_tokens", "cancel");
     assert!(server.create_meter_event_adjustment(Request::new(V2RpcRequest {

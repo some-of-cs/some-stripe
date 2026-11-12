@@ -177,11 +177,19 @@ pub fn describe_event_object(object: &EventObject) -> &'static str {
     match object {
         EventObject::CheckoutSession(_) => "checkout.session",
         EventObject::PaymentIntent(_) => "payment_intent",
-        EventObject::Invoice(_) => "invoice",
-        EventObject::Dispute(_) => "dispute",
         EventObject::Refund(_) => "refund",
+        EventObject::Dispute(_) => "dispute",
+        other => describe_secondary_event_object(other),
+    }
+}
+
+/// Classifies secondary billing and payment-link [`EventObject`] variants.
+#[must_use]
+fn describe_secondary_event_object(object: &EventObject) -> &'static str {
+    match object {
+        EventObject::Invoice(_) => "invoice",
         EventObject::PaymentLink(_) => "payment_link",
-        EventObject::Unknown => "unknown",
+        _ => "unknown",
     }
 }
 
@@ -256,7 +264,7 @@ impl CoreWebhooksGrpcService for CoreWebhooksGrpcServer {
         Ok(Response::new(HealthCheckResponse {
             status: "SERVING".to_string(),
             service: "tonic_core_and_webhooks".to_string(),
-            api_base: self.stripe.config.api_base.clone(),
+            api_base: self.stripe.config.api_base.as_str().to_owned(),
             secret_debug_redacted: format!("{:?}", self.webhook_secret),
         }))
     }

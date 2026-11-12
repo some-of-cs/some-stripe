@@ -176,7 +176,7 @@ async fn scenario_3_payment_links_crud_and_line_items() {
         .await
         .expect("update_payment_link")
         .into_inner();
-    assert!(r3.json_data.contains(""active":false"));
+    assert!(r3.json_data.contains(r#""active":false"#));
 
     let r4 = server
         .list_payment_link_line_items(Request::new(CheckoutIdRequest {
@@ -213,7 +213,7 @@ async fn scenario_4_eu_omnibus_directive_price_and_tax_transparency_validation()
         .expect("valid omnibus promotion should pass")
         .into_inner();
     assert!(ok_resp.is_fulfillment_ready);
-    assert!(ok_resp.json_data.contains(""compliant":true"));
+    assert!(ok_resp.json_data.contains(r#""compliant":true"#));
 
     let invalid_promo = OmnibusPromotionInput {
         regular_price: 10_000,

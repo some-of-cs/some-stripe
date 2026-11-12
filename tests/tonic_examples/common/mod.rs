@@ -143,20 +143,23 @@ impl MockWireResponse {
     }
 }
 
-/// Maps an HTTP status code to its standard reason phrase.
+/// Maps an HTTP status code to its standard reason phrase via static lookup table.
 #[must_use]
 fn http_reason_phrase(status: u16) -> &'static str {
-    match status {
-        200 => "OK",
-        201 => "Created",
-        202 => "Accepted",
-        400 => "Bad Request",
-        401 => "Unauthorized",
-        403 => "Forbidden",
-        404 => "Not Found",
-        429 => "Too Many Requests",
-        _ => "Error",
-    }
+    const REASONS: &[(u16, &str)] = &[
+        (200, "OK"),
+        (201, "Created"),
+        (202, "Accepted"),
+        (400, "Bad Request"),
+        (401, "Unauthorized"),
+        (403, "Forbidden"),
+        (404, "Not Found"),
+        (429, "Too Many Requests"),
+    ];
+    REASONS
+        .iter()
+        .find_map(|&(code, phrase)| (code == status).then_some(phrase))
+        .unwrap_or("Error")
 }
 
 /// Lightweight local async TCP server simulating Stripe API v1 & v2 endpoints and error paths.
