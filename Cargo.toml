@@ -40,6 +40,10 @@ tokio = { version = "1.54.1", features = ["sync", "time", "rt", "macros"] }
 [dev-dependencies]
 tokio = { version = "1.54.1", features = ["full"] }
 actix-web = "4"
+tonic = "0.12"
+prost = "0.13"
+hmac = "0.12"
+hex = "0.4"
 
 [[example]]
 name = "actix_core_and_webhooks"
@@ -112,3 +116,43 @@ path = "tests/actix_examples/v2_next_gen_services/main.rs"
 [[test]]
 name = "actix_full_sdk_server_test"
 path = "tests/actix_examples/full_sdk_server/main.rs"
+
+[[example]]
+name = "tonic_core_and_webhooks"
+path = "examples/tonic_core_and_webhooks.rs"
+
+[[example]]
+name = "tonic_payments_and_settlement"
+path = "examples/tonic_payments_and_settlement.rs"
+
+[[example]]
+name = "tonic_checkout_and_payment_links"
+path = "examples/tonic_checkout_and_payment_links.rs"
+
+[[example]]
+name = "tonic_customers_and_subscriptions"
+path = "examples/tonic_customers_and_subscriptions.rs"
+
+[[example]]
+name = "tonic_invoicing_and_billing_portal"
+path = "examples/tonic_invoicing_and_billing_portal.rs"
+
+[[example]]
+name = "tonic_connect_marketplace"
+path = "examples/tonic_connect_marketplace.rs"
+
+[[example]]
+name = "tonic_specialized_products"
+path = "examples/tonic_specialized_products.rs"
+
+[[example]]
+name = "tonic_v2_next_gen_services"
+path = "examples/tonic_v2_next_gen_services.rs"
+
+[[example]]
+name = "tonic_full_sdk_server"
+path = "examples/tonic_full_sdk_server.rs"
+
+[[test]]
+name = "tonic_examples_integration_test"
+path = "tests/tonic_examples/main.rs"
