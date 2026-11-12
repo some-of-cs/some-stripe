@@ -8,7 +8,7 @@
 mod common;
 
 #[allow(dead_code)]
-#[path = "../../../examples/tonic_checkout_and_payment_links.rs"]
+#[path = "../../../examples/tonic_grpc/tonic_checkout_and_payment_links.rs"]
 mod example_grpc;
 
 use common::{DotEnvConfig, MockStripeServer, MockWireResponse};

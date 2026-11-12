@@ -1,6 +1,6 @@
 # Axum Examples Full Integration Test Suite
 
-This directory (`tests/axum_examples_integration/`) contains the **full integration test suite** covering all 7 Axum example applications (`01_axum_webhooks` through `06_axum_v2_meter_billing` and the unified `axum_stripe_server`).
+This directory (`tests/axum_examples_integration/`) contains the **full integration test suite** covering all 7 Axum example applications under [`examples/axum/`](../../examples/axum/) (`01_axum_webhooks` through `06_axum_v2_meter_billing` and the unified `axum_stripe_server`).
 
 ---
 
@@ -29,13 +29,13 @@ This directory (`tests/axum_examples_integration/`) contains the **full integrat
 | File | Target Example | Scenarios Verified |
 | :--- | :--- | :--- |
 | `common.rs` | Shared Harness | Native `$VAR_NAME` `.env*` resolver (`AxumDotEnvConfig::load`), live/mock `StripeClient` builders, raw HTTP wire parser, Axum `oneshot` helpers |
-| `ex01_webhooks_test.rs` | `examples/01_axum_webhooks.rs` | V1 HMAC-SHA256 verification, V2 Thin Event routing (`construct_v2_thin_event`) & hydration, missing header, forged signature, stale timestamp (>300s) replay rejection |
-| `ex02_checkout_and_payments_test.rs` | `examples/02_axum_checkout_and_payments.rs` | Hosted Checkout Sessions, Payment Links with EU Omnibus `price_data` binding & deceptive discount rejection (`400`), PaymentIntents lifecycle, Refunds, and live `.env` PaymentIntent test |
-| `ex03_subscriptions_and_invoicing_test.rs` | `examples/03_axum_subscriptions_and_invoicing.rs` | Customer vaulting, GDPR Art. 15 portability & Art. 17 erasure, 14-day trial Subscriptions, Invoices, Customer Portal sessions, and live `.env` Customer roundtrip |
-| `ex04_connect_marketplace_test.rs` | `examples/04_axum_connect_marketplace.rs` | Express Connected Accounts, `AccountOnboarding` links, KYC Persons with `Stripe-Account` multi-tenancy header, split Transfers, and Payouts |
-| `ex05_specialized_products_test.rs` | `examples/05_axum_specialized_products.rs` | Stripe Tax calculate/commit, Identity KYC sessions, Issuing Cardholders (with `individual` first/last name) & active virtual Cards, Treasury FinancialAccounts, and Terminal ConnectionTokens |
-| `ex06_v2_meter_billing_test.rs` | `examples/06_axum_v2_meter_billing.rs` | V2 Core Events, Webhook Event Destinations, V2 Accounts, V2 Billing Meters (`event_payload_key: "value"`), event streaming, and shared `MeterStreamCollector` telemetry |
-| `ex07_unified_server_test.rs` | `examples/axum_stripe_server/` | Unified server V1/V2 webhooks, `subscription` mode Checkout validation, Credit Note `CreditNoteReason` validation, Balance/BalanceTransactions pagination, Treasury transfers, V2 meter adjustments, and RFC 7807 `401`/`404` status mapping |
+| `ex01_webhooks_test.rs` | `examples/axum/01_axum_webhooks.rs` | V1 HMAC-SHA256 verification, V2 Thin Event routing (`construct_v2_thin_event`) & hydration, missing header, forged signature, stale timestamp (>300s) replay rejection |
+| `ex02_checkout_and_payments_test.rs` | `examples/axum/02_axum_checkout_and_payments.rs` | Hosted Checkout Sessions, Payment Links with EU Omnibus `price_data` binding & deceptive discount rejection (`400`), PaymentIntents lifecycle, Refunds, and live `.env` PaymentIntent test |
+| `ex03_subscriptions_and_invoicing_test.rs` | `examples/axum/03_axum_subscriptions_and_invoicing.rs` | Customer vaulting, GDPR Art. 15 portability & Art. 17 erasure, 14-day trial Subscriptions, Invoices, Customer Portal sessions, and live `.env` Customer roundtrip |
+| `ex04_connect_marketplace_test.rs` | `examples/axum/04_axum_connect_marketplace.rs` | Express Connected Accounts, `AccountOnboarding` links, KYC Persons with `Stripe-Account` multi-tenancy header, split Transfers, and Payouts |
+| `ex05_specialized_products_test.rs` | `examples/axum/05_axum_specialized_products.rs` | Stripe Tax calculate/commit, Identity KYC sessions, Issuing Cardholders (with `individual` first/last name) & active virtual Cards, Treasury FinancialAccounts, and Terminal ConnectionTokens |
+| `ex06_v2_meter_billing_test.rs` | `examples/axum/06_axum_v2_meter_billing.rs` | V2 Core Events, Webhook Event Destinations, V2 Accounts, V2 Billing Meters (`event_payload_key: "value"`), event streaming, and shared `MeterStreamCollector` telemetry |
+| `ex07_unified_server_test.rs` | `examples/axum/axum_stripe_server/` | Unified server V1/V2 webhooks, `subscription` mode Checkout validation, Credit Note `CreditNoteReason` validation, Balance/BalanceTransactions pagination, Treasury transfers, V2 meter adjustments, and RFC 7807 `401`/`404` status mapping |
 
 ---
 

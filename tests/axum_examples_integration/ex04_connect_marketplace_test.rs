@@ -1,4 +1,4 @@
-//! Integration Test Suite for `examples/04_axum_connect_marketplace.rs` (Module 6: Connect & Marketplaces).
+//! Integration Test Suite for `examples/axum/04_axum_connect_marketplace.rs` (Module 6: Connect & Marketplaces).
 //!
 //! Covers:
 //! 1. `POST /connect/account` Express merchant account creation.
@@ -7,7 +7,7 @@
 //! 4. `POST /connect/transfer` split payment transfer to connected merchant.
 //! 5. `POST /connect/payout` merchant bank payout creation.
 
-#[path = "../../examples/04_axum_connect_marketplace.rs"]
+#[path = "../../examples/axum/04_axum_connect_marketplace.rs"]
 mod ex04_axum_connect_marketplace;
 
 use axum::http::{Method, StatusCode};

@@ -11,7 +11,7 @@
 mod common;
 
 #[allow(dead_code)]
-#[path = "../../../examples/tonic_core_and_webhooks.rs"]
+#[path = "../../../examples/tonic_grpc/tonic_core_and_webhooks.rs"]
 mod example_grpc;
 
 use common::{DotEnvConfig, sign_webhook_payload};

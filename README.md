@@ -258,7 +258,7 @@ let stripe = StripeClient::new("$STRIPE_SECRET_KEY");
 let webhook_secret = SecretKey::new("$STRIPE_WEBHOOK_SECRET");
 ```
 
-Complete, production-grade [**Axum (`axum 0.8`) and Actix-Web (`actix-web 4`) Example Suites**](examples/) are included in `examples/`, accompanied by full integration test suites in [`tests/axum_examples_integration/`](tests/axum_examples_integration/) and [`tests/actix_examples/`](tests/actix_examples/):
+Complete, production-grade [**Axum (`axum 0.8`) and Actix-Web (`actix-web 4`) Example Suites**](examples/) are organized into dedicated per-framework folders under [`examples/axum/`](examples/axum/) and [`examples/actix_web/`](examples/actix_web/), accompanied by full integration test suites in [`tests/axum_examples_integration/`](tests/axum_examples_integration/) and [`tests/actix_examples/`](tests/actix_examples/):
 
 ```bash
 # Run the Unified Axum Server (Port 3000) or Standalone Axum Microservices (Ports 3001..3006)
@@ -270,28 +270,23 @@ cargo run --example 04_axum_connect_marketplace
 cargo run --example 05_axum_specialized_products
 cargo run --example 06_axum_v2_meter_billing
 
-# Run the Full Axum Examples Integration Test Suite
+# Run the Unified Actix-Web Server (Port 8080) or Standalone Actix-Web Microservices (Ports 8081..8088)
+cargo run --example actix_full_sdk_server
+cargo run --example actix_core_and_webhooks
+cargo run --example actix_payments_and_settlement
+cargo run --example actix_checkout_and_payment_links
+cargo run --example actix_customers_and_subscriptions
+cargo run --example actix_invoicing_and_billing_portal
+cargo run --example actix_connect_marketplace
+cargo run --example actix_specialized_products
+cargo run --example actix_v2_next_gen_services
+
+# Run the Full Axum & Actix-Web Examples Integration Test Suites
 cargo test --test axum_examples_integration_test
+cargo test --test 'actix_*_test'
 ```
 
-See [**`examples/README.md`**](examples/README.md) and [**`tests/axum_examples_integration/README.md`**](tests/axum_examples_integration/README.md) for full endpoint specifications and test scenarios.
-
----
-
-## Rocket.rs Web Framework Example
-
-A comprehensive, production-ready web application showcasing how to integrate `some-stripe` into the **[Rocket.rs (v0.5)](https://rocket.rs/)** web framework is provided under [`examples/rocket_stripe`](examples/rocket_stripe/):
-
-- **Native `$VAR_NAME` Secret Resolution**: Uses `StripeClient::new("$STRIPE_SECRET_KEY")` and `SecretKey::new("$STRIPE_WEBHOOK_SECRET")` to automatically resolve secrets from process environment variables or `.env.local`, `.env.dev`, `.env`, and `.env.example`.
-- **End-to-End Coverage**: Route modules and dual-mode integration test suites (`examples/rocket_stripe/tests/`) for all 8 Stripe SDK services (Checkout, Payments & Settlements, Customers & Billing, Connect & Marketplaces, Tax, Identity, Issuing, Treasury, Terminal, API V2 Core & High-Throughput Usage Meters).
-- **Cryptographic Webhooks**: Constant-time signature verification (`Webhook::construct_event`), replay protection (300s tolerance), 1 MB payload limits, and automatic V2 thin event hydration.
-- **Runnable Documentation**: Complete directory of endpoints and verbatim `curl` commands in [`examples/rocket_stripe/README.md`](examples/rocket_stripe/README.md).
-
-Run the example or its integration test suite directly:
-```bash
-cargo run --bin rocket-stripe-example
-cargo test -p rocket-stripe-example
-```
+See [**`examples/README.md`**](examples/README.md), [**`examples/axum/README.md`**](examples/axum/README.md), [**`examples/actix_web/README.md`**](examples/actix_web/README.md), [**`tests/axum_examples_integration/README.md`**](tests/axum_examples_integration/README.md), and [**`tests/actix_examples/README.md`**](tests/actix_examples/README.md) for full endpoint specifications and test scenarios.
 
 ---
 
@@ -301,40 +296,44 @@ cargo test -p rocket-stripe-example
 
 ```text
 some-stripe/
-├── Cargo.toml                           # Root facade crate (some-stripe v0.8.0) & workspace manifest
+├── Cargo.toml                              # Root facade crate (some-stripe v0.8.0) & workspace manifest
 ├── src/
-│   ├── lib.rs                           # Unified StripeClient, StripeClientExt, and public re-exports
+│   ├── lib.rs                              # Unified StripeClient, StripeClientExt, and public re-exports
 │   ├── crates/
-│   │   ├── some-stripe-core/            # Microkernel runtime, transport, retry workflows & serializers
+│   │   ├── some-stripe-core/               # Microkernel runtime, transport, retry workflows & serializers
 │   │   │   └── src/
-│   │   │       ├── client.rs            # Lock-free Arc<ClientInner> HTTP execution engine
-│   │   │       ├── error.rs             # StripeError & StripeWebhookError taxonomy
-│   │   │       ├── idempotency.rs       # RFC 4122 UUID v4 generator & header injection
-│   │   │       ├── workflow.rs          # Jittered exponential backoff & security escalation hooks
-│   │   │       └── patterns/            # Shared DRY patterns catalog
-│   │   │           ├── serializer.rs    # v1 indexed-bracket form & v2 JSON serializers
-│   │   │           ├── nullable.rs      # 3-state Nullable<T> (Value, Null -> "", Omit)
-│   │   │           ├── pagination.rs    # v1 cursor Paginator<T> with CursorLoopDetector
-│   │   │           ├── v2_pagination.rs # v2 URL-driven V2Paginator<T> with SSRF & loop guards
+│   │   │       ├── client.rs               # Lock-free Arc<ClientInner> HTTP execution engine
+│   │   │       ├── error.rs                # StripeError & StripeWebhookError taxonomy
+│   │   │       ├── idempotency.rs          # RFC 4122 UUID v4 generator & header injection
+│   │   │       ├── workflow.rs             # Jittered exponential backoff & security escalation hooks
+│   │   │       └── patterns/               # Shared DRY patterns catalog
+│   │   │           ├── serializer.rs       # v1 indexed-bracket form & v2 JSON serializers
+│   │   │           ├── nullable.rs         # 3-state Nullable<T> (Value, Null -> "", Omit)
+│   │   │           ├── pagination.rs       # v1 cursor Paginator<T> with CursorLoopDetector
+│   │   │           ├── v2_pagination.rs    # v2 URL-driven V2Paginator<T> with SSRF & loop guards
 │   │   │           └── meter_serializer.rs # High-throughput JSON/NDJSON meter batch serializer
-│   │   ├── some-stripe-types/           # Zero-copy domain models, DTOs & EventObject union
-│   │   └── some-stripe-webhooks/        # Constant-time HMAC-SHA256 & v2 thin event probe engine
-│   └── resources/                       # Idiomatic resource namespaces (Modules 1..8)
-│       ├── checkout.rs                  # Module 4: Hosted Checkout Sessions & Payment Links
-│       ├── payment_intents.rs           # Module 3: PaymentIntents, Refunds, Disputes, Balance
+│   │   ├── some-stripe-types/              # Zero-copy domain models, DTOs & EventObject union
+│   │   └── some-stripe-webhooks/           # Constant-time HMAC-SHA256 & v2 thin event probe engine
+│   └── resources/                          # Idiomatic resource namespaces (Modules 1..8)
+│       ├── checkout.rs                     # Module 4: Hosted Checkout Sessions & Payment Links
+│       ├── payment_intents.rs              # Module 3: PaymentIntents, Refunds, Disputes, Balance
 │       ├── customers.rs / subscriptions.rs / invoices.rs / credit_notes.rs / quotes.rs / billing_portal.rs # Module 5
 │       ├── accounts.rs / persons.rs / transfers.rs / application_fees.rs / payouts.rs # Module 6: Connect
 │       ├── tax.rs / identity.rs / issuing*.rs / treasury*.rs / terminal.rs # Module 7: Specialized Products
 │       ├── v2_core.rs / v2_events.rs / v2_destinations.rs / v2_accounts.rs / v2_hydration.rs # Module 8 (US-8.1.0)
-│       └── v2/                          # Module 8 (US-8.2.0): V2 Billing & Meter Ingestion Engine
-│           ├── billing.rs               # stripe.v2().billing() facade
-│           ├── billing_meters.rs        # V2 Billing Meters CRUD (/v2/billing/meters)
-│           ├── meter_session.rs         # Ephemeral Meter Event Sessions (/v2/billing/meter_event_session)
-│           ├── meter_stream.rs          # Batch Meter Event Stream (/v2/billing/meter_event_stream)
-│           ├── meter_adjustments.rs     # Meter Event Adjustments (/v2/billing/meter_event_adjustments)
-│           └── ingestion_engine.rs      # MeterIngestionEngine & MeterStreamCollector
-├── tests/                               # End-to-end wire mock & omnibus integration test suites
-└── docs/                                # Architectural research, user stories & live Kanban boards
+│       └── v2/                             # Module 8 (US-8.2.0): V2 Billing & Meter Ingestion Engine
+│           ├── billing.rs                  # stripe.v2().billing() facade
+│           ├── billing_meters.rs           # V2 Billing Meters CRUD (/v2/billing/meters)
+│           ├── meter_session.rs            # Ephemeral Meter Event Sessions (/v2/billing/meter_event_session)
+│           ├── meter_stream.rs             # Batch Meter Event Stream (/v2/billing/meter_event_stream)
+│           ├── meter_adjustments.rs        # Meter Event Adjustments (/v2/billing/meter_event_adjustments)
+│           └── ingestion_engine.rs         # MeterIngestionEngine & MeterStreamCollector
+├── examples/                               # Framework-organized reference servers & microservices
+│   ├── README.md                           # Top-level framework index
+│   ├── axum/                               # Axum 0.8 microservices & unified axum_stripe_server/
+│   └── actix_web/                          # Actix-Web 4 microservices & unified actix_full_sdk_server.rs
+├── tests/                                  # End-to-end wire mock & omnibus integration test suites
+└── docs/                                   # Architectural research, user stories & live Kanban boards
 ```
 
 ---
@@ -379,7 +378,7 @@ All **8 Core Architectural Modules** (16 User Stories, 80 Micro-Units) are **100
 
 | Tier | Monthly | Placement & Benefits |
 | :--- | :--- | :--- |
-| **🏆 Visionary** | $1,000 / mo | Large logo on `README.md`, website, and Docs.rs header • Prioritized GitHub issues • Dedicated quarterly roadmap review |
+| **🌟 Visionary** | $1,000 / mo | Large logo on `README.md`, website, and Docs.rs header • Prioritized GitHub issues • Dedicated quarterly roadmap review |
 | **🥇 Gold Partner** | $500 / mo | Prominent logo on `README.md` • Prioritized PR reviews • Direct issue escalation |
 | **🥈 Silver Backer** | $150 / mo | Company logo, link, and mention in `README.md` and release changelogs |
 | **☕ Individual** | $10 – $50 / mo | Listed as a contributor and backer on GitHub |

@@ -9,7 +9,7 @@
 mod common;
 
 #[allow(dead_code)]
-#[path = "../../../examples/actix_full_sdk_server.rs"]
+#[path = "../../../examples/actix_web/actix_full_sdk_server.rs"]
 mod full_server;
 
 use actix_web::{App, http::StatusCode, test, web};

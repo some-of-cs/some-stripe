@@ -1,4 +1,4 @@
-//! Integration Test Suite for `examples/05_axum_specialized_products.rs` (Module 7: Specialized Products).
+//! Integration Test Suite for `examples/axum/05_axum_specialized_products.rs` (Module 7: Specialized Products).
 //!
 //! Covers:
 //! 1. `POST /tax/calculate` & `POST /tax/commit` (Stripe Tax calculations and immutable transaction commit).
@@ -8,7 +8,7 @@
 //! 4. `POST /treasury/account` (Treasury financial account creation).
 //! 5. `POST /terminal/token` (Terminal Smart Reader connection token minting).
 
-#[path = "../../examples/05_axum_specialized_products.rs"]
+#[path = "../../examples/axum/05_axum_specialized_products.rs"]
 mod ex05_axum_specialized_products;
 
 use axum::http::{Method, StatusCode};

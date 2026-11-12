@@ -1,4 +1,4 @@
-//! Integration Test Suite for `examples/01_axum_webhooks.rs` (Module 2: Cryptographic Webhooks & V2 Thin Events).
+//! Integration Test Suite for `examples/axum/01_axum_webhooks.rs` (Module 2: Cryptographic Webhooks & V2 Thin Events).
 //!
 //! Covers:
 //! 1. Valid V1 `payment_intent.succeeded` webhook signature verification (`200 OK`, `v2_thin_event: false`).
@@ -10,7 +10,7 @@
 //! 6. Stale timestamp outside 300-second replay window rejection (`400 Bad Request`).
 //! 7. Credential loader validation (`load_required_env` rejects missing/empty/whitespace keys).
 
-#[path = "../../examples/01_axum_webhooks.rs"]
+#[path = "../../examples/axum/01_axum_webhooks.rs"]
 mod ex01_axum_webhooks;
 
 use axum::http::StatusCode;

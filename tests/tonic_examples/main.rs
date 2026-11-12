@@ -16,39 +16,39 @@
 mod common;
 
 #[allow(dead_code)]
-#[path = "../../examples/tonic_core_and_webhooks.rs"]
+#[path = "../../examples/tonic_grpc/tonic_core_and_webhooks.rs"]
 mod tonic_core_and_webhooks;
 
 #[allow(dead_code)]
-#[path = "../../examples/tonic_payments_and_settlement.rs"]
+#[path = "../../examples/tonic_grpc/tonic_payments_and_settlement.rs"]
 mod tonic_payments_and_settlement;
 
 #[allow(dead_code)]
-#[path = "../../examples/tonic_checkout_and_payment_links.rs"]
+#[path = "../../examples/tonic_grpc/tonic_checkout_and_payment_links.rs"]
 mod tonic_checkout_and_payment_links;
 
 #[allow(dead_code)]
-#[path = "../../examples/tonic_customers_and_subscriptions.rs"]
+#[path = "../../examples/tonic_grpc/tonic_customers_and_subscriptions.rs"]
 mod tonic_customers_and_subscriptions;
 
 #[allow(dead_code)]
-#[path = "../../examples/tonic_invoicing_and_billing_portal.rs"]
+#[path = "../../examples/tonic_grpc/tonic_invoicing_and_billing_portal.rs"]
 mod tonic_invoicing_and_billing_portal;
 
 #[allow(dead_code)]
-#[path = "../../examples/tonic_connect_marketplace.rs"]
+#[path = "../../examples/tonic_grpc/tonic_connect_marketplace.rs"]
 mod tonic_connect_marketplace;
 
 #[allow(dead_code)]
-#[path = "../../examples/tonic_specialized_products.rs"]
+#[path = "../../examples/tonic_grpc/tonic_specialized_products.rs"]
 mod tonic_specialized_products;
 
 #[allow(dead_code)]
-#[path = "../../examples/tonic_v2_next_gen_services.rs"]
+#[path = "../../examples/tonic_grpc/tonic_v2_next_gen_services.rs"]
 mod tonic_v2_next_gen_services;
 
 #[allow(dead_code)]
-#[path = "../../examples/tonic_full_sdk_server.rs"]
+#[path = "../../examples/tonic_grpc/tonic_full_sdk_server.rs"]
 mod tonic_full_sdk_server;
 
 use common::{DotEnvConfig, MockStripeServer, MockWireResponse, sign_webhook_payload};

@@ -1,4 +1,4 @@
-//! Integration Test Suite for `examples/06_axum_v2_meter_billing.rs` (Module 8: API V2 & Meter Billing).
+//! Integration Test Suite for `examples/axum/06_axum_v2_meter_billing.rs` (Module 8: API V2 & Meter Billing).
 //!
 //! Covers:
 //! 1. `GET /v2/events` listing API V2 core events.
@@ -8,7 +8,7 @@
 //! 5. `POST /v2/meters/event` streaming usage events and `GET /v2/meters/engine-stats` verifying that
 //!    the shared `MeterStreamCollector` in `V2State` increments `events_received`.
 
-#[path = "../../examples/06_axum_v2_meter_billing.rs"]
+#[path = "../../examples/axum/06_axum_v2_meter_billing.rs"]
 mod ex06_axum_v2_meter_billing;
 
 use axum::http::{Method, StatusCode};
@@ -120,7 +120,7 @@ async fn test_ex06_v2_billing_meter_and_shared_collector_stats() {
     assert_eq!(b1["id"], "mtr_test_06");
     let (_, meter_wire) = h1.await.expect("Mock server failed");
     assert!(
-        meter_wire.contains(""event_payload_key":"value""),
+        meter_wire.contains(r#""event_payload_key":"value""#),
         "Meter creation must configure event_payload_key as 'value': {meter_wire}"
     );
 
