@@ -278,6 +278,23 @@ See [**`examples/README.md`**](examples/README.md) and [**`tests/axum_examples_i
 
 ---
 
+## Rocket.rs Web Framework Example
+
+A comprehensive, production-ready web application showcasing how to integrate `some-stripe` into the **[Rocket.rs (v0.5)](https://rocket.rs/)** web framework is provided under [`examples/rocket_stripe`](examples/rocket_stripe/):
+
+- **Native `$VAR_NAME` Secret Resolution**: Uses `StripeClient::new("$STRIPE_SECRET_KEY")` and `SecretKey::new("$STRIPE_WEBHOOK_SECRET")` to automatically resolve secrets from process environment variables or `.env.local`, `.env.dev`, `.env`, and `.env.example`.
+- **End-to-End Coverage**: Route modules and dual-mode integration test suites (`examples/rocket_stripe/tests/`) for all 8 Stripe SDK services (Checkout, Payments & Settlements, Customers & Billing, Connect & Marketplaces, Tax, Identity, Issuing, Treasury, Terminal, API V2 Core & High-Throughput Usage Meters).
+- **Cryptographic Webhooks**: Constant-time signature verification (`Webhook::construct_event`), replay protection (300s tolerance), 1 MB payload limits, and automatic V2 thin event hydration.
+- **Runnable Documentation**: Complete directory of endpoints and verbatim `curl` commands in [`examples/rocket_stripe/README.md`](examples/rocket_stripe/README.md).
+
+Run the example or its integration test suite directly:
+```bash
+cargo run --bin rocket-stripe-example
+cargo test -p rocket-stripe-example
+```
+
+---
+
 ## Architecture Overview
 
 `some-stripe` is structured as a 4-crate Cargo workspace following a strict microkernel separation of concerns:

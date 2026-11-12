@@ -1,0 +1,11 @@
+[default]
+port = 8000
+address = "127.0.0.1"
+log_level = "normal"
+secret_key = "MDEyMzQ1Njc4OTAxMjM0NTY3ODkwMTIzNDU2Nzg5MDE="
+
+[default.limits]
+forms = "1 MiB"
+json = "1 MiB"
+data-form = "2 MiB"
+bytes = "1 MiB"
