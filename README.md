@@ -17,6 +17,7 @@
 [Key Features](#key-features) •
 [Installation](#installation) •
 [Quick Start](#quick-start) •
+[Axum & Actix-Web Integration](#axum--actix-web-framework-integration) •
 [Webhook & V2 Security](#security--cryptographic-integrity) •
 [Architecture](#architecture-overview) •
 [Development Status (v0.8.0)](#development-status--module-matrix-v080) •
@@ -241,6 +242,39 @@ let stripe = StripeClient::with_config(config);
 - **Automatic Secret Zeroization (`ZeroizeOnDrop`)**: API secret keys (`SecretKey`), v2 account access tokens (`V2AccountToken`), and ephemeral meter session bearer tokens (`SessionTokenDetails`) are automatically scrubbed from memory on drop and masked as `[REDACTED]` in `Debug` / `Display` formatting.
 - **SSRF & Path Traversal Isolation**: All resource IDs are validated via `validate_and_encode_id` to prevent URL path traversal (`..`, `/`, `?`, `#`), and URL-driven v2 pagination (`resolve_v2_url`) strips untrusted external hosts to prevent Server-Side Request Forgery (SSRF).
 - **Bounded Payload Allocations**: Incoming webhook requests enforce a strict 1 MB (`MAX_WEBHOOK_PAYLOAD_BYTES`) ceiling before allocation.
+
+---
+
+## Axum & Actix-Web Framework Integration
+
+`some-stripe` is engineered from the ground up for asynchronous Rust web microservices and includes native **`$VAR_NAME` environment and `.env*` secret resolution**:
+
+```rust,no_run
+use some_stripe::{SecretKey, StripeClient};
+
+// Automatically resolves $STRIPE_SECRET_KEY and $STRIPE_WEBHOOK_SECRET from process env,
+// .env.local, .env.dev, .env.development, .env.test, .env.prod, .env.production, .env, or .env.example!
+let stripe = StripeClient::new("$STRIPE_SECRET_KEY");
+let webhook_secret = SecretKey::new("$STRIPE_WEBHOOK_SECRET");
+```
+
+Complete, production-grade [**Axum (`axum 0.8`) and Actix-Web (`actix-web 4`) Example Suites**](examples/) are included in `examples/`, accompanied by full integration test suites in [`tests/axum_examples_integration/`](tests/axum_examples_integration/) and [`tests/actix_examples/`](tests/actix_examples/):
+
+```bash
+# Run the Unified Axum Server (Port 3000) or Standalone Axum Microservices (Ports 3001..3006)
+cargo run --example axum_stripe_server
+cargo run --example 01_axum_webhooks
+cargo run --example 02_axum_checkout_and_payments
+cargo run --example 03_axum_subscriptions_and_invoicing
+cargo run --example 04_axum_connect_marketplace
+cargo run --example 05_axum_specialized_products
+cargo run --example 06_axum_v2_meter_billing
+
+# Run the Full Axum Examples Integration Test Suite
+cargo test --test axum_examples_integration_test
+```
+
+See [**`examples/README.md`**](examples/README.md) and [**`tests/axum_examples_integration/README.md`**](tests/axum_examples_integration/README.md) for full endpoint specifications and test scenarios.
 
 ---
 
