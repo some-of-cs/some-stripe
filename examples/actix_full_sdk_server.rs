@@ -116,16 +116,12 @@ pub async fn sdk_service_catalog() -> HttpResponse {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let secret_key =
-        std::env::var("STRIPE_SECRET_KEY").unwrap_or_else(|_| "sk_test_example_key".to_string());
-    let webhook_secret =
-        std::env::var("STRIPE_WEBHOOK_SECRET").unwrap_or_else(|_| "whsec_test_secret".to_string());
-
-    let stripe = core_and_webhooks::build_configured_client(&secret_key, None);
-    let shared_stripe = web::Data::new(StripeClient::new(SecretKey::new(&secret_key)));
+    // Automatically resolves $STRIPE_SECRET_KEY and $STRIPE_WEBHOOK_SECRET from .env, .env.local, .env.dev, or .env.example
+    let stripe = core_and_webhooks::build_configured_client("$STRIPE_SECRET_KEY", None);
+    let shared_stripe = web::Data::new(StripeClient::new("$STRIPE_SECRET_KEY"));
     let webhook_state = web::Data::new(core_and_webhooks::WebhookAppState {
-        stripe: StripeClient::new(SecretKey::new(&secret_key)),
-        webhook_secret: SecretKey::new(webhook_secret),
+        stripe: StripeClient::new("$STRIPE_SECRET_KEY"),
+        webhook_secret: SecretKey::new("$STRIPE_WEBHOOK_SECRET"),
     });
     let v2_state = web::Data::new(v2_next_gen_services::V2AppState {
         ingestion_engine: stripe.v2().billing().create_ingestion_engine(),

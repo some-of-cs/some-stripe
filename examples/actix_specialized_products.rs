@@ -858,6 +858,44 @@ pub async fn create_terminal_connection_token(
     Ok(HttpResponse::Created().json(token))
 }
 
+/// `GET /tax/transactions/{id}/line-items` — Streams tax transaction line items via
+/// `stripe.tax().transactions().list_line_items_default()`.
+#[get("/tax/transactions/{id}/line-items")]
+pub async fn list_tax_transaction_line_items(
+    stripe: web::Data<StripeClient>,
+    id: web::Path<String>,
+) -> Result<HttpResponse, SpecializedError> {
+    let mut paginator = stripe
+        .tax()
+        .transactions()
+        .list_line_items_default(id.as_str());
+    let mut items = Vec::new();
+    while let Some(item) = paginator.next_item().await? {
+        items.push(item);
+        if items.len() >= 25 {
+            break;
+        }
+    }
+    Ok(HttpResponse::Ok().json(items))
+}
+
+/// `GET /identity/reports` — Streams Identity VerificationReports via
+/// `stripe.identity().verification_reports().list_default()`.
+#[get("/identity/reports")]
+pub async fn list_verification_reports(
+    stripe: web::Data<StripeClient>,
+) -> Result<HttpResponse, SpecializedError> {
+    let mut paginator = stripe.identity().verification_reports().list_default();
+    let mut items = Vec::new();
+    while let Some(report) = paginator.next_item().await? {
+        items.push(report);
+        if items.len() >= 25 {
+            break;
+        }
+    }
+    Ok(HttpResponse::Ok().json(items))
+}
+
 /// Mounts all Module 7 (Tax, Identity, Issuing, Treasury & Terminal) routes onto an Actix-Web [`web::ServiceConfig`].
 pub fn configure_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(create_tax_calculation)
@@ -866,6 +904,7 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
         .service(create_tax_transaction_from_calculation)
         .service(create_tax_transaction_reversal)
         .service(retrieve_tax_transaction)
+        .service(list_tax_transaction_line_items)
         .service(create_tax_registration)
         .service(retrieve_tax_registration)
         .service(update_tax_registration)
@@ -878,6 +917,7 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
         .service(cancel_verification_session)
         .service(redact_verification_session)
         .service(retrieve_verification_report)
+        .service(list_verification_reports)
         .service(create_issuing_cardholder)
         .service(retrieve_issuing_cardholder)
         .service(update_issuing_cardholder)
@@ -921,9 +961,8 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let secret_key =
-        std::env::var("STRIPE_SECRET_KEY").unwrap_or_else(|_| "sk_test_example_key".to_string());
-    let stripe = web::Data::new(StripeClient::new(SecretKey::new(secret_key)));
+    // Automatically resolves $STRIPE_SECRET_KEY from process env, .env.local, .env.dev, .env, or .env.example
+    let stripe = web::Data::new(StripeClient::new("$STRIPE_SECRET_KEY"));
 
     println!("Starting Actix-Web Specialized Products example on http://127.0.0.1:8087");
     HttpServer::new(move || {

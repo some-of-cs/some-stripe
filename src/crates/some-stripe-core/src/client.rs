@@ -18,8 +18,24 @@ pub struct SecretKey {
 
 impl SecretKey {
     /// Creates a new securely held [`SecretKey`].
+    ///
+    /// If `key` begins with `$` (such as `"$STRIPE_SECRET_KEY"` or `"${STRIPE_SECRET_KEY}"`),
+    /// it automatically resolves the secret value from the process environment or workspace
+    /// dotenv files (`.env.local`, `.env.dev`, `.env.development`, `.env.test`, `.env.prod`,
+    /// `.env.production`, `.env`, `.env.example`, or custom `.env.*` files).
     pub fn new(key: impl Into<String>) -> Self {
-        Self { inner: key.into() }
+        let mut raw = key.into();
+        let inner = crate::env_secret::resolve_env_secret(&raw);
+        raw.zeroize();
+        Self { inner }
+    }
+
+    /// Creates a [`SecretKey`] resolving any `$VAR_NAME` reference relative to `base_dir`.
+    pub fn from_dir(key: impl Into<String>, base_dir: &std::path::Path) -> Self {
+        let mut raw = key.into();
+        let inner = crate::env_secret::resolve_env_secret_from_dir(&raw, base_dir);
+        raw.zeroize();
+        Self { inner }
     }
 
     /// Exposes the underlying secret string for authenticated HTTP transmissions.

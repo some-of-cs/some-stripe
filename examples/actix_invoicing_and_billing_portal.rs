@@ -523,9 +523,8 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let secret_key =
-        std::env::var("STRIPE_SECRET_KEY").unwrap_or_else(|_| "sk_test_example_key".to_string());
-    let stripe = web::Data::new(StripeClient::new(SecretKey::new(secret_key)));
+    // Automatically resolves $STRIPE_SECRET_KEY from process env, .env.local, .env.dev, .env, or .env.example
+    let stripe = web::Data::new(StripeClient::new("$STRIPE_SECRET_KEY"));
 
     println!("Starting Actix-Web Invoicing & Billing Portal example on http://127.0.0.1:8085");
     HttpServer::new(move || {

@@ -630,9 +630,8 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let secret_key =
-        std::env::var("STRIPE_SECRET_KEY").unwrap_or_else(|_| "sk_test_example_key".to_string());
-    let stripe = StripeClient::new(SecretKey::new(&secret_key));
+    // Automatically resolves $STRIPE_SECRET_KEY from process env, .env.local, .env.dev, .env, or .env.example
+    let stripe = StripeClient::new("$STRIPE_SECRET_KEY");
     let ingestion_engine = stripe.v2().billing().create_ingestion_engine();
 
     let state = web::Data::new(V2AppState {

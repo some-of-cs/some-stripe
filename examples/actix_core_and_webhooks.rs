@@ -278,14 +278,10 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let secret_key =
-        std::env::var("STRIPE_SECRET_KEY").unwrap_or_else(|_| "sk_test_example_key".to_string());
-    let webhook_secret =
-        std::env::var("STRIPE_WEBHOOK_SECRET").unwrap_or_else(|_| "whsec_test_secret".to_string());
-
+    // Automatically resolves $STRIPE_SECRET_KEY and $STRIPE_WEBHOOK_SECRET from env, .env.local, .env.dev, .env, or .env.example
     let state = web::Data::new(WebhookAppState {
-        stripe: build_configured_client(&secret_key, None),
-        webhook_secret: SecretKey::new(webhook_secret),
+        stripe: build_configured_client("$STRIPE_SECRET_KEY", None),
+        webhook_secret: SecretKey::new("$STRIPE_WEBHOOK_SECRET"),
     });
 
     println!("Starting Actix-Web Core & Webhooks example on http://127.0.0.1:8081");

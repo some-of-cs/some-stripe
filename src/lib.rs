@@ -63,6 +63,10 @@ pub use some_stripe_core::Bytes;
 pub use some_stripe_core::client::{
     ClientInner, RequestOptions, SecretKey, StripeConfig, StripeHeaderExt,
 };
+pub use some_stripe_core::env_secret::{
+    DOTENV_CANDIDATE_FILES, parse_dotenv_for_key, parse_env_reference, resolve_env_secret,
+    resolve_env_secret_from_dir, resolve_var_from_dirs,
+};
 pub use some_stripe_core::error::{StripeError, StripeWebhookError};
 pub use some_stripe_core::patterns;
 pub use some_stripe_core::patterns::MeterBatchSerializer;
@@ -150,6 +154,10 @@ impl std::ops::Deref for StripeClient {
 
 impl StripeClient {
     /// Creates a new `StripeClient` configured with default settings and the provided secret key.
+    ///
+    /// Supports both literal keys (`"sk_test_..."`) and `$`-prefixed environment/dotenv references
+    /// (`"$STRIPE_SECRET_KEY"` or `"${STRIPE_SECRET_KEY}"`), which automatically resolve from
+    /// process environment variables or `.env.local`, `.env.dev`, `.env`, `.env.example`, etc.
     pub fn new(secret_key: impl Into<SecretKey>) -> Self {
         Self(some_stripe_core::StripeClient::new(secret_key))
     }
