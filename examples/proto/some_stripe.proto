@@ -1,0 +1,85 @@
+// ============================================================================
+// some-stripe Tonic gRPC Reference Schema (Protocol Buffers v3)
+// Covers all 8 architectural modules (34+ Stripe API v1 & v2 services)
+// ============================================================================
+syntax = "proto3";
+
+package some_stripe.grpc.v1;
+
+// ----------------------------------------------------------------------------
+// 1. Core Runtime, Dual-Protocol Serialization & Cryptographic Webhooks
+// ----------------------------------------------------------------------------
+service CoreWebhooksGrpc {
+  rpc GetHealth (HealthCheckRequest) returns (HealthCheckResponse);
+  rpc PreviewDualProtocol (DualProtocolPreviewRequest) returns (DualProtocolPreviewResponse);
+  rpc VerifyV1Webhook (WebhookVerifyRequest) returns (V1WebhookVerifyResponse);
+  rpc VerifyV2ThinWebhook (WebhookVerifyRequest) returns (V2ThinWebhookVerifyResponse);
+}
+
+message HealthCheckRequest {}
+
+message HealthCheckResponse {
+  string status = 1;
+  string service = 2;
+  string api_base = 3;
+  string secret_debug_redacted = 4;
+}
+
+message DualProtocolPreviewRequest {
+  optional string email = 1;
+  bool clear_description = 2;
+  optional string stripe_account = 3;
+  optional string idempotency_key = 4;
+}
+
+message DualProtocolPreviewResponse {
+  string v1_form_urlencoded = 1;
+  string v2_json_payload = 2;
+  string stripe_account = 3;
+  string idempotency_key = 4;
+  uint64 max_webhook_payload_bytes = 5;
+}
+
+message WebhookVerifyRequest {
+  bytes payload = 1;
+  string signature_header = 2;
+}
+
+message V1WebhookVerifyResponse {
+  bool verified = 1;
+  string event_id = 2;
+  string event_type = 3;
+  bool is_checkout_completed = 4;
+  string object_variant = 5;
+}
+
+message V2ThinWebhookVerifyResponse {
+  bool verified = 1;
+  bool thin_detected = 2;
+  string event_id = 3;
+  string event_type = 4;
+  string related_object_id = 5;
+}
+
+// ----------------------------------------------------------------------------
+// 2. Generic JSON-Envelope RPC Transport for Typed Domain Operations
+// ----------------------------------------------------------------------------
+message ResourceIdRequest {
+  string id = 1;
+  string sub_id = 2;
+}
+
+message JsonPayloadRequest {
+  string id = 1;
+  string sub_id = 2;
+  string json_params = 3;
+}
+
+message JsonPayloadResponse {
+  string json_data = 1;
+}
+
+message BinaryPdfResponse {
+  bytes pdf_bytes = 1;
+  string content_type = 2;
+}

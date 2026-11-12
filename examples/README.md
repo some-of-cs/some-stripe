@@ -120,3 +120,24 @@ cp .env.example .env
 # Run all 23 Axum integration test scenarios across examples 01..06 and axum_stripe_server
 cargo test --test axum_examples_integration_test
 ```
+
+---
+
+## Tonic gRPC Framework Examples Suite (`examples/tonic_*.rs`)
+
+In addition to the Actix-Web REST suite above, `some-stripe` provides a complete **Tonic gRPC (`tonic` + `prost`)** example suite covering all 8 SDK modules plus a unified multi-domain gRPC hub and a canonical Protocol Buffers v3 schema ([`examples/proto/some_stripe.proto`](./proto/some_stripe.proto)).
+
+- **Full Tonic gRPC Documentation**: See [`examples/TONIC_GRPC_README.md`](./TONIC_GRPC_README.md)
+- **Protocol Buffers v3 Schema**: [`examples/proto/some_stripe.proto`](./proto/some_stripe.proto)
+- **Tonic gRPC Example Targets**:
+  - `cargo run --example tonic_core_and_webhooks`
+  - `cargo run --example tonic_payments_and_settlement`
+  - `cargo run --example tonic_checkout_and_payment_links`
+  - `cargo run --example tonic_customers_and_subscriptions`
+  - `cargo run --example tonic_invoicing_and_billing_portal`
+  - `cargo run --example tonic_connect_marketplace`
+  - `cargo run --example tonic_specialized_products`
+  - `cargo run --example tonic_v2_next_gen_services`
+  - `cargo run --example tonic_full_sdk_server`
+- **Tonic gRPC Integration Tests**:
+  - `cargo test --test tonic_examples_integration_test`
