@@ -18,10 +18,7 @@
 //!   cargo run --example actix_core_and_webhooks
 //! ```
 
-#[path = "common/dotenv.rs"]
-pub mod dotenv;
-
-use actix_web::{App, HttpRequest, HttpResponse, HttpServer, ResponseError, get, post, web};
+use actix_web::{App, HttpRequest, HttpResponse, HttpServer, ResponseError, post, get, web};
 use serde::{Deserialize, Serialize};
 use some_stripe::core::patterns::{Nullable, serialize_v1_form, serialize_v2_json};
 use some_stripe::core::workflow::CustomErrorWorkflowBuilder;
@@ -281,16 +278,13 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let env = dotenv::ExampleDotEnv::load();
+    // Automatically resolves $STRIPE_SECRET_KEY and $STRIPE_WEBHOOK_SECRET from env, .env.local, .env.dev, .env, or .env.example
     let state = web::Data::new(WebhookAppState {
-        stripe: build_configured_client(env.secret_key.as_str(), env.api_base.as_deref()),
-        webhook_secret: env.webhook_secret,
+        stripe: build_configured_client("$STRIPE_SECRET_KEY", None),
+        webhook_secret: SecretKey::new("$STRIPE_WEBHOOK_SECRET"),
     });
 
-    println!(
-        "Starting Actix-Web Core & Webhooks example on http://127.0.0.1:8081 (.env loaded: {})",
-        env.dotenv_loaded
-    );
+    println!("Starting Actix-Web Core & Webhooks example on http://127.0.0.1:8081");
     HttpServer::new(move || {
         App::new()
             .app_data(state.clone())

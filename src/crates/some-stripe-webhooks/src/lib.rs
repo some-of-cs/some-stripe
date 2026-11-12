@@ -70,7 +70,7 @@ use hmac::digest::KeyInit;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 use some_stripe_types::Event;
-pub use validation::is_blank_webhook_secret;
+pub use validation::{is_blank_webhook_secret, resolve_webhook_secret};
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -148,6 +148,8 @@ impl Webhook {
         secret: &str,
         config: &ToleranceConfig,
     ) -> Result<bool, StripeWebhookError> {
+        let resolved_secret = resolve_webhook_secret(secret);
+        let secret = resolved_secret.as_ref();
         if is_blank_webhook_secret(secret) {
             return Err(StripeWebhookError::BadKey);
         }
@@ -224,6 +226,8 @@ impl Webhook {
         secret: &str,
         timestamp: Option<i64>,
     ) -> String {
+        let resolved_secret = resolve_webhook_secret(secret);
+        let secret = resolved_secret.as_ref();
         let ts = timestamp.unwrap_or_else(|| chrono::Utc::now().timestamp());
         let sig = compute_streaming_hmac_hex(secret.as_bytes(), ts, payload).unwrap_or_default();
         format!("{TIMESTAMP_PREFIX}{ts},{V1_SIGNATURE_PREFIX}{sig}")

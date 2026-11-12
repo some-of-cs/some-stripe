@@ -24,9 +24,6 @@
 //! STRIPE_SECRET_KEY=sk_test_123 cargo run --example actix_v2_next_gen_services
 //! ```
 
-#[path = "common/dotenv.rs"]
-pub mod dotenv;
-
 use actix_web::{App, HttpResponse, HttpServer, ResponseError, delete, get, post, web};
 use some_stripe::{
     CreateBillingMeterParams, CreateEventDestinationParams, CreateMeterEventAdjustmentParams,
@@ -633,19 +630,16 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let env = dotenv::ExampleDotEnv::load();
-    let stripe = env.build_client();
-    let ingestion_engine = env.build_ingestion_engine(&stripe);
+    // Automatically resolves $STRIPE_SECRET_KEY from process env, .env.local, .env.dev, .env, or .env.example
+    let stripe = StripeClient::new("$STRIPE_SECRET_KEY");
+    let ingestion_engine = stripe.v2().billing().create_ingestion_engine();
 
     let state = web::Data::new(V2AppState {
         stripe,
         ingestion_engine,
     });
 
-    println!(
-        "Starting Actix-Web Stripe API v2 Next-Gen Services example on http://127.0.0.1:8088 (.env loaded: {})",
-        env.dotenv_loaded
-    );
+    println!("Starting Actix-Web Stripe API v2 Next-Gen Services example on http://127.0.0.1:8088");
     HttpServer::new(move || {
         App::new()
             .app_data(state.clone())

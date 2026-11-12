@@ -116,25 +116,19 @@ pub async fn sdk_service_catalog() -> HttpResponse {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let env = core_and_webhooks::dotenv::ExampleDotEnv::load();
-    let stripe = core_and_webhooks::build_configured_client(
-        env.secret_key.as_str(),
-        env.api_base.as_deref(),
-    );
-    let shared_stripe = web::Data::new(env.build_client());
+    // Automatically resolves $STRIPE_SECRET_KEY and $STRIPE_WEBHOOK_SECRET from .env, .env.local, .env.dev, or .env.example
+    let stripe = core_and_webhooks::build_configured_client("$STRIPE_SECRET_KEY", None);
+    let shared_stripe = web::Data::new(StripeClient::new("$STRIPE_SECRET_KEY"));
     let webhook_state = web::Data::new(core_and_webhooks::WebhookAppState {
-        stripe: env.build_client(),
-        webhook_secret: env.webhook_secret.clone(),
+        stripe: StripeClient::new("$STRIPE_SECRET_KEY"),
+        webhook_secret: SecretKey::new("$STRIPE_WEBHOOK_SECRET"),
     });
     let v2_state = web::Data::new(v2_next_gen_services::V2AppState {
-        ingestion_engine: env.build_ingestion_engine(&stripe),
+        ingestion_engine: stripe.v2().billing().create_ingestion_engine(),
         stripe,
     });
 
-    println!(
-        "Starting Unified some-stripe Actix-Web Reference Server on http://127.0.0.1:8080 (.env loaded: {})",
-        env.dotenv_loaded
-    );
+    println!("Starting Unified some-stripe Actix-Web Reference Server on http://127.0.0.1:8080");
     HttpServer::new(move || {
         App::new()
             .app_data(shared_stripe.clone())

@@ -76,6 +76,7 @@
 //! ```
 
 pub mod client;
+pub mod env_secret;
 pub mod error;
 pub mod patterns;
 pub mod v2_pagination;
@@ -85,6 +86,10 @@ pub use bytes::Bytes;
 pub use client::{
     ClientInner, MAX_RETRY_AFTER_SECS, RequestOptions, SecretKey, StripeClient, StripeConfig,
     StripeHeaderExt, retry_after_delay,
+};
+pub use env_secret::{
+    DOTENV_CANDIDATE_FILES, parse_dotenv_for_key, parse_env_reference, resolve_env_secret,
+    resolve_env_secret_from_dir, resolve_var_from_dirs,
 };
 pub use error::{RedirectError, StripeError, StripeWebhookError};
 pub use patterns::{
