@@ -51,6 +51,8 @@ tower = { version = "0.5" }
 tower-http = { version = "0.6", features = ["trace", "cors"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+rocket = { version = "0.5.1", features = ["json"] }
+rocket-stripe-example = { path = "examples/rocket_stripe" }
 
 [[example]]
 name = "actix_core_and_webhooks"
@@ -231,3 +233,39 @@ path = "tests/tonic_examples/full_sdk_server/main.rs"
 [[test]]
 name = "tonic_examples_integration_test"
 path = "tests/tonic_examples/main.rs"
+
+[[test]]
+name = "rocket_checkout_and_payment_links_test"
+path = "tests/rocket_examples/checkout_and_payment_links/main.rs"
+
+[[test]]
+name = "rocket_payments_and_settlement_test"
+path = "tests/rocket_examples/payments_and_settlement/main.rs"
+
+[[test]]
+name = "rocket_customers_and_billing_test"
+path = "tests/rocket_examples/customers_and_billing/main.rs"
+
+[[test]]
+name = "rocket_connect_marketplace_test"
+path = "tests/rocket_examples/connect_marketplace/main.rs"
+
+[[test]]
+name = "rocket_specialized_products_test"
+path = "tests/rocket_examples/specialized_products/main.rs"
+
+[[test]]
+name = "rocket_v2_next_gen_services_test"
+path = "tests/rocket_examples/v2_next_gen_services/main.rs"
+
+[[test]]
+name = "rocket_webhooks_and_security_test"
+path = "tests/rocket_examples/webhooks_and_security/main.rs"
+
+[[test]]
+name = "rocket_full_sdk_server_test"
+path = "tests/rocket_examples/full_sdk_server/main.rs"
+
+[[test]]
+name = "rocket_examples_integration_test"
+path = "tests/rocket_examples/main.rs"

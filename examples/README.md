@@ -7,7 +7,7 @@ All web and RPC framework integrations are organized into dedicated per-framewor
 | **Axum 0.7** | [`examples/axum/`](./axum/README.md) | `01_axum_webhooks.rs` .. `06_axum_v2_meter_billing.rs` + [`axum_stripe_server/`](./axum/axum_stripe_server/main.rs) | [`tests/axum_examples_integration/`](../tests/axum_examples_integration/README.md) |
 | **Actix-Web 4** | [`examples/actix_web/`](./actix_web/README.md) | `actix_core_and_webhooks.rs` .. `actix_v2_next_gen_services.rs` + [`actix_full_sdk_server.rs`](./actix_web/actix_full_sdk_server.rs) | [`tests/actix_examples/`](../tests/actix_examples/README.md) |
 | **Tonic gRPC 0.12** | [`examples/tonic_grpc/`](./tonic_grpc/README.md) | `tonic_core_and_webhooks.rs` .. `tonic_v2_next_gen_services.rs` + [`tonic_full_sdk_server.rs`](./tonic_grpc/tonic_full_sdk_server.rs) + [`proto/some_stripe.proto`](./tonic_grpc/proto/some_stripe.proto) | [`tests/tonic_examples/`](../tests/tonic_examples/README.md) |
-| **Rocket 0.5** | [`examples/rocket_stripe/`](./rocket_stripe/README.md) | Standalone workspace member (`examples/rocket_stripe/src/main.rs`) | `examples/rocket_stripe/tests/` |
+| **Rocket 0.5** | [`examples/rocket_stripe/`](./rocket_stripe/README.md) | Standalone workspace member (`examples/rocket_stripe/src/main.rs`) | [`tests/rocket_examples/`](../tests/rocket_examples/README.md) & `examples/rocket_stripe/tests/` |
 
 ---
 
