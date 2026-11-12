@@ -19,6 +19,9 @@
 //! STRIPE_SECRET_KEY=sk_test_123 cargo run --example actix_connect_marketplace
 //! ```
 
+#[path = "common/dotenv.rs"]
+pub mod dotenv;
+
 use actix_web::{App, HttpResponse, HttpServer, ResponseError, delete, get, post, web};
 use some_stripe::{
     CreateAccountLinkParams, CreateAccountParams, CreateAccountSessionParams,
@@ -452,11 +455,13 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let secret_key =
-        std::env::var("STRIPE_SECRET_KEY").unwrap_or_else(|_| "sk_test_example_key".to_string());
-    let stripe = web::Data::new(StripeClient::new(SecretKey::new(secret_key)));
+    let env = dotenv::ExampleDotEnv::load();
+    let stripe = web::Data::new(env.build_client());
 
-    println!("Starting Actix-Web Connect Marketplace example on http://127.0.0.1:8086");
+    println!(
+        "Starting Actix-Web Connect Marketplace example on http://127.0.0.1:8086 (.env loaded: {})",
+        env.dotenv_loaded
+    );
     HttpServer::new(move || {
         App::new()
             .app_data(stripe.clone())

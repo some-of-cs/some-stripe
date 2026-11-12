@@ -17,6 +17,9 @@
 //! STRIPE_SECRET_KEY=sk_test_123 cargo run --example actix_payments_and_settlement
 //! ```
 
+#[path = "common/dotenv.rs"]
+pub mod dotenv;
+
 use actix_web::{App, HttpResponse, HttpServer, ResponseError, get, post, web};
 use serde::{Deserialize, Serialize};
 use some_stripe::{
@@ -266,11 +269,13 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let secret_key =
-        std::env::var("STRIPE_SECRET_KEY").unwrap_or_else(|_| "sk_test_example_key".to_string());
-    let stripe = web::Data::new(StripeClient::new(SecretKey::new(secret_key)));
+    let env = dotenv::ExampleDotEnv::load();
+    let stripe = web::Data::new(env.build_client());
 
-    println!("Starting Actix-Web Payments & Settlement example on http://127.0.0.1:8082");
+    println!(
+        "Starting Actix-Web Payments & Settlement example on http://127.0.0.1:8082 (.env loaded: {})",
+        env.dotenv_loaded
+    );
     HttpServer::new(move || {
         App::new()
             .app_data(stripe.clone())

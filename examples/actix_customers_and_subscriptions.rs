@@ -18,12 +18,15 @@
 //! STRIPE_SECRET_KEY=sk_test_123 cargo run --example actix_customers_and_subscriptions
 //! ```
 
+#[path = "common/dotenv.rs"]
+pub mod dotenv;
+
 use actix_web::{App, HttpResponse, HttpServer, ResponseError, delete, get, post, web};
 use some_stripe::{
     CancelSubscriptionParams, CancelSubscriptionScheduleParams, CreateCustomerParams,
     CreateSubscriptionItemParams, CreateSubscriptionParams, CreateSubscriptionScheduleParams,
     CreateUsageRecordParams, DeleteSubscriptionItemParams, ListCustomersParams,
-    ListSubscriptionItemsParams, PauseCollectionParams, PreviewProrationParams,
+    ListSubscriptionItemsParams, ListSubscriptionSchedulesParams, ListSubscriptionsParams, PauseCollectionParams, PreviewProrationParams,
     ReleaseSubscriptionScheduleParams, ResumeSubscriptionParams, SearchCustomersParams,
     SearchSubscriptionsParams, SecretKey, StripeClient, StripeError,
     UpdateCustomerCashBalanceParams, UpdateCustomerParams, UpdateSubscriptionItemParams,
@@ -403,6 +406,40 @@ pub async fn cancel_subscription_schedule(
     Ok(HttpResponse::Ok().json(schedule))
 }
 
+/// `GET /subscriptions` — Streams subscriptions using `Paginator<Subscription>` via `stripe.subscriptions().list()`.
+#[get("/subscriptions")]
+pub async fn list_subscriptions(
+    stripe: web::Data<StripeClient>,
+    query: web::Query<ListSubscriptionsParams>,
+) -> Result<HttpResponse, BillingError> {
+    let mut paginator = stripe.subscriptions().list(&query);
+    let mut items = Vec::new();
+    while let Some(sub) = paginator.next_item().await? {
+        items.push(sub);
+        if items.len() >= 25 {
+            break;
+        }
+    }
+    Ok(HttpResponse::Ok().json(items))
+}
+
+/// `GET /subscription-schedules` — Streams subscription schedules via `stripe.subscription_schedules().list()`.
+#[get("/subscription-schedules")]
+pub async fn list_subscription_schedules(
+    stripe: web::Data<StripeClient>,
+    query: web::Query<ListSubscriptionSchedulesParams>,
+) -> Result<HttpResponse, BillingError> {
+    let mut paginator = stripe.subscription_schedules().list(&query);
+    let mut items = Vec::new();
+    while let Some(sched) = paginator.next_item().await? {
+        items.push(sched);
+        if items.len() >= 25 {
+            break;
+        }
+    }
+    Ok(HttpResponse::Ok().json(items))
+}
+
 /// Mounts all Customers, Subscriptions, Items & Schedules routes onto an Actix-Web [`web::ServiceConfig`].
 pub fn configure_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(create_customer)
@@ -422,6 +459,7 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
         .service(resume_subscription_collection)
         .service(preview_subscription_proration)
         .service(search_subscriptions)
+        .service(list_subscriptions)
         .service(create_subscription_item)
         .service(retrieve_subscription_item)
         .service(update_subscription_item)
@@ -432,16 +470,19 @@ pub fn configure_routes(cfg: &mut web::ServiceConfig) {
         .service(retrieve_subscription_schedule)
         .service(update_subscription_schedule)
         .service(release_subscription_schedule)
-        .service(cancel_subscription_schedule);
+        .service(cancel_subscription_schedule)
+        .service(list_subscription_schedules);
 }
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    let secret_key =
-        std::env::var("STRIPE_SECRET_KEY").unwrap_or_else(|_| "sk_test_example_key".to_string());
-    let stripe = web::Data::new(StripeClient::new(SecretKey::new(secret_key)));
+    let env = dotenv::ExampleDotEnv::load();
+    let stripe = web::Data::new(env.build_client());
 
-    println!("Starting Actix-Web Customers & Subscriptions example on http://127.0.0.1:8084");
+    println!(
+        "Starting Actix-Web Customers & Subscriptions example on http://127.0.0.1:8084 (.env loaded: {})",
+        env.dotenv_loaded
+    );
     HttpServer::new(move || {
         App::new()
             .app_data(stripe.clone())
