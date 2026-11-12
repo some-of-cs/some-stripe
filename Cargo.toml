@@ -4,6 +4,7 @@ members = [
     "src/crates/some-stripe-types",
     "src/crates/some-stripe-webhooks",
     ".",
+    "examples/rocket_stripe",
 ]
 exclude = [".worktrees"]
 
@@ -42,8 +43,14 @@ tokio = { version = "1.54.1", features = ["full"] }
 actix-web = "4"
 tonic = "0.12"
 prost = "0.13"
+tokio-stream = "0.1"
 hmac = "0.12"
 hex = "0.4"
+axum = { version = "0.8", features = ["macros"] }
+tower = { version = "0.5" }
+tower-http = { version = "0.6", features = ["trace", "cors"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [[example]]
 name = "actix_core_and_webhooks"
@@ -116,6 +123,38 @@ path = "tests/actix_examples/v2_next_gen_services/main.rs"
 [[test]]
 name = "actix_full_sdk_server_test"
 path = "tests/actix_examples/full_sdk_server/main.rs"
+
+[[example]]
+name = "axum_stripe_server"
+path = "examples/axum_stripe_server/main.rs"
+
+[[example]]
+name = "01_axum_webhooks"
+path = "examples/01_axum_webhooks.rs"
+
+[[example]]
+name = "02_axum_checkout_and_payments"
+path = "examples/02_axum_checkout_and_payments.rs"
+
+[[example]]
+name = "03_axum_subscriptions_and_invoicing"
+path = "examples/03_axum_subscriptions_and_invoicing.rs"
+
+[[example]]
+name = "04_axum_connect_marketplace"
+path = "examples/04_axum_connect_marketplace.rs"
+
+[[example]]
+name = "05_axum_specialized_products"
+path = "examples/05_axum_specialized_products.rs"
+
+[[example]]
+name = "06_axum_v2_meter_billing"
+path = "examples/06_axum_v2_meter_billing.rs"
+
+[[test]]
+name = "axum_examples_integration_test"
+path = "tests/axum_examples_integration/main.rs"
 
 [[example]]
 name = "tonic_core_and_webhooks"
