@@ -4,6 +4,7 @@ members = [
     "src/crates/some-stripe-types",
     "src/crates/some-stripe-webhooks",
     ".",
+    "examples/rocket_stripe",
 ]
 exclude = [".worktrees"]
 
