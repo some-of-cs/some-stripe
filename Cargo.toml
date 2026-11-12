@@ -154,5 +154,41 @@ name = "tonic_full_sdk_server"
 path = "examples/tonic_full_sdk_server.rs"
 
 [[test]]
+name = "tonic_core_and_webhooks_test"
+path = "tests/tonic_examples/core_and_webhooks/main.rs"
+
+[[test]]
+name = "tonic_payments_and_settlement_test"
+path = "tests/tonic_examples/payments_and_settlement/main.rs"
+
+[[test]]
+name = "tonic_checkout_and_payment_links_test"
+path = "tests/tonic_examples/checkout_and_payment_links/main.rs"
+
+[[test]]
+name = "tonic_customers_and_subscriptions_test"
+path = "tests/tonic_examples/customers_and_subscriptions/main.rs"
+
+[[test]]
+name = "tonic_invoicing_and_billing_portal_test"
+path = "tests/tonic_examples/invoicing_and_billing_portal/main.rs"
+
+[[test]]
+name = "tonic_connect_marketplace_test"
+path = "tests/tonic_examples/connect_marketplace/main.rs"
+
+[[test]]
+name = "tonic_specialized_products_test"
+path = "tests/tonic_examples/specialized_products/main.rs"
+
+[[test]]
+name = "tonic_v2_next_gen_services_test"
+path = "tests/tonic_examples/v2_next_gen_services/main.rs"
+
+[[test]]
+name = "tonic_full_sdk_server_test"
+path = "tests/tonic_examples/full_sdk_server/main.rs"
+
+[[test]]
 name = "tonic_examples_integration_test"
 path = "tests/tonic_examples/main.rs"
