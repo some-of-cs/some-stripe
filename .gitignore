@@ -5,3 +5,6 @@ Cargo.lock
 .DS_Store
 /.agent_profiles/
 .worktrees/
+.env
+.env.*
+!.env.example
