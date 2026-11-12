@@ -287,7 +287,7 @@ impl MeterIngestionEngine {
         Self {
             http,
             api_base: api_base.into(),
-            secret_key: secret_key.into(),
+            secret_key: some_stripe_core::resolve_env_secret(&secret_key.into()),
             active_session: Arc::new(RwLock::new(None)),
             refresh_threshold_secs,
             dedup_cache: Arc::new(Mutex::new(HashSet::new())),
