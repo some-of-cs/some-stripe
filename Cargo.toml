@@ -54,39 +54,39 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [[example]]
 name = "actix_core_and_webhooks"
-path = "examples/actix_core_and_webhooks.rs"
+path = "examples/actix_web/actix_core_and_webhooks.rs"
 
 [[example]]
 name = "actix_payments_and_settlement"
-path = "examples/actix_payments_and_settlement.rs"
+path = "examples/actix_web/actix_payments_and_settlement.rs"
 
 [[example]]
 name = "actix_checkout_and_payment_links"
-path = "examples/actix_checkout_and_payment_links.rs"
+path = "examples/actix_web/actix_checkout_and_payment_links.rs"
 
 [[example]]
 name = "actix_customers_and_subscriptions"
-path = "examples/actix_customers_and_subscriptions.rs"
+path = "examples/actix_web/actix_customers_and_subscriptions.rs"
 
 [[example]]
 name = "actix_invoicing_and_billing_portal"
-path = "examples/actix_invoicing_and_billing_portal.rs"
+path = "examples/actix_web/actix_invoicing_and_billing_portal.rs"
 
 [[example]]
 name = "actix_connect_marketplace"
-path = "examples/actix_connect_marketplace.rs"
+path = "examples/actix_web/actix_connect_marketplace.rs"
 
 [[example]]
 name = "actix_specialized_products"
-path = "examples/actix_specialized_products.rs"
+path = "examples/actix_web/actix_specialized_products.rs"
 
 [[example]]
 name = "actix_v2_next_gen_services"
-path = "examples/actix_v2_next_gen_services.rs"
+path = "examples/actix_web/actix_v2_next_gen_services.rs"
 
 [[example]]
 name = "actix_full_sdk_server"
-path = "examples/actix_full_sdk_server.rs"
+path = "examples/actix_web/actix_full_sdk_server.rs"
 
 [[test]]
 name = "actix_core_and_webhooks_test"
@@ -126,31 +126,31 @@ path = "tests/actix_examples/full_sdk_server/main.rs"
 
 [[example]]
 name = "axum_stripe_server"
-path = "examples/axum_stripe_server/main.rs"
+path = "examples/axum/axum_stripe_server/main.rs"
 
 [[example]]
 name = "01_axum_webhooks"
-path = "examples/01_axum_webhooks.rs"
+path = "examples/axum/01_axum_webhooks.rs"
 
 [[example]]
 name = "02_axum_checkout_and_payments"
-path = "examples/02_axum_checkout_and_payments.rs"
+path = "examples/axum/02_axum_checkout_and_payments.rs"
 
 [[example]]
 name = "03_axum_subscriptions_and_invoicing"
-path = "examples/03_axum_subscriptions_and_invoicing.rs"
+path = "examples/axum/03_axum_subscriptions_and_invoicing.rs"
 
 [[example]]
 name = "04_axum_connect_marketplace"
-path = "examples/04_axum_connect_marketplace.rs"
+path = "examples/axum/04_axum_connect_marketplace.rs"
 
 [[example]]
 name = "05_axum_specialized_products"
-path = "examples/05_axum_specialized_products.rs"
+path = "examples/axum/05_axum_specialized_products.rs"
 
 [[example]]
 name = "06_axum_v2_meter_billing"
-path = "examples/06_axum_v2_meter_billing.rs"
+path = "examples/axum/06_axum_v2_meter_billing.rs"
 
 [[test]]
 name = "axum_examples_integration_test"
@@ -158,39 +158,39 @@ path = "tests/axum_examples_integration/main.rs"
 
 [[example]]
 name = "tonic_core_and_webhooks"
-path = "examples/tonic_core_and_webhooks.rs"
+path = "examples/tonic_grpc/tonic_core_and_webhooks.rs"
 
 [[example]]
 name = "tonic_payments_and_settlement"
-path = "examples/tonic_payments_and_settlement.rs"
+path = "examples/tonic_grpc/tonic_payments_and_settlement.rs"
 
 [[example]]
 name = "tonic_checkout_and_payment_links"
-path = "examples/tonic_checkout_and_payment_links.rs"
+path = "examples/tonic_grpc/tonic_checkout_and_payment_links.rs"
 
 [[example]]
 name = "tonic_customers_and_subscriptions"
-path = "examples/tonic_customers_and_subscriptions.rs"
+path = "examples/tonic_grpc/tonic_customers_and_subscriptions.rs"
 
 [[example]]
 name = "tonic_invoicing_and_billing_portal"
-path = "examples/tonic_invoicing_and_billing_portal.rs"
+path = "examples/tonic_grpc/tonic_invoicing_and_billing_portal.rs"
 
 [[example]]
 name = "tonic_connect_marketplace"
-path = "examples/tonic_connect_marketplace.rs"
+path = "examples/tonic_grpc/tonic_connect_marketplace.rs"
 
 [[example]]
 name = "tonic_specialized_products"
-path = "examples/tonic_specialized_products.rs"
+path = "examples/tonic_grpc/tonic_specialized_products.rs"
 
 [[example]]
 name = "tonic_v2_next_gen_services"
-path = "examples/tonic_v2_next_gen_services.rs"
+path = "examples/tonic_grpc/tonic_v2_next_gen_services.rs"
 
 [[example]]
 name = "tonic_full_sdk_server"
-path = "examples/tonic_full_sdk_server.rs"
+path = "examples/tonic_grpc/tonic_full_sdk_server.rs"
 
 [[test]]
 name = "tonic_core_and_webhooks_test"

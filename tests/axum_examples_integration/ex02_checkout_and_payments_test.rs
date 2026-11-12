@@ -1,4 +1,4 @@
-//! Integration Test Suite for `examples/02_axum_checkout_and_payments.rs` (Modules 3 & 4).
+//! Integration Test Suite for `examples/axum/02_axum_checkout_and_payments.rs` (Modules 3 & 4).
 //!
 //! Covers:
 //! 1. `POST /checkout/session` & `GET /checkout/session/{id}` lifecycle.
@@ -10,7 +10,7 @@
 //! 5. `POST /payments/refund` statutory refund creation.
 //! 6. Live `.env` Stripe API verification when `STRIPE_SECRET_KEY` is provided in `.env`.
 
-#[path = "../../examples/02_axum_checkout_and_payments.rs"]
+#[path = "../../examples/axum/02_axum_checkout_and_payments.rs"]
 mod ex02_axum_checkout_and_payments;
 
 use axum::http::{Method, StatusCode};

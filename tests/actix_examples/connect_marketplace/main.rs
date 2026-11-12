@@ -7,7 +7,7 @@
 mod common;
 
 #[allow(dead_code)]
-#[path = "../../../examples/actix_connect_marketplace.rs"]
+#[path = "../../../examples/actix_web/actix_connect_marketplace.rs"]
 mod example_app;
 
 use actix_web::{App, http::StatusCode, test, web};

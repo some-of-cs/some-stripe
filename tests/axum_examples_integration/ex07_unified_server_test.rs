@@ -1,4 +1,4 @@
-//! Integration Test Suite for `examples/axum_stripe_server/` (Unified Production Server covering all 8 Modules).
+//! Integration Test Suite for `examples/axum/axum_stripe_server/` (Unified Production Server covering all 8 Modules).
 //!
 //! Covers:
 //! 1. Webhooks route (`/webhooks/stripe`) for both V1 events and V2 thin events.
@@ -10,7 +10,7 @@
 //! 7. V2 Services routes (`/v2/billing/meters/adjustments`, `/v2/billing/meter-ingestion/stream-demo`).
 //! 8. Unified `AppError` RFC 7807 error mapping (`401 Unauthorized`, `404 Not Found`, `429 Too Many Requests`).
 
-#[path = "../../examples/axum_stripe_server/main.rs"]
+#[path = "../../examples/axum/axum_stripe_server/main.rs"]
 mod axum_stripe_server;
 
 use axum::http::{Method, StatusCode};

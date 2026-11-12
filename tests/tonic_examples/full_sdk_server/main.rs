@@ -8,7 +8,7 @@
 mod common;
 
 #[allow(dead_code)]
-#[path = "../../../examples/tonic_full_sdk_server.rs"]
+#[path = "../../../examples/tonic_grpc/tonic_full_sdk_server.rs"]
 mod full_hub;
 
 use common::{DotEnvConfig, MockStripeServer, MockWireResponse, sign_webhook_payload};

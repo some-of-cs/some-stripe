@@ -1,4 +1,4 @@
-//! Integration Test Suite for `examples/03_axum_subscriptions_and_invoicing.rs` (Module 5: Billing & GDPR).
+//! Integration Test Suite for `examples/axum/03_axum_subscriptions_and_invoicing.rs` (Module 5: Billing & GDPR).
 //!
 //! Covers:
 //! 1. `POST /customers`, `GET /customers/{id}` (GDPR Art. 15 portability), and `DELETE /customers/{id}` (GDPR Art. 17 erasure).
@@ -7,7 +7,7 @@
 //! 4. `POST /portal/session` self-service Customer Portal session minting.
 //! 5. Live `.env` Stripe API Customer create/retrieve/delete cycle when `STRIPE_SECRET_KEY` is set.
 
-#[path = "../../examples/03_axum_subscriptions_and_invoicing.rs"]
+#[path = "../../examples/axum/03_axum_subscriptions_and_invoicing.rs"]
 mod ex03_axum_subscriptions_and_invoicing;
 
 use axum::http::{Method, StatusCode};

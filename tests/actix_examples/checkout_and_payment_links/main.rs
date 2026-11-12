@@ -8,7 +8,7 @@
 mod common;
 
 #[allow(dead_code)]
-#[path = "../../../examples/actix_checkout_and_payment_links.rs"]
+#[path = "../../../examples/actix_web/actix_checkout_and_payment_links.rs"]
 mod example_app;
 
 use actix_web::{App, http::StatusCode, test, web};
