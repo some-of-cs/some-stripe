@@ -11,7 +11,7 @@
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Rust: Edition 2024](https://img.shields.io/badge/rust-2024%20edition-orange.svg)](Cargo.toml)
 [![CI](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/some-of-cs/some-stripe)
-[![Sponsor](https://img.shields.io/badge/Sponsor-%E2%99%A5-ff69b4.svg)](https://github.com/sponsors/some-of-cs)
+[![Sponsor](https://img.shields.io/badge/Sponsor-%E2%99%A5-ff69b4.svg)](https://github.com/sponsors/maheraladdin)
 
 [Why some-stripe?](#why-some-stripe) •
 [Key Features](#key-features) •
@@ -370,7 +370,7 @@ All **8 Core Architectural Modules** (16 User Stories, 80 Micro-Units) are **100
 
 <div align="center">
 
-[![Become a Sponsor](https://img.shields.io/badge/Become%20a%20Sponsor-%E2%99%A5-ea4aaa?style=for-the-badge)](https://github.com/sponsors/some-of-cs)
+[![Become a Sponsor](https://img.shields.io/badge/Become%20a%20Sponsor-%E2%99%A5-ea4aaa?style=for-the-badge)](https://github.com/sponsors/maheraladdin)
 
 </div>
 
