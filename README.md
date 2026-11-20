@@ -3,13 +3,14 @@
 <div align="center">
 
 > **Idiomatic, high-performance Rust SDK and constant-time webhook verification engine for Stripe (API v1 & v2).**  
-> Modeled after `stripe-node` ergonomics • Built for the Rust 2024 edition • Zero-clone microkernel & timing-safe cryptography
+> Modeled after `stripe-node` ergonomics • Built for the Rust 2024 edition • Core Global provider for [`some-payment`](https://github.com/some-of-cs/some-payment)
 
 [![Crates.io](https://img.shields.io/crates/v/some-stripe.svg)](https://crates.io/crates/some-stripe)
 [![Version](https://img.shields.io/badge/version-0.8.0-blue.svg)](Cargo.toml)
 [![Docs.rs](https://docs.rs/some-stripe/badge.svg)](https://docs.rs/some-stripe)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Rust: Edition 2024](https://img.shields.io/badge/rust-2024%20edition-orange.svg)](Cargo.toml)
+[![Ecosystem: some-payment](https://img.shields.io/badge/ecosystem-some--payment-8a2be2.svg)](https://github.com/some-of-cs/some-payment)
 [![CI](https://img.shields.io/badge/build-passing-brightgreen.svg)](https://github.com/some-of-cs/some-stripe)
 [![Sponsor](https://img.shields.io/badge/Sponsor-%E2%99%A5-ff69b4.svg)](https://github.com/sponsors/maheraladdin)
 
@@ -21,6 +22,7 @@
 [Webhook & V2 Security](#security--cryptographic-integrity) •
 [Architecture](#architecture-overview) •
 [Development Status (v0.8.0)](#development-status--module-matrix-v080) •
+[some-payment Ecosystem](#cross-gateway-interoperability-with-some-payment) •
 [Sponsors](#backers--corporate-sponsors)
 
 </div>
@@ -35,6 +37,7 @@ Integrating Stripe in modern Rust services often introduces friction:
 2. **Developer Ergonomics**: Transitioning between TypeScript/Node services and Rust can be jarring. `some-stripe` adopts the familiar hierarchical namespace ergonomics of `stripe-node` (`stripe.checkout().sessions`, `stripe.payment_intents()`, `stripe.subscriptions()`, `stripe.v2().core()`, `stripe.v2().billing()`).
 3. **Serverless & Edge Footprint**: Validating webhook signatures or parsing thin event notifications in AWS Lambda, Cloudflare Workers, or Fastly Compute should not require pulling in hundreds of megabytes of domain types or heavy HTTP client machinery.
 4. **Dual-Protocol Serialization & Nullability Precision**: Accurate zero-indexed bracket encoding (`items[0][price]=...`) and 3-state `Nullable<T>` (`Value`, `Null` $\to$ `""`, `Omit`) for Stripe API v1 (`application/x-www-form-urlencoded`), paired with strict JSON serialization and URL-driven pagination for Stripe API v2 (`application/json`).
+5. **Native Multi-Gateway Composition**: Designed to operate standalone or as the global provider crate inside [`some-payment`](https://github.com/some-of-cs/some-payment) alongside [`some-paymob`](https://github.com/some-of-cs/some-paymob) and [`some-moyasar`](https://github.com/some-of-cs/some-moyasar), combining global Payments, Connect payouts, Tax, and Stripe Identity KYC with regional MENA/GCC gateways.
 
 **`some-stripe` (`v0.8.0`)** solves these challenges with a **4-crate microkernel architecture**: an ultra-lightweight core runtime, zero-copy domain types, an isolated constant-time webhook engine, and comprehensive coverage across **all 8 Stripe product modules (API v1 & v2)**.
 
@@ -364,9 +367,18 @@ All **8 Core Architectural Modules** (16 User Stories, 80 Micro-Units) are **100
 
 ---
 
+## Cross-Gateway Interoperability with `some-payment`
+
+`some-stripe` is built to work standalone or as the global gateway provider inside **[`some-payment`](https://github.com/some-of-cs/some-payment)** alongside **[`some-paymob`](https://github.com/some-of-cs/some-paymob)** and **[`some-moyasar`](https://github.com/some-of-cs/some-moyasar)**:
+
+- **Country-Aware Payment Routing**: Automatically route global customers (`US`, `EU`, `GB`, `CA`, `AU`, and 45+ countries) to `some-stripe` while routing `EG` customers to [`some-paymob`](https://github.com/some-of-cs/some-paymob) (EGP Cards, Vodafone Cash, Fawry Kiosk, ValU BNPL) and `SA` customers to [`some-moyasar`](https://github.com/some-of-cs/some-moyasar) (Mada, STC Pay, SADAD), with `some-stripe` also serving as a global failover gateway.
+- **Composable Cross-Gateway Capabilities**: Mix and match `some-stripe` Identity (`stripe.identity().verification_sessions()`) for global passport/biometric KYC, Stripe Tax (`stripe.tax()`), and Connect Payouts (`stripe.payouts()` / `stripe.transfers()`) with localized checkout collection and regional disbursements from [`some-paymob`](https://github.com/some-of-cs/some-paymob) and [`some-moyasar`](https://github.com/some-of-cs/some-moyasar).
+
+---
+
 ## Backers & Corporate Sponsors
 
-`some-stripe` is an independent, community-driven open-source project. If your business relies on this crate to process transactions or verify webhooks, corporate sponsorship directly finances continuous maintenance, zero-day security updates, and upcoming module expansion.
+`some-stripe` (and the [`some-payment`](https://github.com/some-of-cs/some-payment) ecosystem) is an independent, community-driven open-source project. If your business relies on this crate to process transactions or verify webhooks, corporate sponsorship directly finances continuous maintenance, zero-day security updates, and upcoming module expansion.
 
 <div align="center">
 
