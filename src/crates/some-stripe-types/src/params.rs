@@ -1268,28 +1268,7 @@ impl CreateCheckoutSessionParams {
             });
         }
 
-        if let Some(ref items) = self.line_items {
-            for item in items {
-                if item.quantity == Some(0) {
-                    return Err(PaymentIntentValidationError::InvalidParameter {
-                        field: "line_items.quantity",
-                        reason: "line item quantity must be greater than 0".to_string(),
-                    });
-                }
-                if let Some(ref price_data) = item.price_data {
-                    validate_currency(&price_data.currency)?;
-                    if let Some(amt) = price_data.unit_amount {
-                        validate_amount(amt)?;
-                    }
-                    if price_data.product_data.name.trim().is_empty() {
-                        return Err(PaymentIntentValidationError::InvalidParameter {
-                            field: "product_data.name",
-                            reason: "product name cannot be empty".to_string(),
-                        });
-                    }
-                }
-            }
-        }
+        validate_line_items(self.line_items.as_deref().unwrap_or_default())?;
 
         if let Some(ref curr) = self.currency {
             validate_currency(curr)?;
@@ -1306,6 +1285,42 @@ impl CreateCheckoutSessionParams {
 
         Ok(())
     }
+}
+
+fn validate_line_items(items: &[LineItemParams]) -> Result<(), PaymentIntentValidationError> {
+    for item in items {
+        validate_line_item(item)?;
+    }
+    Ok(())
+}
+
+fn validate_line_item(item: &LineItemParams) -> Result<(), PaymentIntentValidationError> {
+    if item.quantity == Some(0) {
+        return Err(PaymentIntentValidationError::InvalidParameter {
+            field: "line_items.quantity",
+            reason: "line item quantity must be greater than 0".to_string(),
+        });
+    }
+    let Some(price_data) = item.price_data.as_ref() else {
+        return Ok(());
+    };
+    validate_price_data(price_data)
+}
+
+fn validate_price_data(
+    price_data: &LineItemPriceDataParams,
+) -> Result<(), PaymentIntentValidationError> {
+    validate_currency(&price_data.currency)?;
+    if let Some(amt) = price_data.unit_amount {
+        validate_amount(amt)?;
+    }
+    if price_data.product_data.name.trim().is_empty() {
+        return Err(PaymentIntentValidationError::InvalidParameter {
+            field: "product_data.name",
+            reason: "product name cannot be empty".to_string(),
+        });
+    }
+    Ok(())
 }
 
 /// Query parameters for listing line items of a Checkout Session (`GET /v1/checkout/sessions/{id}/line_items`).
