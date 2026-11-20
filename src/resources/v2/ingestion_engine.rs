@@ -65,6 +65,14 @@ enum CollectorCommand {
     Flush(tokio::sync::oneshot::Sender<Result<Option<BatchIngestionResponse>, StripeError>>),
 }
 
+/// Internal mutable state owned by the background collector worker task.
+struct WorkerState {
+    engine: MeterIngestionEngine,
+    stats: Arc<Mutex<CollectorStats>>,
+    buffer: Vec<MeterEventPayload>,
+    batch_size: usize,
+}
+
 /// Async buffered batching stream collector for high-throughput meter events.
 ///
 /// Buffers events sent via [`send`](MeterStreamCollector::send) and automatically
@@ -118,7 +126,7 @@ impl MeterStreamCollector {
         if let Some(id) = &event.identifier
             && !self.engine.record_identifier(id)
         {
-            let mut s = self.stats.lock().unwrap();
+            let mut s = lock_unpoisoned(&self.stats);
             s.duplicates_dropped += 1;
             return Err(StripeError::InvalidRequest(format!(
                 "Duplicate meter event identifier '{id}' rejected by client deduplication engine"
@@ -130,7 +138,7 @@ impl MeterStreamCollector {
             .await
             .map_err(|_| StripeError::InvalidRequest("Collector channel closed".into()))?;
 
-        let mut s = self.stats.lock().unwrap();
+        let mut s = lock_unpoisoned(&self.stats);
         s.events_received += 1;
         Ok(())
     }
@@ -154,7 +162,7 @@ impl MeterStreamCollector {
     /// Inspects the current collector runtime statistics.
     #[must_use]
     pub fn stats(&self) -> CollectorStats {
-        let s = self.stats.lock().unwrap();
+        let s = lock_unpoisoned(&self.stats);
         *s
     }
 
@@ -170,68 +178,74 @@ impl MeterStreamCollector {
         flush_interval: Duration,
         stats: Arc<Mutex<CollectorStats>>,
     ) {
-        let mut buffer: Vec<MeterEventPayload> = Vec::with_capacity(batch_size);
+        let mut state = WorkerState {
+            engine,
+            stats,
+            buffer: Vec::with_capacity(batch_size),
+            batch_size,
+        };
         let mut ticker = tokio::time::interval(flush_interval);
         ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
 
-        loop {
-            tokio::select! {
-                cmd = rx.recv() => match cmd {
-                    Some(CollectorCommand::Event(event)) => {
-                        Self::handle_event_command(event, &mut buffer, batch_size, &engine, &stats).await;
-                    }
-                    Some(CollectorCommand::Flush(reply)) => {
-                        Self::handle_flush_command(reply, &mut buffer, &engine, &stats).await;
-                    }
-                    None => {
-                        Self::flush_if_pending(&mut buffer, &engine, &stats).await;
-                        break;
-                    }
-                },
-                _ = ticker.tick() => {
-                    Self::flush_if_pending(&mut buffer, &engine, &stats).await;
-                }
+        while Self::worker_step(&mut rx, &mut ticker, &mut state).await {}
+    }
+
+    async fn worker_step(
+        rx: &mut tokio::sync::mpsc::Receiver<CollectorCommand>,
+        ticker: &mut tokio::time::Interval,
+        state: &mut WorkerState,
+    ) -> bool {
+        tokio::select! {
+            cmd = rx.recv() => Self::dispatch_command(cmd, state).await,
+            _ = ticker.tick() => {
+                Self::flush_if_pending(state).await;
+                true
             }
         }
     }
 
-    async fn handle_event_command(
-        event: MeterEventPayload,
-        buffer: &mut Vec<MeterEventPayload>,
-        batch_size: usize,
-        engine: &MeterIngestionEngine,
-        stats: &Arc<Mutex<CollectorStats>>,
-    ) {
-        buffer.push(event);
-        if buffer.len() >= batch_size {
-            let batch = std::mem::take(buffer);
-            let _ = Self::flush_batch_internal(engine, batch, stats).await;
+    async fn dispatch_command(cmd: Option<CollectorCommand>, state: &mut WorkerState) -> bool {
+        match cmd {
+            Some(CollectorCommand::Event(event)) => {
+                Self::handle_event_command(event, state).await;
+                true
+            }
+            Some(CollectorCommand::Flush(reply)) => {
+                Self::handle_flush_command(reply, state).await;
+                true
+            }
+            None => {
+                Self::flush_if_pending(state).await;
+                false
+            }
+        }
+    }
+
+    async fn handle_event_command(event: MeterEventPayload, state: &mut WorkerState) {
+        state.buffer.push(event);
+        if state.buffer.len() >= state.batch_size {
+            let batch = std::mem::take(&mut state.buffer);
+            let _ = Self::flush_batch_internal(&state.engine, batch, &state.stats).await;
         }
     }
 
     async fn handle_flush_command(
         reply: tokio::sync::oneshot::Sender<Result<Option<BatchIngestionResponse>, StripeError>>,
-        buffer: &mut Vec<MeterEventPayload>,
-        engine: &MeterIngestionEngine,
-        stats: &Arc<Mutex<CollectorStats>>,
+        state: &mut WorkerState,
     ) {
-        let res = if !buffer.is_empty() {
-            let batch = std::mem::take(buffer);
-            Self::flush_batch_internal(engine, batch, stats).await
-        } else {
+        let res = if state.buffer.is_empty() {
             Ok(None)
+        } else {
+            let batch = std::mem::take(&mut state.buffer);
+            Self::flush_batch_internal(&state.engine, batch, &state.stats).await
         };
         let _ = reply.send(res);
     }
 
-    async fn flush_if_pending(
-        buffer: &mut Vec<MeterEventPayload>,
-        engine: &MeterIngestionEngine,
-        stats: &Arc<Mutex<CollectorStats>>,
-    ) {
-        if !buffer.is_empty() {
-            let batch = std::mem::take(buffer);
-            let _ = Self::flush_batch_internal(engine, batch, stats).await;
+    async fn flush_if_pending(state: &mut WorkerState) {
+        if !state.buffer.is_empty() {
+            let batch = std::mem::take(&mut state.buffer);
+            let _ = Self::flush_batch_internal(&state.engine, batch, &state.stats).await;
         }
     }
 
@@ -242,7 +256,7 @@ impl MeterStreamCollector {
     ) -> Result<Option<BatchIngestionResponse>, StripeError> {
         let count = batch.len() as u64;
         let resp = engine.send_batch(batch).await?;
-        let mut s = stats.lock().unwrap();
+        let mut s = lock_unpoisoned(stats);
         s.events_flushed += count;
         s.batches_sent += 1;
         Ok(Some(resp))
@@ -311,7 +325,7 @@ impl MeterIngestionEngine {
 
     /// Checks if a meter event identifier was already seen in the client deduplication cache.
     pub fn is_duplicate(&self, identifier: &str) -> bool {
-        let cache = self.dedup_cache.lock().unwrap();
+        let cache = lock_unpoisoned(&self.dedup_cache);
         cache.contains(identifier)
     }
 
@@ -319,7 +333,7 @@ impl MeterIngestionEngine {
     ///
     /// Returns `true` if newly recorded, or `false` if already present.
     pub fn record_identifier(&self, identifier: &str) -> bool {
-        let mut cache = self.dedup_cache.lock().unwrap();
+        let mut cache = lock_unpoisoned(&self.dedup_cache);
         if cache.len() >= self.dedup_capacity {
             cache.clear();
         }
@@ -328,7 +342,7 @@ impl MeterIngestionEngine {
 
     /// Clears all entries from the client-side deduplication cache.
     pub fn clear_dedup_cache(&self) {
-        let mut cache = self.dedup_cache.lock().unwrap();
+        let mut cache = lock_unpoisoned(&self.dedup_cache);
         cache.clear();
     }
 
@@ -535,4 +549,30 @@ fn current_unix_timestamp() -> i64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs() as i64
+}
+
+fn lock_unpoisoned<T>(m: &std::sync::Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lock_unpoisoned_recovers_after_panic() {
+        let mutex = Arc::new(Mutex::new(41_u32));
+        let poisoned = Arc::clone(&mutex);
+
+        let _ = std::thread::spawn(move || {
+            let mut guard = lock_unpoisoned(&poisoned);
+            *guard = 42;
+            panic!("simulated worker panic while holding mutex");
+        })
+        .join();
+
+        assert!(mutex.is_poisoned());
+        let guard = lock_unpoisoned(&mutex);
+        assert_eq!(*guard, 42);
+    }
 }
