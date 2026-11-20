@@ -616,12 +616,9 @@ impl StripeClient {
                 AttemptOutcome::Done(result) => return result,
                 AttemptOutcome::Retry => {
                     retries_taken += 1;
-                    let Some(cloned) = next_req else {
-                        return Err(StripeError::ConnectionError(
-                            "retry request could not be cloned".into(),
-                        ));
-                    };
-                    req = cloned;
+                    req = next_req.ok_or_else(|| {
+                        StripeError::ConnectionError("retry request could not be cloned".into())
+                    })?;
                 }
             }
         }
@@ -1028,7 +1025,7 @@ mod tests {
             Some("tok_ephemeral_secret_98765")
         );
         let debug_str = format!("{opts:?}");
-        assert!(debug_str.contains("bearer_token: Some("[REDACTED]")"));
+        assert!(debug_str.contains(r#"bearer_token: Some("[REDACTED]")"#));
         assert!(!debug_str.contains("tok_ephemeral_secret_98765"));
 
         let empty_debug = format!("{:?}", RequestOptions::new());
