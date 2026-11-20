@@ -114,7 +114,7 @@ impl StripeHeaderExt for reqwest::RequestBuilder {
 
 /// Per-request options allowing callers to override multi-tenant headers, idempotency keys,
 /// API versions, or network timeouts on a specific call without mutating the base client.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Clone, Default, PartialEq, Eq)]
 pub struct RequestOptions {
     /// Connected account ID for Stripe Connect multi-tenancy (`Stripe-Account` header).
     pub stripe_account: Option<String>,
@@ -125,7 +125,20 @@ pub struct RequestOptions {
     /// Per-request execution timeout override.
     pub timeout: Option<Duration>,
     /// Ephemeral bearer token override (e.g. for Meter Event Sessions: `Authorization: Bearer <token>`).
-    pub bearer_token: Option<String>,
+    pub bearer_token: Option<SecretKey>,
+}
+
+impl std::fmt::Debug for RequestOptions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let redacted_token = self.bearer_token.as_ref().map(|_| "[REDACTED]");
+        f.debug_struct("RequestOptions")
+            .field("stripe_account", &self.stripe_account)
+            .field("idempotency_key", &self.idempotency_key)
+            .field("stripe_version", &self.stripe_version)
+            .field("timeout", &self.timeout)
+            .field("bearer_token", &redacted_token)
+            .finish()
+    }
 }
 
 impl RequestOptions {
@@ -136,7 +149,7 @@ impl RequestOptions {
 
     /// Attaches an ephemeral bearer token override for authentication.
     pub fn bearer_token(mut self, token: impl Into<String>) -> Self {
-        self.bearer_token = Some(token.into());
+        self.bearer_token = Some(SecretKey::new(token));
         self
     }
 
@@ -229,6 +242,12 @@ impl StripeConfig {
     /// Sets a custom error workflow and retry handler.
     pub fn with_error_workflow(mut self, handler: Arc<dyn ErrorWorkflowHandler>) -> Self {
         self.error_workflow = handler;
+        self
+    }
+
+    /// Sets application info metadata sent in the HTTP `User-Agent` header.
+    pub fn with_app_info(mut self, app_info: impl Into<String>) -> Self {
+        self.app_info = Some(app_info.into());
         self
     }
 }
@@ -358,6 +377,28 @@ impl StripeClient {
         }
     }
 
+    /// Creates a new `StripeClient` with custom [`StripeConfig`], returning [`StripeError::Config`]
+    /// if the underlying HTTP transport fails to initialize.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use some_stripe_core::{StripeClient, StripeConfig, SecretKey};
+    /// use std::time::Duration;
+    ///
+    /// let config = StripeConfig::new(SecretKey::new("sk_test_123"))
+    ///     .with_timeout(Duration::from_secs(10))
+    ///     .with_app_info("some-payment/0.1.0");
+    /// let client = StripeClient::try_with_config(config).expect("client init");
+    /// assert_eq!(client.config.app_info.as_deref(), Some("some-payment/0.1.0"));
+    /// ```
+    pub fn try_with_config(config: StripeConfig) -> Result<Self, StripeError> {
+        let http = ReqwestTransport::try_new(config.timeout)?.inner().clone();
+
+        Ok(Self {
+            inner: Arc::new(ClientInner { config, http }),
+        })
+    }
+
     /// Reference to the underlying atomic inner state.
     pub fn inner(&self) -> &Arc<ClientInner> {
         &self.inner
@@ -400,30 +441,17 @@ impl StripeClient {
         mut request: reqwest::RequestBuilder,
         options: Option<&RequestOptions>,
     ) -> Result<reqwest::Request, StripeError> {
-        let mut bearer = None;
+        if let Some(app_info) = &self.config.app_info {
+            request = request.header(reqwest::header::USER_AGENT, app_info);
+        }
         if let Some(opts) = options {
-            if let Some(acct) = &opts.stripe_account {
-                request = request.header("Stripe-Account", acct);
-            }
-            if let Some(idemp) = &opts.idempotency_key {
-                request = request.header("Idempotency-Key", idemp);
-            }
-            if let Some(ver) = &opts.stripe_version {
-                request = request.header("Stripe-Version", ver);
-            }
-            if let Some(to) = opts.timeout {
-                request = request.timeout(to);
-            }
-            if let Some(tok) = &opts.bearer_token {
-                bearer = Some(tok.as_str());
-            }
+            request = apply_request_options(request, opts);
         }
-
-        if let Some(tok) = bearer {
-            request = request.bearer_auth(tok);
-        } else {
-            request = request.basic_auth(self.config.secret_key.expose_secret(), None::<&str>);
-        }
+        let bearer = options.and_then(|o| o.bearer_token.as_ref());
+        request = match bearer {
+            Some(tok) => request.bearer_auth(tok.expose_secret()),
+            None => request.basic_auth(self.config.secret_key.expose_secret(), None::<&str>),
+        };
         request.build().map_err(StripeError::Http)
     }
 
@@ -505,6 +533,69 @@ impl StripeClient {
         self.execute_raw_bytes_with_options(request, None).await
     }
 
+    async fn send_and_read_response(
+        &self,
+        req: reqwest::Request,
+    ) -> Result<(reqwest::StatusCode, Option<Duration>, bytes::Bytes), reqwest::Error> {
+        let response = self.http.execute(req).await?;
+        let retry_after = parse_retry_after_delay(&response);
+        let status = response.status();
+        let body_bytes = response.bytes().await?;
+        Ok((status, retry_after, body_bytes))
+    }
+
+    async fn handle_transport_error(
+        &self,
+        err: reqwest::Error,
+        can_retry_network: bool,
+        has_next_req: bool,
+        retries_taken: u32,
+    ) -> AttemptOutcome {
+        if self
+            .should_retry_network_error(&err, can_retry_network, has_next_req, retries_taken)
+            .await
+        {
+            return AttemptOutcome::Retry;
+        }
+        AttemptOutcome::Done(Err(StripeError::Http(err)))
+    }
+
+    async fn execute_single_attempt(
+        &self,
+        req: reqwest::Request,
+        can_retry_network: bool,
+        has_next_req: bool,
+        retries_taken: u32,
+    ) -> AttemptOutcome {
+        let (status, retry_after, body_bytes) = match self.send_and_read_response(req).await {
+            Ok(parts) => parts,
+            Err(err) => {
+                return self
+                    .handle_transport_error(err, can_retry_network, has_next_req, retries_taken)
+                    .await;
+            }
+        };
+
+        if status.is_success() {
+            return AttemptOutcome::Done(Ok(body_bytes));
+        }
+
+        let api_error = parse_api_error_response(status, &body_bytes);
+        if self
+            .should_retry_api_error(
+                &api_error,
+                retry_after,
+                can_retry_network,
+                has_next_req,
+                retries_taken,
+            )
+            .await
+        {
+            return AttemptOutcome::Retry;
+        }
+        AttemptOutcome::Done(Err(api_error))
+    }
+
     /// Executes requests with options and returns the raw response body as zero-copy `bytes::Bytes`.
     pub async fn execute_raw_bytes_with_options(
         &self,
@@ -517,57 +608,59 @@ impl StripeClient {
         let mut retries_taken = 0u32;
 
         loop {
-            let next_req = if retries_taken < max_retries {
-                req.try_clone()
-            } else {
-                None
-            };
-
-            let response = match self.http.execute(req).await {
-                Ok(resp) => resp,
-                Err(err) => {
-                    if self
-                        .should_retry_network_error(
-                            &err,
-                            can_retry_network,
-                            next_req.is_some(),
-                            retries_taken,
-                        )
-                        .await
-                    {
-                        retries_taken += 1;
-                        req = next_req.expect("next_req confirmed present");
-                        continue;
-                    }
-                    return Err(StripeError::Http(err));
-                }
-            };
-
-            let retry_after_delay = parse_retry_after_delay(&response);
-            let status = response.status();
-            let body_bytes = response.bytes().await?;
-
-            if !status.is_success() {
-                let api_error = parse_api_error_response(status, &body_bytes);
-                if self
-                    .should_retry_api_error(
-                        &api_error,
-                        retry_after_delay,
-                        can_retry_network,
-                        next_req.is_some(),
-                        retries_taken,
-                    )
-                    .await
-                {
+            let next_req = clone_for_retry(&req, retries_taken, max_retries);
+            match self
+                .execute_single_attempt(req, can_retry_network, next_req.is_some(), retries_taken)
+                .await
+            {
+                AttemptOutcome::Done(result) => return result,
+                AttemptOutcome::Retry => {
                     retries_taken += 1;
-                    req = next_req.expect("next_req confirmed present");
-                    continue;
+                    let Some(cloned) = next_req else {
+                        return Err(StripeError::ConnectionError(
+                            "retry request could not be cloned".into(),
+                        ));
+                    };
+                    req = cloned;
                 }
-                return Err(api_error);
             }
-
-            return Ok(body_bytes);
         }
+    }
+}
+
+enum AttemptOutcome {
+    Done(Result<bytes::Bytes, StripeError>),
+    Retry,
+}
+
+fn apply_request_options(
+    mut request: reqwest::RequestBuilder,
+    opts: &RequestOptions,
+) -> reqwest::RequestBuilder {
+    if let Some(acct) = &opts.stripe_account {
+        request = request.header("Stripe-Account", acct);
+    }
+    if let Some(idemp) = &opts.idempotency_key {
+        request = request.header("Idempotency-Key", idemp);
+    }
+    if let Some(ver) = &opts.stripe_version {
+        request = request.header("Stripe-Version", ver);
+    }
+    if let Some(to) = opts.timeout {
+        request = request.timeout(to);
+    }
+    request
+}
+
+fn clone_for_retry(
+    req: &reqwest::Request,
+    retries_taken: u32,
+    max_retries: u32,
+) -> Option<reqwest::Request> {
+    if retries_taken < max_retries {
+        req.try_clone()
+    } else {
+        None
     }
 }
 
@@ -922,6 +1015,95 @@ mod tests {
         assert_eq!(
             val.get("id").and_then(|v| v.as_str()),
             Some("ch_retried_ok")
+        );
+
+        server.await.unwrap();
+    }
+
+    #[test]
+    fn test_request_options_bearer_token_redacted_and_secret() {
+        let opts = RequestOptions::new().bearer_token("tok_ephemeral_secret_98765");
+        assert_eq!(
+            opts.bearer_token.as_ref().map(|t| t.expose_secret()),
+            Some("tok_ephemeral_secret_98765")
+        );
+        let debug_str = format!("{opts:?}");
+        assert!(debug_str.contains("bearer_token: Some("[REDACTED]")"));
+        assert!(!debug_str.contains("tok_ephemeral_secret_98765"));
+
+        let empty_debug = format!("{:?}", RequestOptions::new());
+        assert!(empty_debug.contains("bearer_token: None"));
+    }
+
+    #[test]
+    fn test_try_with_config_and_app_info_user_agent() {
+        let config = StripeConfig::new("sk_test_123").with_app_info("some-payment/0.1.0");
+        let client = StripeClient::try_with_config(config).expect("client init");
+        let opts = RequestOptions::new().bearer_token("tok_meter_abc");
+        let req = client
+            .prepare_request(
+                client.http.get("https://api.stripe.com/v1/customers"),
+                Some(&opts),
+            )
+            .expect("prepare_request");
+
+        assert_eq!(
+            req.headers()
+                .get(reqwest::header::USER_AGENT)
+                .and_then(|v| v.to_str().ok()),
+            Some("some-payment/0.1.0")
+        );
+        assert_eq!(
+            req.headers()
+                .get(reqwest::header::AUTHORIZATION)
+                .and_then(|v| v.to_str().ok()),
+            Some("Bearer tok_meter_abc")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_mid_stream_body_read_error_retries_for_idempotent_get() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            // Attempt 1: send headers with Content-Length: 100 but drop connection mid-body
+            let (mut socket1, _) = listener.accept().await.unwrap();
+            let mut buf1 = vec![0; 1024];
+            let _ = socket1.read(&mut buf1).await.unwrap();
+            let resp1 = "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: 100\r\nConnection: close\r\n\r\n{\"partial\":";
+            socket1.write_all(resp1.as_bytes()).await.unwrap();
+            drop(socket1);
+
+            // Attempt 2: return complete JSON body
+            let (mut socket2, _) = listener.accept().await.unwrap();
+            let mut buf2 = vec![0; 1024];
+            let _ = socket2.read(&mut buf2).await.unwrap();
+            let body = "{\"id\":\"body_retry_ok\"}";
+            let resp2 = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            socket2.write_all(resp2.as_bytes()).await.unwrap();
+            drop(socket2);
+        });
+
+        let config = StripeConfig::new("sk_test_123")
+            .with_api_base(format!("http://{addr}"))
+            .with_max_retries(1);
+        let client = StripeClient::try_with_config(config).expect("client init");
+
+        let req = client.http.get(format!("http://{addr}/v1/customers"));
+        let val = client
+            .execute(req)
+            .await
+            .expect("should retry and succeed after mid-stream body EOF");
+        assert_eq!(
+            val.get("id").and_then(|v| v.as_str()),
+            Some("body_retry_ok")
         );
 
         server.await.unwrap();
