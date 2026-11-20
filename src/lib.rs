@@ -112,6 +112,13 @@ pub use resources::{
     tax_registration_id, validate_redirect_url,
 };
 
+/// Composable `some-payment` orthogonal capability adapter layer.
+pub mod adapter;
+pub use adapter::{
+    KycCapability, PaymentCapability, PayoutCapability, StripeExt, StripeGatewayAdapter,
+    UnifiedGatewayError, WebhookCapability,
+};
+
 /// Stripe API v2 namespace and sub-resources.
 pub mod v2 {
     pub mod core {
