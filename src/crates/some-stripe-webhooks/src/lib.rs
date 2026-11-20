@@ -70,7 +70,10 @@ use hmac::digest::KeyInit;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 use some_stripe_types::Event;
-pub use validation::{is_blank_webhook_secret, resolve_webhook_secret};
+pub use validation::{
+    is_blank_webhook_secret, resolve_webhook_secret, try_resolve_webhook_secret,
+    try_resolve_webhook_secret_from_dir,
+};
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -142,13 +145,16 @@ impl Webhook {
     }
 
     /// Verifies the authenticity and recency of an incoming webhook header using a [`ToleranceConfig`].
+    ///
+    /// Fails closed with [`StripeWebhookError::MissingSecret`] when a `$VAR` / `${VAR}` secret
+    /// reference cannot be resolved, and [`StripeWebhookError::BadKey`] for blank literals.
     pub fn verify_header_with_config(
         payload: &[u8],
         header: &str,
         secret: &str,
         config: &ToleranceConfig,
     ) -> Result<bool, StripeWebhookError> {
-        let resolved_secret = resolve_webhook_secret(secret);
+        let resolved_secret = try_resolve_webhook_secret(secret)?;
         let secret = resolved_secret.as_ref();
         if is_blank_webhook_secret(secret) {
             return Err(StripeWebhookError::BadKey);
