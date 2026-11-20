@@ -294,6 +294,42 @@ impl<'a, T: serde::de::DeserializeOwned> Paginator<'a, T> {
         Ok(page)
     }
 
+    fn is_exhausted(&self) -> bool {
+        self.done || !self.has_more
+    }
+
+    fn record_current_cursor(&mut self) -> Result<(), StripeError> {
+        if let Some(ref cursor) = self.last_seen_cursor {
+            self.loop_detector.record_cursor(cursor)?;
+        }
+        Ok(())
+    }
+
+    async fn load_next_page(&mut self) -> Result<bool, StripeError> {
+        if self.is_exhausted() {
+            self.done = true;
+            return Ok(false);
+        }
+
+        self.record_current_cursor()?;
+
+        let response = self.fetch_page().await?;
+        self.has_more = response.has_more;
+
+        if let Some(last) = response.data.last() {
+            self.last_seen_cursor = Some((self.last_id_extractor)(last).to_string());
+        }
+
+        if response.data.is_empty() {
+            self.done = true;
+            return Ok(false);
+        }
+
+        // Move elements into deque buffer without cloning
+        self.buffer = response.data.into();
+        Ok(true)
+    }
+
     /// Fetches the next item by value with zero heap clones.
     pub async fn next_item(&mut self) -> Result<Option<T>, StripeError> {
         if let Some(err) = self.initial_error.take() {
@@ -307,37 +343,8 @@ impl<'a, T: serde::de::DeserializeOwned> Paginator<'a, T> {
                 return Ok(Some(item));
             }
 
-            // 2. Check termination
-            if self.done || !self.has_more {
-                self.done = true;
-                return Ok(None);
-            }
-
-            // 3. Fetch next page
-            if let Some(ref cursor) = self.last_seen_cursor {
-                self.loop_detector.record_cursor(cursor)?;
-            }
-
-            let response = self.fetch_page().await?;
-            self.has_more = response.has_more;
-
-            if let Some(last) = response.data.last() {
-                self.last_seen_cursor = Some((self.last_id_extractor)(last).to_string());
-            }
-
-            if response.data.is_empty() {
-                self.done = true;
-                return Ok(None);
-            }
-
-            // Move elements into deque buffer without cloning
-            self.buffer = response.data.into();
-
-            // Guard against empty intermediate pages
-            if self.buffer.is_empty() && self.has_more {
-                continue;
-            } else if self.buffer.is_empty() {
-                self.done = true;
+            // 2. Check termination and fetch next page
+            if !self.load_next_page().await? {
                 return Ok(None);
             }
         }
