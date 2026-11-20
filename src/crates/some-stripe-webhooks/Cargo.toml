@@ -7,8 +7,8 @@ license = "Apache-2.0"
 description = "Cryptographic Webhook Engine & Edge Security Specialist for some-stripe"
 
 [dependencies]
-some-stripe-core = { path = "../some-stripe-core" }
-some-stripe-types = { path = "../some-stripe-types" }
+some-stripe-core = { version = "0.8.0", path = "../some-stripe-core" }
+some-stripe-types = { version = "0.8.0", path = "../some-stripe-types" }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.154" }
 hmac = "0.13.0"
