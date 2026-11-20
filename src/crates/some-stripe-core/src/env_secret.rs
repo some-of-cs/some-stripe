@@ -50,12 +50,12 @@ const DOTENV_EXCLUDED_FILES: &[&str] = &[".env.example", ".env.sample", ".env.te
 #[must_use]
 pub fn parse_env_reference(input: &str) -> Option<&str> {
     let trimmed = input.trim();
-    let raw_name = if let Some(inner) = trimmed.strip_prefix("${").and_then(|s| s.strip_suffix('}')) {
+    let braced = trimmed.strip_prefix("${").and_then(|s| s.strip_suffix('}'));
+    let raw_name = if let Some(inner) = braced {
         inner.trim()
-    } else if let Some(rest) = trimmed.strip_prefix('$') {
-        rest.trim()
     } else {
-        return None;
+        let rest = trimmed.strip_prefix('$')?;
+        rest.trim()
     };
 
     if is_valid_env_var_name(raw_name) {
