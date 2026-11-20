@@ -41,7 +41,19 @@ pub struct ReqwestTransport {
 
 impl ReqwestTransport {
     /// Creates a new `ReqwestTransport` with default connection pooling and timeouts.
-    pub fn new(timeout: Duration) -> Self {
+    ///
+    /// Returns [`StripeError::Config`] if the underlying TLS or HTTP client builder
+    /// fails to initialize, preventing silent fallback to an unconfigured client.
+    ///
+    /// # Examples
+    /// ```rust
+    /// use some_stripe_core::patterns::transport::ReqwestTransport;
+    /// use std::time::Duration;
+    ///
+    /// let transport = ReqwestTransport::try_new(Duration::from_secs(30)).expect("transport init");
+    /// assert!(transport.inner().get("https://api.stripe.com/healthcheck").build().is_ok());
+    /// ```
+    pub fn try_new(timeout: Duration) -> Result<Self, StripeError> {
         let client = reqwest::Client::builder()
             .timeout(timeout)
             .pool_idle_timeout(Duration::from_secs(90))
@@ -49,9 +61,21 @@ impl ReqwestTransport {
             .tcp_keepalive(Duration::from_secs(60))
             .redirect(reqwest::redirect::Policy::none())
             .build()
-            .unwrap_or_default();
+            .map_err(|err| {
+                StripeError::Config(format!("failed to initialize HTTP transport: {err}"))
+            })?;
 
-        Self { client }
+        Ok(Self { client })
+    }
+
+    /// Creates a new `ReqwestTransport` with default connection pooling and timeouts.
+    ///
+    /// Prefer [`ReqwestTransport::try_new`] in fallible initialization paths so TLS
+    /// or client builder failures surface as [`StripeError::Config`].
+    pub fn new(timeout: Duration) -> Self {
+        Self::try_new(timeout).unwrap_or_else(|_| Self {
+            client: reqwest::Client::new(),
+        })
     }
 
     /// Access the underlying `reqwest::Client`.
@@ -82,11 +106,13 @@ impl HttpClient for ReqwestTransport {
     }
 }
 
-/// Computes exponential backoff delay with deterministic pseudorandom jitter.
+/// Computes exponential backoff delay with subsecond-entropy jitter.
 ///
 /// The formula calculates:
 /// `delay = min(base_ms * 2^min(attempt, 6), max_ms) - jitter`
-/// where jitter avoids thundering herd spikes when multiple requests fail simultaneously.
+/// mixing `attempt` with nanosecond subsecond entropy from [`std::time::SystemTime::now`]
+/// so concurrent requests do not retry in lockstep while keeping the result strictly
+/// within `[capped / 2, capped]`.
 ///
 /// # Examples
 /// ```rust
@@ -103,16 +129,17 @@ impl HttpClient for ReqwestTransport {
 pub fn compute_backoff_delay(attempt: u32, base_ms: u64, max_ms: u64) -> Duration {
     let exponential = base_ms.saturating_mul(1u64 << attempt.min(6));
     let capped = exponential.min(max_ms);
-    // Deterministic pseudorandom jitter with effective spread up to 50% of capped delay
-    // while guaranteeing delay <= capped and delay >= base_ms / 2.
-    // Knuth's multiplicative hash / LCG to spread attempt values smoothly:
-    let hash = (attempt as u64)
+    let subsec_nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0u64, |d| u64::from(d.subsec_nanos()));
+    let seed = (attempt as u64) ^ subsec_nanos.rotate_left(13);
+    let hash = seed
         .wrapping_mul(2654435761)
         .wrapping_add(1013904223);
-    // Jitter spread between 1% and 50% of capped
+    // Jitter spread between 1% and 50% of capped, guaranteeing [capped/2, capped]
     let jitter_fraction = (hash % 50) + 1;
     let max_jitter = capped / 2;
-    let jitter = (max_jitter * jitter_fraction) / 50;
+    let jitter = max_jitter.saturating_mul(jitter_fraction) / 50;
     Duration::from_millis(capped.saturating_sub(jitter))
 }
 
@@ -141,5 +168,11 @@ mod tests {
             assert!(delay <= Duration::from_millis(capped));
             assert!(delay >= Duration::from_millis(capped / 2));
         }
+    }
+
+    #[test]
+    fn test_reqwest_transport_try_new_succeeds() {
+        let transport = ReqwestTransport::try_new(Duration::from_secs(15));
+        assert!(transport.is_ok());
     }
 }
