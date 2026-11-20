@@ -456,13 +456,21 @@ fn build_create_invoice_form(params: &CreateInvoiceParams) -> Vec<(String, Strin
     push_opt_str(
         &mut form_data,
         "collection_method",
-        params.collection_method.as_ref().map(|m| m.as_str()),
+        params.collection_method.as_deref(),
     );
-    push_opt_str(&mut form_data, "currency", params.currency.as_ref().map(|c| c.as_str()));
-    push_opt_str(&mut form_data, "description", params.description.as_ref().map(|d| d.as_str()));
+    push_opt_str(&mut form_data, "currency", params.currency.as_deref());
+    push_opt_str(&mut form_data, "description", params.description.as_deref());
     push_opt_display(&mut form_data, "due_date", params.due_date.as_ref());
-    push_opt_display(&mut form_data, "days_until_due", params.days_until_due.as_ref());
-    push_opt_str(&mut form_data, "subscription", params.subscription.as_ref().map(|s| s.as_str()));
+    push_opt_display(
+        &mut form_data,
+        "days_until_due",
+        params.days_until_due.as_ref(),
+    );
+    push_opt_str(
+        &mut form_data,
+        "subscription",
+        params.subscription.as_deref(),
+    );
     push_opt_metadata(&mut form_data, params.metadata.as_ref());
     form_data
 }
@@ -473,9 +481,9 @@ fn build_update_invoice_form(params: &UpdateInvoiceParams) -> Vec<(String, Strin
     push_opt_str(
         &mut form_data,
         "collection_method",
-        params.collection_method.as_ref().map(|m| m.as_str()),
+        params.collection_method.as_deref(),
     );
-    push_opt_str(&mut form_data, "description", params.description.as_ref().map(|d| d.as_str()));
+    push_opt_str(&mut form_data, "description", params.description.as_deref());
     push_opt_display(&mut form_data, "due_date", params.due_date.as_ref());
     push_opt_metadata(&mut form_data, params.metadata.as_ref());
     form_data
@@ -487,10 +495,14 @@ fn build_pay_invoice_form(params: Option<&PayInvoiceParams>) -> Vec<(String, Str
         return form_data;
     };
     push_opt_bool(&mut form_data, "forgive", p.forgive);
-    push_opt_str(&mut form_data, "mandate", p.mandate.as_ref().map(|m| m.as_str()));
+    push_opt_str(&mut form_data, "mandate", p.mandate.as_deref());
     push_opt_bool(&mut form_data, "off_session", p.off_session);
     push_opt_bool(&mut form_data, "paid_out_of_band", p.paid_out_of_band);
-    push_opt_str(&mut form_data, "payment_method", p.payment_method.as_ref().map(|pm| pm.as_str()));
-    push_opt_str(&mut form_data, "source", p.source.as_ref().map(|s| s.as_str()));
+    push_opt_str(
+        &mut form_data,
+        "payment_method",
+        p.payment_method.as_deref(),
+    );
+    push_opt_str(&mut form_data, "source", p.source.as_deref());
     form_data
 }
