@@ -9,11 +9,18 @@
 //! 1. The process environment (`std::env::var`), and
 //! 2. Standard dotenv files across the current and parent workspace directories in priority order:
 //!    `.env.local`, `.env.dev`, `.env.development`, `.env.test`, `.env.prod`, `.env.production`,
-//!    `.env`, `.env.example`, plus any other `.env.*` file in the directory.
+//!    `.env`, plus any non-template custom `.env.*` file in the directory.
+//!
+//! Template files such as `.env.example` are never consulted, and unresolved `$VAR` references
+//! fail closed rather than returning the literal `"$VAR"` placeholder string.
 
+use crate::error::StripeError;
 use std::path::{Path, PathBuf};
 
 /// Ordered list of standard dotenv filenames checked before scanning custom `.env.*` files.
+///
+/// Template files such as `.env.example` are intentionally excluded so public example secrets
+/// committed to version control are never loaded as runtime credentials.
 pub const DOTENV_CANDIDATE_FILES: &[&str] = &[
     ".env.local",
     ".env.dev",
@@ -22,8 +29,10 @@ pub const DOTENV_CANDIDATE_FILES: &[&str] = &[
     ".env.prod",
     ".env.production",
     ".env",
-    ".env.example",
 ];
+
+/// Dotenv template/example filenames that must never be loaded as runtime credentials.
+const DOTENV_EXCLUDED_FILES: &[&str] = &[".env.example", ".env.sample", ".env.template"];
 
 /// Extracts the environment variable name if `input` starts with `$` (e.g. `"$STRIPE_SECRET_KEY"`
 /// or `"${STRIPE_SECRET_KEY}"`).
@@ -68,23 +77,31 @@ fn is_valid_env_var_name(name: &str) -> bool {
         && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
+fn lookup_process_env(var_name: &str) -> Option<String> {
+    let val = std::env::var(var_name).ok()?;
+    let trimmed = val.trim();
+    (!trimmed.is_empty()).then(|| trimmed.to_string())
+}
+
 /// Resolves a secret string that may be either a literal key (`"sk_test_..."`) or a `$`-prefixed
-/// environment variable reference (`"$STRIPE_SECRET_KEY"` or `"${STRIPE_SECRET_KEY}"`).
+/// environment variable reference (`"$STRIPE_SECRET_KEY"` or `"${STRIPE_SECRET_KEY}"`),
+/// failing closed with [`StripeError::Config`] when a `$VAR` reference cannot be resolved.
 ///
 /// Searches `std::env::var` first, followed by `.env.local`, `.env.dev`, `.env.development`,
-/// `.env.test`, `.env.prod`, `.env.production`, `.env`, `.env.example`, and any custom `.env.*`
+/// `.env.test`, `.env.prod`, `.env.production`, `.env`, and any non-template custom `.env.*`
 /// files in the current working directory and up to 3 parent directories.
-#[must_use]
-pub fn resolve_env_secret(input: &str) -> String {
+/// Template files such as `.env.example` are never consulted.
+///
+/// # Errors
+/// Returns [`StripeError::Config`] if `input` is a `$VAR` / `${VAR}` reference that is unset
+/// or empty in both the process environment and allowed dotenv files.
+pub fn try_resolve_env_secret(input: &str) -> Result<String, StripeError> {
     let Some(var_name) = parse_env_reference(input) else {
-        return input.to_string();
+        return Ok(input.to_string());
     };
 
-    if let Ok(val) = std::env::var(var_name) {
-        let trimmed = val.trim();
-        if !trimmed.is_empty() {
-            return trimmed.to_string();
-        }
+    if let Some(val) = lookup_process_env(var_name) {
+        return Ok(val);
     }
 
     let roots = [
@@ -93,17 +110,55 @@ pub fn resolve_env_secret(input: &str) -> String {
         Path::new("../.."),
         Path::new("../../.."),
     ];
-    resolve_var_from_dirs(var_name, &roots).unwrap_or_else(|| input.to_string())
+    resolve_var_from_dirs(var_name, &roots).ok_or_else(|| {
+        StripeError::Config(format!(
+            "unresolved environment variable reference '${var_name}'"
+        ))
+    })
 }
 
-/// Resolves a `$`-prefixed variable reference strictly from dotenv files inside `base_dir`
-/// (useful for deterministic unit tests and isolated directory contexts).
+/// Resolves a `$`-prefixed variable reference strictly from allowed dotenv files inside
+/// `base_dir`, failing closed with [`StripeError::Config`] when the reference cannot be resolved.
+///
+/// Literal keys (values without a valid `$VAR` / `${VAR}` reference) are returned unchanged.
+/// Template files such as `.env.example` are never consulted.
+///
+/// # Errors
+/// Returns [`StripeError::Config`] if `input` is a `$VAR` / `${VAR}` reference that is not
+/// defined in any allowed dotenv file inside `base_dir`.
+pub fn try_resolve_env_secret_from_dir(
+    input: &str,
+    base_dir: &Path,
+) -> Result<String, StripeError> {
+    let Some(var_name) = parse_env_reference(input) else {
+        return Ok(input.to_string());
+    };
+    resolve_var_from_dirs(var_name, &[base_dir]).ok_or_else(|| {
+        StripeError::Config(format!(
+            "unresolved environment variable reference '${var_name}'"
+        ))
+    })
+}
+
+/// Resolves a secret string that may be either a literal key (`"sk_test_..."`) or a `$`-prefixed
+/// environment variable reference (`"$STRIPE_SECRET_KEY"` or `"${STRIPE_SECRET_KEY}"`).
+///
+/// Fails closed by returning an empty `String` when a `$VAR` / `${VAR}` reference cannot be
+/// resolved, ensuring the literal `"$VAR"` placeholder is never used as a runtime credential
+/// and downstream blank-key guards reject it safely.
+#[must_use]
+pub fn resolve_env_secret(input: &str) -> String {
+    try_resolve_env_secret(input).unwrap_or_default()
+}
+
+/// Resolves a `$`-prefixed variable reference strictly from allowed dotenv files inside
+/// `base_dir` (useful for deterministic unit tests and isolated directory contexts).
+///
+/// Fails closed by returning an empty `String` when a `$VAR` / `${VAR}` reference cannot be
+/// resolved, rather than returning the literal `"$VAR"` placeholder string.
 #[must_use]
 pub fn resolve_env_secret_from_dir(input: &str, base_dir: &Path) -> String {
-    let Some(var_name) = parse_env_reference(input) else {
-        return input.to_string();
-    };
-    resolve_var_from_dirs(var_name, &[base_dir]).unwrap_or_else(|| input.to_string())
+    try_resolve_env_secret_from_dir(input, base_dir).unwrap_or_default()
 }
 
 /// Searches `dirs` in order for `var_name` across priority and custom `.env*` files.
@@ -133,6 +188,13 @@ fn resolve_var_in_single_dir(var_name: &str, dir: &Path) -> Option<String> {
     None
 }
 
+fn is_allowed_custom_dotenv_file(name: &str, path: &Path) -> bool {
+    name.starts_with(".env")
+        && !DOTENV_CANDIDATE_FILES.contains(&name)
+        && !DOTENV_EXCLUDED_FILES.contains(&name)
+        && path.is_file()
+}
+
 fn collect_custom_dotenv_files(dir: &Path) -> Vec<PathBuf> {
     let Ok(entries) = std::fs::read_dir(dir) else {
         return Vec::new();
@@ -140,10 +202,9 @@ fn collect_custom_dotenv_files(dir: &Path) -> Vec<PathBuf> {
     let mut custom = Vec::new();
     for entry in entries.flatten() {
         let path = entry.path();
-        let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
-            continue;
-        };
-        if name.starts_with(".env") && !DOTENV_CANDIDATE_FILES.contains(&name) && path.is_file() {
+        if let Some(name) = path.file_name().and_then(|n| n.to_str())
+            && is_allowed_custom_dotenv_file(name, &path)
+        {
             custom.push(path);
         }
     }
@@ -156,24 +217,26 @@ fn lookup_var_in_file(path: &Path, target_key: &str) -> Option<String> {
     parse_dotenv_for_key(&content, target_key)
 }
 
+fn parse_dotenv_line(raw_line: &str) -> Option<(&str, String)> {
+    let trimmed = raw_line.trim();
+    if trimmed.is_empty() || trimmed.starts_with('#') {
+        return None;
+    }
+    let line = trimmed.strip_prefix("export ").unwrap_or(trimmed).trim();
+    let (key_part, val_part) = line.split_once('=')?;
+    Some((key_part.trim(), clean_dotenv_value(val_part.trim())))
+}
+
 /// Parses dotenv file content for `target_key`, supporting `export KEY=VAL`, single/double quotes,
 /// and inline `#` comments.
 #[must_use]
 pub fn parse_dotenv_for_key(content: &str, target_key: &str) -> Option<String> {
     for raw_line in content.lines() {
-        let trimmed = raw_line.trim();
-        if trimmed.is_empty() || trimmed.starts_with('#') {
-            continue;
-        }
-        let line = trimmed.strip_prefix("export ").unwrap_or(trimmed).trim();
-        let Some((key_part, val_part)) = line.split_once('=') else {
-            continue;
-        };
-        if key_part.trim() == target_key {
-            let cleaned = clean_dotenv_value(val_part.trim());
-            if !cleaned.is_empty() {
-                return Some(cleaned);
-            }
+        if let Some((key, cleaned)) = parse_dotenv_line(raw_line)
+            && key == target_key
+            && !cleaned.is_empty()
+        {
+            return Some(cleaned);
         }
     }
     None
