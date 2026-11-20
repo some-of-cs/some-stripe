@@ -168,3 +168,91 @@ pub enum RedirectError {
         allowed_domains: Vec<String>,
     },
 }
+
+impl StripeError {
+    /// Returns `true` if this error is transient and safe to retry (HTTP 429,
+    /// HTTP 5xx, connection drops, or retryable transport errors).
+    pub fn is_retryable(&self) -> bool {
+        match self {
+            Self::Api { status, .. } => *status == 429 || (500..600).contains(status),
+            Self::ConnectionError(_) => true,
+            Self::Http(err) => is_reqwest_error_retryable(err),
+            _ => false,
+        }
+    }
+
+    /// Returns the HTTP status code associated with this error, if any.
+    pub fn status_code(&self) -> Option<u16> {
+        match self {
+            Self::Api { status, .. } => Some(*status),
+            Self::Http(err) => err.status().map(|s| s.as_u16()),
+            _ => None,
+        }
+    }
+
+    /// Returns the Stripe-specific error code (e.g., `rate_limit`, `card_declined`), if any.
+    pub fn stripe_code(&self) -> Option<&str> {
+        match self {
+            Self::Api { code, .. } => Some(code.as_str()),
+            _ => None,
+        }
+    }
+}
+
+fn is_reqwest_error_retryable(err: &reqwest::Error) -> bool {
+    let status_retryable = err
+        .status()
+        .is_some_and(|s| s.as_u16() == 429 || s.is_server_error());
+    err.is_timeout() || err.is_connect() || err.is_body() || status_retryable
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_stripe_error_telemetry_helpers() {
+        let rate_limited = StripeError::Api {
+            status: 429,
+            code: "rate_limit".into(),
+            message: "Too many requests".into(),
+            error_type: "api_error".into(),
+            doc_url: None,
+        };
+        assert!(rate_limited.is_retryable());
+        assert_eq!(rate_limited.status_code(), Some(429));
+        assert_eq!(rate_limited.stripe_code(), Some("rate_limit"));
+
+        let server_err = StripeError::Api {
+            status: 503,
+            code: "api_error".into(),
+            message: "Service unavailable".into(),
+            error_type: "api_error".into(),
+            doc_url: None,
+        };
+        assert!(server_err.is_retryable());
+        assert_eq!(server_err.status_code(), Some(503));
+        assert_eq!(server_err.stripe_code(), Some("api_error"));
+
+        let client_err = StripeError::Api {
+            status: 400,
+            code: "card_declined".into(),
+            message: "Your card was declined".into(),
+            error_type: "card_error".into(),
+            doc_url: None,
+        };
+        assert!(!client_err.is_retryable());
+        assert_eq!(client_err.status_code(), Some(400));
+        assert_eq!(client_err.stripe_code(), Some("card_declined"));
+
+        let conn_err = StripeError::ConnectionError("socket closed".into());
+        assert!(conn_err.is_retryable());
+        assert_eq!(conn_err.status_code(), None);
+        assert_eq!(conn_err.stripe_code(), None);
+
+        let cfg_err = StripeError::Config("invalid tls".into());
+        assert!(!cfg_err.is_retryable());
+        assert_eq!(cfg_err.status_code(), None);
+        assert_eq!(cfg_err.stripe_code(), None);
+    }
+}
