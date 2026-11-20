@@ -33,44 +33,7 @@ impl<'a> InvoicesResource<'a> {
     /// Creates a new draft invoice (`POST /v1/invoices`).
     pub async fn create(&self, params: &CreateInvoiceParams) -> Result<Invoice, StripeError> {
         let url = format!("{}/v1/invoices", self.client.config.api_base);
-        let mut form_data = Vec::new();
-
-        form_data.push(("customer", params.customer.as_str()));
-
-        if let Some(auto) = params.auto_advance {
-            form_data.push(("auto_advance", if auto { "true" } else { "false" }));
-        }
-        if let Some(ref m) = params.collection_method {
-            form_data.push(("collection_method", m.as_str()));
-        }
-        if let Some(ref c) = params.currency {
-            form_data.push(("currency", c.as_str()));
-        }
-        if let Some(ref d) = params.description {
-            form_data.push(("description", d.as_str()));
-        }
-        let due_date_str = params.due_date.map(|d| d.to_string());
-        if let Some(ref d) = due_date_str {
-            form_data.push(("due_date", d.as_str()));
-        }
-        let days_str = params.days_until_due.map(|d| d.to_string());
-        if let Some(ref d) = days_str {
-            form_data.push(("days_until_due", d.as_str()));
-        }
-        if let Some(ref s) = params.subscription {
-            form_data.push(("subscription", s.as_str()));
-        }
-
-        let mut metadata_entries = Vec::new();
-        if let Some(ref meta) = params.metadata {
-            for (k, v) in meta {
-                metadata_entries.push((format!("metadata[{k}]"), v.as_str()));
-            }
-        }
-        for (k, v) in &metadata_entries {
-            form_data.push((k.as_str(), *v));
-        }
-
+        let form_data = build_create_invoice_form(params);
         let idempotency_key = super::resolve_idempotency_key(params.idempotency_key.as_deref());
 
         let req = self
@@ -104,32 +67,7 @@ impl<'a> InvoicesResource<'a> {
     ) -> Result<Invoice, StripeError> {
         let safe_id = validate_and_encode_id(invoice_id)?;
         let url = format!("{}/v1/invoices/{}", self.client.config.api_base, safe_id);
-        let mut form_data = Vec::new();
-
-        if let Some(auto) = params.auto_advance {
-            form_data.push(("auto_advance", if auto { "true" } else { "false" }));
-        }
-        if let Some(ref m) = params.collection_method {
-            form_data.push(("collection_method", m.as_str()));
-        }
-        if let Some(ref d) = params.description {
-            form_data.push(("description", d.as_str()));
-        }
-        let due_date_str = params.due_date.map(|d| d.to_string());
-        if let Some(ref d) = due_date_str {
-            form_data.push(("due_date", d.as_str()));
-        }
-
-        let mut metadata_entries = Vec::new();
-        if let Some(ref meta) = params.metadata {
-            for (k, v) in meta {
-                metadata_entries.push((format!("metadata[{k}]"), v.as_str()));
-            }
-        }
-        for (k, v) in &metadata_entries {
-            form_data.push((k.as_str(), *v));
-        }
-
+        let form_data = build_update_invoice_form(params);
         let idempotency_key = super::resolve_idempotency_key(params.idempotency_key.as_deref());
 
         let req = self
@@ -197,29 +135,7 @@ impl<'a> InvoicesResource<'a> {
             "{}/v1/invoices/{}/pay",
             self.client.config.api_base, safe_id
         );
-        let mut form_data = Vec::new();
-
-        if let Some(p) = params {
-            if let Some(forgive) = p.forgive {
-                form_data.push(("forgive", if forgive { "true" } else { "false" }));
-            }
-            if let Some(ref m) = p.mandate {
-                form_data.push(("mandate", m.as_str()));
-            }
-            if let Some(off) = p.off_session {
-                form_data.push(("off_session", if off { "true" } else { "false" }));
-            }
-            if let Some(pob) = p.paid_out_of_band {
-                form_data.push(("paid_out_of_band", if pob { "true" } else { "false" }));
-            }
-            if let Some(ref pm) = p.payment_method {
-                form_data.push(("payment_method", pm.as_str()));
-            }
-            if let Some(ref s) = p.source {
-                form_data.push(("source", s.as_str()));
-            }
-        }
-
+        let form_data = build_pay_invoice_form(params);
         let idempotency_key =
             super::resolve_idempotency_key(params.and_then(|p| p.idempotency_key.as_deref()));
 
@@ -498,4 +414,83 @@ impl<'a> InvoicesResource<'a> {
         let req = self.client.http.get(&url);
         self.client.execute_raw_bytes(req).await
     }
+}
+
+fn push_opt_bool(form_data: &mut Vec<(String, String)>, key: &str, value: Option<bool>) {
+    if let Some(flag) = value {
+        form_data.push((key.to_string(), flag.to_string()));
+    }
+}
+
+fn push_opt_str(form_data: &mut Vec<(String, String)>, key: &str, value: Option<&str>) {
+    if let Some(val) = value {
+        form_data.push((key.to_string(), val.to_string()));
+    }
+}
+
+fn push_opt_display<T: std::fmt::Display>(
+    form_data: &mut Vec<(String, String)>,
+    key: &str,
+    value: Option<&T>,
+) {
+    if let Some(val) = value {
+        form_data.push((key.to_string(), val.to_string()));
+    }
+}
+
+fn push_opt_metadata<'a, I>(form_data: &mut Vec<(String, String)>, metadata: Option<I>)
+where
+    I: IntoIterator<Item = (&'a String, &'a String)>,
+{
+    let Some(meta) = metadata else {
+        return;
+    };
+    for (k, v) in meta {
+        form_data.push((format!("metadata[{k}]"), v.as_str().to_string()));
+    }
+}
+
+fn build_create_invoice_form(params: &CreateInvoiceParams) -> Vec<(String, String)> {
+    let mut form_data = vec![("customer".to_string(), params.customer.as_str().to_string())];
+    push_opt_bool(&mut form_data, "auto_advance", params.auto_advance);
+    push_opt_str(
+        &mut form_data,
+        "collection_method",
+        params.collection_method.as_ref().map(|m| m.as_str()),
+    );
+    push_opt_str(&mut form_data, "currency", params.currency.as_ref().map(|c| c.as_str()));
+    push_opt_str(&mut form_data, "description", params.description.as_ref().map(|d| d.as_str()));
+    push_opt_display(&mut form_data, "due_date", params.due_date.as_ref());
+    push_opt_display(&mut form_data, "days_until_due", params.days_until_due.as_ref());
+    push_opt_str(&mut form_data, "subscription", params.subscription.as_ref().map(|s| s.as_str()));
+    push_opt_metadata(&mut form_data, params.metadata.as_ref());
+    form_data
+}
+
+fn build_update_invoice_form(params: &UpdateInvoiceParams) -> Vec<(String, String)> {
+    let mut form_data = Vec::new();
+    push_opt_bool(&mut form_data, "auto_advance", params.auto_advance);
+    push_opt_str(
+        &mut form_data,
+        "collection_method",
+        params.collection_method.as_ref().map(|m| m.as_str()),
+    );
+    push_opt_str(&mut form_data, "description", params.description.as_ref().map(|d| d.as_str()));
+    push_opt_display(&mut form_data, "due_date", params.due_date.as_ref());
+    push_opt_metadata(&mut form_data, params.metadata.as_ref());
+    form_data
+}
+
+fn build_pay_invoice_form(params: Option<&PayInvoiceParams>) -> Vec<(String, String)> {
+    let mut form_data = Vec::new();
+    let Some(p) = params else {
+        return form_data;
+    };
+    push_opt_bool(&mut form_data, "forgive", p.forgive);
+    push_opt_str(&mut form_data, "mandate", p.mandate.as_ref().map(|m| m.as_str()));
+    push_opt_bool(&mut form_data, "off_session", p.off_session);
+    push_opt_bool(&mut form_data, "paid_out_of_band", p.paid_out_of_band);
+    push_opt_str(&mut form_data, "payment_method", p.payment_method.as_ref().map(|pm| pm.as_str()));
+    push_opt_str(&mut form_data, "source", p.source.as_ref().map(|s| s.as_str()));
+    form_data
 }
