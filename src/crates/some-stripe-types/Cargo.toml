@@ -15,5 +15,5 @@ thiserror = "2.0.21"
 zeroize = { version = "1.9.1", features = ["derive"] }
 
 [dev-dependencies]
-some-stripe-core = { path = "../some-stripe-core" }
+some-stripe-core = { version = "0.8.0", path = "../some-stripe-core" }
 
