@@ -41,13 +41,11 @@ pub const DOTENV_CANDIDATE_FILES: &[&str] = &[
 #[must_use]
 pub fn parse_env_reference(input: &str) -> Option<&str> {
     let trimmed = input.trim();
-    let raw_name = if let Some(inner) = trimmed.strip_prefix("${").and_then(|s| s.strip_suffix('}')) {
-        inner.trim()
-    } else if let Some(rest) = trimmed.strip_prefix('$') {
-        rest.trim()
-    } else {
-        return None;
-    };
+    let raw_name = trimmed
+        .strip_prefix("${")
+        .and_then(|s| s.strip_suffix('}'))
+        .or_else(|| trimmed.strip_prefix('$'))?
+        .trim();
 
     if is_valid_env_var_name(raw_name) {
         Some(raw_name)
