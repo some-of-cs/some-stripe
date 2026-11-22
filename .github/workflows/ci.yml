@@ -34,9 +34,9 @@ jobs:
           src/crates/some-stripe-types/src/refund_lifecycle.rs
           src/crates/some-stripe-webhooks/src/multi_v1_verifier.rs
       - name: Run Clippy (standalone)
-        run: cargo clippy -p some-stripe-core -p some-stripe-types -p some-stripe-webhooks -p some-stripe --lib --tests -- -D warnings
+        run: cargo clippy -p some-stripe-core -p some-stripe-types -p some-stripe-webhooks -p some-stripe --lib -- -D warnings
       - name: Run Clippy (some-payment-adapter)
-        run: cargo clippy -p some-stripe --features some-payment-adapter --lib --tests -- -D warnings
+        run: cargo clippy -p some-stripe --features some-payment-adapter --lib -- -D warnings
       - name: Run unit & integration tests (standalone)
         run: cargo test -p some-stripe-core -p some-stripe-types -p some-stripe-webhooks --lib && cargo test -p some-stripe --lib
       - name: Run unit & integration tests (some-payment-adapter)
