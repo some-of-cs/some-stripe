@@ -29,30 +29,6 @@ const TEST_API_KEY: &str = "sk_test_super_secret";
 const TEST_WEBHOOK_SECRET: &str = "whsec_super_secret";
 const PINNED_STRIPE_VERSION: &str = "2026-11-18.endive";
 
-const SNAPSHOT_PAYLOAD: &[u8] = concat!(
-    r#"{"id": "evt_snap_1", "object": "event", "type": "payment_intent.succeeded", "#,
-    r#""livemode": false, "data": {"object": {"id": "pi_wh_1", "object": "payment_intent", "#,
-    r#""amount": 2500, "currency": "usd", "status": "succeeded", "#,
-    r#""client_secret": "pi_wh_1_secret_leaked", "api_key": "sk_live_should_redact"}}}"#,
-)
-.as_bytes();
-
-const RESERIALIZED_SNAPSHOT_PAYLOAD: &[u8] = concat!(
-    r#"{"id":"evt_snap_1","object":"event","type":"payment_intent.succeeded","#,
-    r#""livemode":false,"data":{"object":{"id":"pi_wh_1","object":"payment_intent","#,
-    r#""amount":2500,"currency":"usd","status":"succeeded","#,
-    r#""client_secret":"pi_wh_1_secret_leaked","api_key":"sk_live_should_redact"}}}"#,
-)
-.as_bytes();
-
-const THIN_EVENT_PAYLOAD: &[u8] = concat!(
-    r#"{"id":"evt_thin_1","object":"v2.core.event","#,
-    r#""type":"v2.billing.meter_event_session.created","livemode":false,"#,
-    r#""related_object":{"id":"pi_thin_1","type":"payment_intent","#,
-    r#""url":"/v1/payment_intents/pi_thin_1"}}"#,
-)
-.as_bytes();
-
 fn make_config(base_url: String) -> StripeProviderConfig {
     StripeProviderConfig::new(TEST_API_KEY)
         .with_base_url(base_url)
@@ -100,6 +76,40 @@ fn build_webhook_request(payload: &[u8], sig_header: String) -> RawWebhookReques
         query_params: BTreeMap::new(),
         method: HttpMethod::Post,
     }
+}
+
+fn snapshot_event_value() -> serde_json::Value {
+    serde_json::json!({
+        "id": "evt_snap_1",
+        "object": "event",
+        "type": "payment_intent.succeeded",
+        "livemode": false,
+        "data": {
+            "object": {
+                "id": "pi_wh_1",
+                "object": "payment_intent",
+                "amount": 2_500,
+                "currency": "usd",
+                "status": "succeeded",
+                "client_secret": "pi_wh_1_secret_leaked",
+                "api_key": "sk_live_should_redact"
+            }
+        }
+    })
+}
+
+fn thin_event_value() -> serde_json::Value {
+    serde_json::json!({
+        "id": "evt_thin_1",
+        "object": "v2.core.event",
+        "type": "v2.billing.meter_event_session.created",
+        "livemode": false,
+        "related_object": {
+            "id": "pi_thin_1",
+            "type": "payment_intent",
+            "url": "/v1/payment_intents/pi_thin_1"
+        }
+    })
 }
 
 fn payment_intent_json(
@@ -459,13 +469,17 @@ async fn test_webhook_dual_v1_rotation_v0_downgrade_stale_and_thin_event() {
     let provider = make_provider("https://api.stripe.com".to_owned());
     let now = current_unix_secs();
 
-    let valid_v1 = sign_payload(TEST_WEBHOOK_SECRET, now, SNAPSHOT_PAYLOAD);
-    let old_v1 = sign_payload("whsec_previous_rotated_secret", now, SNAPSHOT_PAYLOAD);
+    let snapshot_val = snapshot_event_value();
+    let compact_bytes = serde_json::to_vec(&snapshot_val).expect("serialize snapshot");
+    let pretty_bytes = serde_json::to_vec_pretty(&snapshot_val).expect("pretty snapshot");
+
+    let valid_v1 = sign_payload(TEST_WEBHOOK_SECRET, now, &compact_bytes);
+    let old_v1 = sign_payload("whsec_previous_rotated_secret", now, &compact_bytes);
     let rotated_header = format!(
         "t={now},v0=deadbeef0000,secret=ignored,destination=ignored,v1={old_v1},v1={valid_v1}"
     );
     let verified = provider
-        .parse_and_verify_webhook(&build_webhook_request(SNAPSHOT_PAYLOAD, rotated_header))
+        .parse_and_verify_webhook(&build_webhook_request(&compact_bytes, rotated_header))
         .await
         .expect("dual-v1 rotated header with v0 and debug entries must pass");
     assert!(!verified.requires_hydration);
@@ -476,29 +490,29 @@ async fn test_webhook_dual_v1_rotation_v0_downgrade_stale_and_thin_event() {
     assert!(!redacted.contains("pi_wh_1_secret_leaked"));
     assert!(!redacted.contains("sk_live_should_redact"));
 
-    let v0_only = build_webhook_request(SNAPSHOT_PAYLOAD, format!("t={now},v0={valid_v1}"));
+    let v0_only = build_webhook_request(&compact_bytes, format!("t={now},v0={valid_v1}"));
     assert_error_kind(
         provider.parse_and_verify_webhook(&v0_only).await,
         ErrorKind::WebhookVerificationFailed,
     );
 
     let stale_ts = now.saturating_sub(301);
-    let stale_v1 = sign_payload(TEST_WEBHOOK_SECRET, stale_ts, SNAPSHOT_PAYLOAD);
-    let stale_req = build_webhook_request(SNAPSHOT_PAYLOAD, format!("t={stale_ts},v1={stale_v1}"));
+    let stale_v1 = sign_payload(TEST_WEBHOOK_SECRET, stale_ts, &compact_bytes);
+    let stale_req = build_webhook_request(&compact_bytes, format!("t={stale_ts},v1={stale_v1}"));
     assert_error_kind(
         provider.parse_and_verify_webhook(&stale_req).await,
         ErrorKind::WebhookVerificationFailed,
     );
 
-    let altered_req =
-        build_webhook_request(RESERIALIZED_SNAPSHOT_PAYLOAD, format!("t={now},v1={valid_v1}"));
+    let altered_req = build_webhook_request(&pretty_bytes, format!("t={now},v1={valid_v1}"));
     assert_error_kind(
         provider.parse_and_verify_webhook(&altered_req).await,
         ErrorKind::WebhookVerificationFailed,
     );
 
-    let thin_v1 = sign_payload(TEST_WEBHOOK_SECRET, now, THIN_EVENT_PAYLOAD);
-    let thin_req = build_webhook_request(THIN_EVENT_PAYLOAD, format!("t={now},v1={thin_v1}"));
+    let thin_bytes = serde_json::to_vec(&thin_event_value()).expect("serialize thin event");
+    let thin_v1 = sign_payload(TEST_WEBHOOK_SECRET, now, &thin_bytes);
+    let thin_req = build_webhook_request(&thin_bytes, format!("t={now},v1={thin_v1}"));
     let thin_event = provider
         .parse_and_verify_webhook(&thin_req)
         .await
