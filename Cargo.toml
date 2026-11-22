@@ -10,7 +10,7 @@ exclude = [".worktrees"]
 
 [package]
 name = "some-stripe"
-version = "0.8.0"
+version = "0.9.0"
 edition = "2024"
 authors = ["Maher Aladdin", "Some(CS)"]
 license = "Apache-2.0"
@@ -21,7 +21,12 @@ keywords = ["stripe", "payments", "checkout", "webhooks", "fintech"]
 categories = ["api-bindings", "finance", "web-programming"]
 readme = "README.md"
 
+[features]
+default = []
+some-payment-adapter = ["dep:some-payment-core"]
+
 [dependencies]
+some-payment-core = { git = "https://github.com/some-of-cs/some-payment", package = "some-payment-core", optional = true }
 some-stripe-core = { path = "src/crates/some-stripe-core" }
 some-stripe-types = { path = "src/crates/some-stripe-types" }
 some-stripe-webhooks = { path = "src/crates/some-stripe-webhooks" }
@@ -39,6 +44,7 @@ bytes = "1.10.1"
 tokio = { version = "1.54.1", features = ["sync", "time", "rt", "macros"] }
 
 [dev-dependencies]
+wiremock = "0.6"
 tokio = { version = "1.54.1", features = ["full"] }
 actix-web = "4"
 tonic = "0.12"
