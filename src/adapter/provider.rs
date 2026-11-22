@@ -16,13 +16,13 @@ use some_payment_core::{
 };
 use some_stripe_core::{SecretKey, validate_and_encode_id};
 use some_stripe_webhooks::multi_v1_verifier::{
-    DEFAULT_TOLERANCE_SECS, verify_stripe_raw_webhook,
+    DEFAULT_TOLERANCE_SECS, WebhookVerificationOptions, verify_stripe_raw_webhook,
 };
 
 use crate::adapter::mappers::{
-    map_checkout_session_json, map_payment_intent_json, map_refund_json, map_stripe_capabilities,
-    map_stripe_error_payload, map_webhook_json_to_normalized, stripe_provider_id,
-    validate_stripe_money_for_adapter,
+    WebhookEventMeta, map_checkout_session_json, map_payment_intent_json, map_refund_json,
+    map_stripe_capabilities, map_stripe_error_payload, map_webhook_json_to_normalized,
+    stripe_provider_id, validate_stripe_money_for_adapter,
 };
 
 /// Default base URL for Stripe's REST API.
@@ -126,6 +126,13 @@ impl StripeProviderConfig {
     }
 }
 
+struct StripeHttpRequest<'a> {
+    method: Method,
+    path: &'a str,
+    form: Option<&'a [(String, String)]>,
+    idempotency_key: Option<&'a str>,
+}
+
 /// Stripe gateway adapter implementing [`some_payment_core::PaymentProvider`].
 ///
 /// Implements a custom [`fmt::Debug`] that always redacts `api_key` and
@@ -203,23 +210,42 @@ impl StripeProvider {
         })
     }
 
-    async fn send_request(
+    async fn get_json(&self, path: &str) -> Result<Value, PaymentError> {
+        self.send_request(StripeHttpRequest {
+            method: Method::GET,
+            path,
+            form: None,
+            idempotency_key: None,
+        })
+        .await
+    }
+
+    async fn post_form(
         &self,
-        method: Method,
         path: &str,
         form: Option<&[(String, String)]>,
         idempotency_key: Option<&str>,
     ) -> Result<Value, PaymentError> {
-        let url = format!("{}{}", self.api_base, path);
+        self.send_request(StripeHttpRequest {
+            method: Method::POST,
+            path,
+            form,
+            idempotency_key,
+        })
+        .await
+    }
+
+    async fn send_request(&self, req: StripeHttpRequest<'_>) -> Result<Value, PaymentError> {
+        let url = format!("{}{}", self.api_base, req.path);
         let mut builder = self
             .http_client
-            .request(method, &url)
+            .request(req.method, &url)
             .bearer_auth(self.api_key.expose_secret())
             .header("Stripe-Version", &self.stripe_version);
-        if let Some(key) = idempotency_key {
+        if let Some(key) = req.idempotency_key {
             builder = builder.header("Idempotency-Key", key);
         }
-        if let Some(params) = form {
+        if let Some(params) = req.form {
             builder = builder.form(params);
         }
         let response = builder
@@ -236,7 +262,8 @@ impl StripeProvider {
             .await
             .map_err(|err| self.transport_error(err))?;
         if !(200..300).contains(&status) {
-            return Err(map_stripe_error_payload(status, &body));
+            let body_json = parse_error_json(&body);
+            return Err(map_stripe_error_payload(status, &body_json));
         }
         serde_json::from_str(&body).map_err(|err| PaymentError::ProviderError {
             provider: self.provider_id.clone(),
@@ -274,8 +301,7 @@ impl PaymentProvider for StripeProvider {
         validate_stripe_money_for_adapter(&req.money)?;
         let params = build_create_payment_params(req);
         let json = self
-            .send_request(
-                Method::POST,
+            .post_form(
                 "/v1/payment_intents",
                 Some(&params),
                 req.idempotency_key.as_deref(),
@@ -289,15 +315,13 @@ impl PaymentProvider for StripeProvider {
         reference: &ProviderReference,
     ) -> Result<PaymentResult, PaymentError> {
         if let Some(raw_id) = resolve_payment_intent_id(reference) {
-            let encoded = encode_stripe_id(raw_id)?;
-            let path = format!("/v1/payment_intents/{encoded}");
-            let json = self.send_request(Method::GET, &path, None, None).await?;
+            let path = encoded_resource_path("/v1/payment_intents", raw_id, "")?;
+            let json = self.get_json(&path).await?;
             return map_payment_intent_json(&json);
         }
         if let Some(raw_cs) = reference.checkout_session_id() {
-            let encoded = encode_stripe_id(raw_cs)?;
-            let path = format!("/v1/checkout/sessions/{encoded}");
-            let json = self.send_request(Method::GET, &path, None, None).await?;
+            let path = encoded_resource_path("/v1/checkout/sessions", raw_cs, "")?;
+            let json = self.get_json(&path).await?;
             return map_checkout_session_json(&json);
         }
         Err(PaymentError::validation(
@@ -313,8 +337,7 @@ impl PaymentProvider for StripeProvider {
         validate_stripe_money_for_adapter(&req.money)?;
         let params = build_checkout_params(req);
         let json = self
-            .send_request(
-                Method::POST,
+            .post_form(
                 "/v1/checkout/sessions",
                 Some(&params),
                 req.idempotency_key.as_deref(),
@@ -326,16 +349,15 @@ impl PaymentProvider for StripeProvider {
     async fn capture(&self, req: &CaptureRequest) -> Result<PaymentResult, PaymentError> {
         req.validate()?;
         let raw_id = require_payment_intent_id(&req.reference, "capture")?;
-        let encoded = encode_stripe_id(raw_id)?;
+        let path = encoded_resource_path("/v1/payment_intents", raw_id, "/capture")?;
         let mut params = Vec::new();
         if let Some(money) = &req.amount {
             validate_stripe_money_for_adapter(money)?;
             params.push(("amount_to_capture".to_owned(), money.amount().to_string()));
         }
         let form = (!params.is_empty()).then_some(params.as_slice());
-        let path = format!("/v1/payment_intents/{encoded}/capture");
         let json = self
-            .send_request(Method::POST, &path, form, req.idempotency_key.as_deref())
+            .post_form(&path, form, req.idempotency_key.as_deref())
             .await?;
         map_payment_intent_json(&json)
     }
@@ -343,21 +365,19 @@ impl PaymentProvider for StripeProvider {
     async fn void_payment(&self, req: &VoidRequest) -> Result<PaymentResult, PaymentError> {
         req.validate()?;
         if let Some(raw_pi) = resolve_payment_intent_id(&req.reference) {
-            let encoded = encode_stripe_id(raw_pi)?;
+            let path = encoded_resource_path("/v1/payment_intents", raw_pi, "/cancel")?;
             let mut params = Vec::new();
             push_opt(&mut params, "cancellation_reason", req.reason.as_deref());
             let form = (!params.is_empty()).then_some(params.as_slice());
-            let path = format!("/v1/payment_intents/{encoded}/cancel");
             let json = self
-                .send_request(Method::POST, &path, form, req.idempotency_key.as_deref())
+                .post_form(&path, form, req.idempotency_key.as_deref())
                 .await?;
             return map_payment_intent_json(&json);
         }
         if let Some(raw_cs) = req.reference.checkout_session_id() {
-            let encoded = encode_stripe_id(raw_cs)?;
-            let path = format!("/v1/checkout/sessions/{encoded}/expire");
+            let path = encoded_resource_path("/v1/checkout/sessions", raw_cs, "/expire")?;
             let json = self
-                .send_request(Method::POST, &path, None, req.idempotency_key.as_deref())
+                .post_form(&path, None, req.idempotency_key.as_deref())
                 .await?;
             return map_checkout_session_json(&json);
         }
@@ -377,14 +397,9 @@ impl PaymentProvider for StripeProvider {
         }
         push_opt(&mut params, "reason", req.reason.as_deref());
         let json = self
-            .send_request(
-                Method::POST,
-                "/v1/refunds",
-                Some(&params),
-                req.idempotency_key.as_deref(),
-            )
+            .post_form("/v1/refunds", Some(&params), req.idempotency_key.as_deref())
             .await?;
-        map_refund_json(&json)
+        map_refund_json(&json, &req.reference)
     }
 
     async fn parse_and_verify_webhook(
@@ -407,25 +422,22 @@ impl PaymentProvider for StripeProvider {
             .iter()
             .map(SecretKey::expose_secret)
             .collect();
-        let now = chrono::Utc::now().timestamp();
-        let _ = verify_stripe_raw_webhook(
-            &raw.raw_body,
-            sig,
-            &secret_slices,
-            now,
-            self.webhook_tolerance_secs,
-        )
-        .map_err(|err| PaymentError::WebhookVerificationFailed {
-            provider: self.provider_id.clone(),
-            reason: err.to_string(),
-        })?;
-        let payload: Value = serde_json::from_slice(&raw.raw_body).map_err(|err| {
-            PaymentError::WebhookVerificationFailed {
+        let options = WebhookVerificationOptions {
+            now_unix_secs: chrono::Utc::now().timestamp(),
+            tolerance_secs: self.webhook_tolerance_secs,
+        };
+        let verified = verify_stripe_raw_webhook(&raw.raw_body, sig, &secret_slices, options)
+            .map_err(|err| PaymentError::WebhookVerificationFailed {
                 provider: self.provider_id.clone(),
-                reason: format!("invalid Stripe webhook JSON payload: {err}"),
-            }
-        })?;
-        map_webhook_json_to_normalized(&payload)
+                reason: err.to_string(),
+            })?;
+        let meta = WebhookEventMeta {
+            event_id: &verified.event_id,
+            event_type: &verified.event_type,
+            livemode: verified.livemode,
+            is_thin_event: verified.is_thin_event,
+        };
+        map_webhook_json_to_normalized(&meta, &verified.payload)
     }
 }
 
@@ -464,8 +476,21 @@ fn build_default_http_client() -> Result<reqwest::Client, PaymentError> {
         })
 }
 
+fn parse_error_json(body: &str) -> Value {
+    serde_json::from_str(body).unwrap_or_else(|_| serde_json::json!({}))
+}
+
 fn encode_stripe_id(id: &str) -> Result<String, PaymentError> {
     validate_and_encode_id(id).map_err(|err| PaymentError::validation(err.to_string()))
+}
+
+fn encoded_resource_path(
+    prefix: &str,
+    raw_id: &str,
+    suffix: &str,
+) -> Result<String, PaymentError> {
+    let encoded = encode_stripe_id(raw_id)?;
+    Ok(format!("{prefix}/{encoded}{suffix}"))
 }
 
 fn resolve_payment_intent_id(reference: &ProviderReference) -> Option<&str> {
@@ -477,7 +502,9 @@ fn require_payment_intent_id<'a>(
     operation: &str,
 ) -> Result<&'a str, PaymentError> {
     resolve_payment_intent_id(reference).ok_or_else(|| {
-        PaymentError::validation(format!("Stripe {operation} requires payment_id or intent_id"))
+        PaymentError::validation(format!(
+            "Stripe {operation} requires payment_id or intent_id"
+        ))
     })
 }
 
@@ -524,26 +551,30 @@ fn build_create_payment_params(req: &CreatePaymentRequest) -> Vec<(String, Strin
     params
 }
 
-fn build_checkout_params(req: &CheckoutSessionRequest) -> Vec<(String, String)> {
+fn append_checkout_line_item(params: &mut Vec<(String, String)>, req: &CheckoutSessionRequest) {
     let product_name = req.description.as_deref().unwrap_or(&req.order_id);
+    params.push((
+        "line_items[0][price_data][currency]".to_owned(),
+        req.money.currency().to_lowercase(),
+    ));
+    params.push((
+        "line_items[0][price_data][unit_amount]".to_owned(),
+        req.money.amount().to_string(),
+    ));
+    params.push((
+        "line_items[0][price_data][product_data][name]".to_owned(),
+        product_name.to_owned(),
+    ));
+    params.push(("line_items[0][quantity]".to_owned(), "1".to_owned()));
+}
+
+fn build_checkout_params(req: &CheckoutSessionRequest) -> Vec<(String, String)> {
     let mut params = vec![
         ("mode".to_owned(), "payment".to_owned()),
         ("success_url".to_owned(), req.success_url.clone()),
         ("client_reference_id".to_owned(), req.order_id.clone()),
-        (
-            "line_items[0][price_data][currency]".to_owned(),
-            req.money.currency().to_lowercase(),
-        ),
-        (
-            "line_items[0][price_data][unit_amount]".to_owned(),
-            req.money.amount().to_string(),
-        ),
-        (
-            "line_items[0][price_data][product_data][name]".to_owned(),
-            product_name.to_owned(),
-        ),
-        ("line_items[0][quantity]".to_owned(), "1".to_owned()),
     ];
+    append_checkout_line_item(&mut params, req);
     push_opt(&mut params, "cancel_url", req.cancel_url.as_deref());
     push_opt(&mut params, "customer_email", req.customer_email.as_deref());
     if req.capture_mode == CaptureMode::Manual {
@@ -561,6 +592,17 @@ mod tests {
     use super::*;
     use some_payment_core::{ErrorKind, Money};
 
+    fn assert_secrets_redacted(debug: &str) {
+        assert!(debug.contains("[REDACTED]"));
+        assert!(!debug.contains("sk_test_canary_api_key_999"));
+        assert!(!debug.contains("whsec_canary_primary_111"));
+        assert!(!debug.contains("whsec_canary_secondary_222"));
+    }
+
+    fn has_param(params: &[(String, String)], key: &str, value: &str) -> bool {
+        params.iter().any(|(k, v)| k == key && v == value)
+    }
+
     #[test]
     fn config_and_provider_debug_redact_all_secrets() {
         let config = StripeProviderConfig::new("sk_test_canary_api_key_999")
@@ -572,61 +614,46 @@ mod tests {
             .with_stripe_version("2026-11-18.endive")
             .with_webhook_tolerance_secs(120);
 
-        let cfg_dbg = format!("{config:?}");
-        assert!(cfg_dbg.contains("[REDACTED]"));
-        assert!(!cfg_dbg.contains("sk_test_canary_api_key_999"));
-        assert!(!cfg_dbg.contains("whsec_canary_primary_111"));
-        assert!(!cfg_dbg.contains("whsec_canary_secondary_222"));
+        assert_secrets_redacted(&format!("{config:?}"));
 
         let provider = StripeProvider::new(config).expect("valid config");
-        let prov_dbg = format!("{provider:?}");
-        assert!(prov_dbg.contains("[REDACTED]"));
-        assert!(!prov_dbg.contains("sk_test_canary_api_key_999"));
-        assert!(!prov_dbg.contains("whsec_canary_primary_111"));
-        assert!(!prov_dbg.contains("whsec_canary_secondary_222"));
+        assert_secrets_redacted(&format!("{provider:?}"));
         assert_eq!(provider.id().as_str(), "stripe");
     }
 
     #[test]
     fn provider_new_rejects_invalid_configuration() {
-        let empty_key = StripeProvider::new(StripeProviderConfig::new("   ")).unwrap_err();
-        assert_eq!(empty_key.kind(), ErrorKind::Configuration);
-
-        let bad_base = StripeProvider::new(
+        let invalid_configs = [
+            StripeProviderConfig::new("   "),
             StripeProviderConfig::new("sk_test_123").with_api_base("ftp://api.stripe.com"),
-        )
-        .unwrap_err();
-        assert_eq!(bad_base.kind(), ErrorKind::Configuration);
-
-        let empty_ver = StripeProvider::new(
             StripeProviderConfig::new("sk_test_123").with_stripe_version("  "),
-        )
-        .unwrap_err();
-        assert_eq!(empty_ver.kind(), ErrorKind::Configuration);
-
-        let neg_tol = StripeProvider::new(
             StripeProviderConfig::new("sk_test_123").with_webhook_tolerance_secs(-1),
-        )
-        .unwrap_err();
-        assert_eq!(neg_tol.kind(), ErrorKind::Configuration);
+        ];
+        for cfg in invalid_configs {
+            assert_eq!(StripeProvider::new(cfg).unwrap_err().kind(), ErrorKind::Configuration);
+        }
     }
 
     #[test]
-    fn param_builders_populate_expected_form_fields() {
+    fn create_payment_params_populate_expected_fields() {
         let money = Money::new(2_500, "USD").unwrap();
-        let mut req = CreatePaymentRequest::new(money.clone(), "ORD-100")
+        let mut req = CreatePaymentRequest::new(money, "ORD-100")
             .with_capture_mode(CaptureMode::Manual);
         req.description = Some("Order 100".to_owned());
         req.metadata.insert("tenant".to_owned(), "acme".to_owned());
 
-        let pi_params = build_create_payment_params(&req);
-        assert!(pi_params.contains(&("amount".to_owned(), "2500".to_owned())));
-        assert!(pi_params.contains(&("currency".to_owned(), "usd".to_owned())));
-        assert!(pi_params.contains(&("capture_method".to_owned(), "manual".to_owned())));
-        assert!(pi_params.contains(&("metadata[order_id]".to_owned(), "ORD-100".to_owned())));
-        assert!(pi_params.contains(&("metadata[tenant]".to_owned(), "acme".to_owned())));
+        let params = build_create_payment_params(&req);
+        assert!(has_param(&params, "amount", "2500"));
+        assert!(has_param(&params, "currency", "usd"));
+        assert!(has_param(&params, "capture_method", "manual"));
+        assert!(has_param(&params, "metadata[order_id]", "ORD-100"));
+        assert!(has_param(&params, "metadata[tenant]", "acme"));
+    }
 
-        let checkout_req = CheckoutSessionRequest {
+    #[test]
+    fn checkout_params_populate_expected_fields() {
+        let money = Money::new(2_500, "USD").unwrap();
+        let req = CheckoutSessionRequest {
             provider_id: None,
             money,
             order_id: "ORD-200".to_owned(),
@@ -639,16 +666,11 @@ mod tests {
             idempotency_key: None,
             metadata: BTreeMap::new(),
         };
-        let cs_params = build_checkout_params(&checkout_req);
-        assert!(cs_params.contains(&("mode".to_owned(), "payment".to_owned())));
-        assert!(cs_params.contains(&(
-            "payment_intent_data[capture_method]".to_owned(),
-            "manual".to_owned()
-        )));
-        assert!(cs_params.contains(&(
-            "line_items[0][price_data][product_data][name]".to_owned(),
-            "Pro Plan".to_owned()
-        )));
+
+        let params = build_checkout_params(&req);
+        assert!(has_param(&params, "mode", "payment"));
+        assert!(has_param(&params, "payment_intent_data[capture_method]", "manual"));
+        assert!(has_param(&params, "line_items[0][price_data][product_data][name]", "Pro Plan"));
     }
 
     #[test]
