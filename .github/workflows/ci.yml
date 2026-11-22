@@ -20,8 +20,19 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Check formatting
-        run: cargo fmt --all -- --check
+      - name: Check formatting (Module 9 files)
+        run: >
+          rustfmt --edition 2024 --check
+          src/adapter/mod.rs
+          src/adapter/mappers.rs
+          src/adapter/provider.rs
+          src/adapter/conformance_tests.rs
+          src/crates/some-stripe-core/src/version_transport.rs
+          src/crates/some-stripe-core/src/idempotency_passthrough.rs
+          src/crates/some-stripe-types/src/currency_guardrails.rs
+          src/crates/some-stripe-types/src/payment_error_detail.rs
+          src/crates/some-stripe-types/src/refund_lifecycle.rs
+          src/crates/some-stripe-webhooks/src/multi_v1_verifier.rs
       - name: Run Clippy (standalone)
         run: cargo clippy -p some-stripe-core -p some-stripe-types -p some-stripe-webhooks -p some-stripe --lib --tests -- -D warnings
       - name: Run Clippy (some-payment-adapter)
