@@ -480,11 +480,7 @@ fn encode_stripe_id(id: &str) -> Result<String, PaymentError> {
     validate_and_encode_id(id).map_err(|err| PaymentError::validation(err.to_string()))
 }
 
-fn encoded_resource_path(
-    prefix: &str,
-    raw_id: &str,
-    suffix: &str,
-) -> Result<String, PaymentError> {
+fn encoded_resource_path(prefix: &str, raw_id: &str, suffix: &str) -> Result<String, PaymentError> {
     let encoded = encode_stripe_id(raw_id)?;
     Ok(format!("{prefix}/{encoded}{suffix}"))
 }
