@@ -311,11 +311,8 @@ fn verify_secret_candidates(
     raw_body: &[u8],
     parsed: &ParsedSignatureHeader<'_>,
 ) -> Result<Choice, StripeWebhookError> {
-    let expected = compute_streaming_hmac_bytes(
-        secret.as_bytes(),
-        parsed.raw_timestamp.as_bytes(),
-        raw_body,
-    )?;
+    let ts_bytes = parsed.raw_timestamp.as_bytes();
+    let expected = compute_streaming_hmac_bytes(secret.as_bytes(), ts_bytes, raw_body)?;
     let mut matched = Choice::from(0u8);
     for candidate in &parsed.v1_candidates {
         matched |= expected.as_bytes().ct_eq(candidate.as_bytes());
@@ -441,22 +438,34 @@ mod tests {
     }
 
     #[test]
-    fn test_order_agnostic_v1_before_t_succeeds() {
+    fn test_order_agnostic_and_debug_keys_ignored() {
         let sig = sign(DEFAULT_SECRET, SNAPSHOT_BODY);
-        let header = format!("v1={sig},t={SAMPLE_TS_STR}");
+        let headers = [
+            format!("v1={sig},t={SAMPLE_TS_STR}"),
+            format!(
+                "secret=leaked,destination=https://attacker.example,payload=fake,v0=deadbeef,v1={sig},t={SAMPLE_TS_STR}"
+            ),
+        ];
 
-        let (ts, raw_ts, cands) =
-            parse_signature_header_order_agnostic(&header).expect("v1 before t must parse");
-        assert_eq!((ts, raw_ts, cands), (SAMPLE_TS, SAMPLE_TS_STR, vec![sig.as_str()]));
+        for header in &headers {
+            let (ts, raw_ts, cands) =
+                parse_signature_header_order_agnostic(header).expect("header must parse");
+            assert_eq!(ts, SAMPLE_TS);
+            assert_eq!(raw_ts, SAMPLE_TS_STR);
+            assert_eq!(cands, vec![sig.as_str()]);
 
-        let verified = verify_with(SNAPSHOT_BODY, &header, &[DEFAULT_SECRET])
-            .expect("v1 before t must verify");
-        assert_eq!(verified.event_id, "evt_snap_001");
+            let verified = verify_with(SNAPSHOT_BODY, header, &[DEFAULT_SECRET]);
+            assert_eq!(
+                verified.expect("header must verify").event_id,
+                "evt_snap_001"
+            );
+        }
     }
 
     #[test]
     fn test_v0_only_downgrade_rejected_fail_closed() {
-        let header = format!("t={SAMPLE_TS_STR},v0={}", sign(DEFAULT_SECRET, SNAPSHOT_BODY));
+        let sig = sign(DEFAULT_SECRET, SNAPSHOT_BODY);
+        let header = format!("t={SAMPLE_TS_STR},v0={sig}");
 
         assert_eq!(
             parse_signature_header_order_agnostic(&header),
@@ -469,63 +478,19 @@ mod tests {
     }
 
     #[test]
-    fn test_unsigned_debug_entries_and_v0_ignored() {
-        let sig = sign(DEFAULT_SECRET, SNAPSHOT_BODY);
-        let header = format!(
-            "secret=leaked,destination=https://attacker.example,payload=fake,v0=deadbeef,v1={sig},t={SAMPLE_TS_STR}"
-        );
-
-        let (_, _, cands) =
-            parse_signature_header_order_agnostic(&header).expect("debug entries must be ignored");
-        assert_eq!(cands, vec![sig.as_str()]);
-
-        let verified = verify_with(SNAPSHOT_BODY, &header, &[DEFAULT_SECRET])
-            .expect("verification should succeed while ignoring unsigned debug keys");
-        assert_eq!(verified.event_id, "evt_snap_001");
-    }
-
-    #[test]
-    fn test_stale_timestamp_outside_tolerance_rejected() {
+    fn test_timestamps_outside_tolerance_rejected() {
         let header = signed_header(DEFAULT_SECRET, SNAPSHOT_BODY);
-        let stale_now = SAMPLE_TS + DEFAULT_TOLERANCE_SECS + 1;
-        let err = verify_stripe_raw_webhook(
-            SNAPSHOT_BODY,
-            &header,
-            &[DEFAULT_SECRET],
-            WebhookVerificationOptions::new(stale_now),
-        )
-        .unwrap_err();
-
-        assert_eq!(
-            err,
-            StripeWebhookError::TimestampOutsideTolerance {
+        for offset in [DEFAULT_TOLERANCE_SECS + 1, -(DEFAULT_TOLERANCE_SECS + 1)] {
+            let now = SAMPLE_TS + offset;
+            let opts = WebhookVerificationOptions::new(now);
+            let res = verify_stripe_raw_webhook(SNAPSHOT_BODY, &header, &[DEFAULT_SECRET], opts);
+            let expected = StripeWebhookError::TimestampOutsideTolerance {
                 timestamp: SAMPLE_TS,
-                now: stale_now,
+                now,
                 tolerance: 300,
-            }
-        );
-    }
-
-    #[test]
-    fn test_future_drift_outside_tolerance_rejected() {
-        let header = signed_header(DEFAULT_SECRET, SNAPSHOT_BODY);
-        let past_now = SAMPLE_TS - DEFAULT_TOLERANCE_SECS - 1;
-        let err = verify_stripe_raw_webhook(
-            SNAPSHOT_BODY,
-            &header,
-            &[DEFAULT_SECRET],
-            WebhookVerificationOptions::new(past_now),
-        )
-        .unwrap_err();
-
-        assert_eq!(
-            err,
-            StripeWebhookError::TimestampOutsideTolerance {
-                timestamp: SAMPLE_TS,
-                now: past_now,
-                tolerance: 300,
-            }
-        );
+            };
+            assert_eq!(res, Err(expected));
+        }
     }
 
     #[test]
