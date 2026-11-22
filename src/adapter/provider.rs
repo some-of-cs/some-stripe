@@ -5,6 +5,7 @@
 
 use std::collections::BTreeMap;
 use std::fmt;
+use std::time::Duration;
 
 use async_trait::async_trait;
 use reqwest::Method;
@@ -14,15 +15,20 @@ use some_payment_core::{
     NormalizedWebhookEvent, PaymentCapabilities, PaymentError, PaymentProvider, PaymentResult,
     ProviderId, ProviderReference, RawWebhookRequest, RefundRequest, RefundResult, VoidRequest,
 };
+use some_stripe_core::idempotency_passthrough::IdempotencyKey;
+use some_stripe_core::version_transport::{
+    StripeVersion, validate_api_base as validate_core_api_base,
+};
 use some_stripe_core::{SecretKey, validate_and_encode_id};
+use some_stripe_types::payment_error_detail::{CheckoutVoidAction, resolve_checkout_void_action};
 use some_stripe_webhooks::multi_v1_verifier::{
     DEFAULT_TOLERANCE_SECS, WebhookVerificationOptions, verify_stripe_raw_webhook,
 };
 
 use crate::adapter::mappers::{
     WebhookEventMeta, map_checkout_session_json, map_payment_intent_json, map_refund_json,
-    map_stripe_capabilities, map_stripe_error_payload, map_webhook_json_to_normalized,
-    stripe_provider_id, validate_stripe_money_for_adapter,
+    map_stripe_capabilities, map_stripe_error_payload_with_retry_after,
+    map_webhook_json_to_normalized, stripe_provider_id, validate_stripe_money_for_adapter,
 };
 
 /// Default base URL for Stripe's REST API.
@@ -30,6 +36,12 @@ pub const DEFAULT_STRIPE_API_BASE: &str = "https://api.stripe.com";
 
 /// Default `Stripe-Version` API header sent by [`StripeProvider`].
 pub const DEFAULT_STRIPE_API_VERSION: &str = "2026-11-18.endive";
+
+/// Maximum permitted HTTP response body size in bytes (10 MiB).
+pub const MAX_RESPONSE_BODY_BYTES: usize = 10 * 1024 * 1024;
+
+const DEFAULT_HTTP_TIMEOUT_SECS: u64 = 30;
+const DEFAULT_HTTP_CONNECT_TIMEOUT_SECS: u64 = 10;
 
 /// Configuration builder for [`StripeProvider`].
 ///
@@ -215,7 +227,10 @@ impl StripeProvider {
     pub fn new(config: StripeProviderConfig) -> Result<Self, PaymentError> {
         validate_non_empty(config.api_key.expose_secret(), "api_key")?;
         let api_base = validate_api_base(&config.api_base)?;
-        let stripe_version = validate_non_empty(&config.stripe_version, "stripe_version")?;
+        let stripe_version = StripeVersion::try_new(&config.stripe_version)
+            .map_err(|err| PaymentError::configuration(err.to_string()))?
+            .as_str()
+            .to_owned();
         if config.webhook_tolerance_secs < 0 {
             return Err(PaymentError::configuration(
                 "Stripe webhook_tolerance_secs must be non-negative",
@@ -243,8 +258,10 @@ impl StripeProvider {
             .request(req.method, &url)
             .bearer_auth(self.api_key.expose_secret())
             .header("Stripe-Version", &self.stripe_version);
-        if let Some(key) = req.idempotency_key {
-            builder = builder.header("Idempotency-Key", key);
+        if let Some(raw_key) = req.idempotency_key {
+            let validated = IdempotencyKey::try_new(raw_key)
+                .map_err(|err| PaymentError::validation(err.to_string()))?;
+            builder = builder.header("Idempotency-Key", validated.as_str());
         }
         if let Some(params) = req.form {
             builder = builder.form(params);
@@ -258,13 +275,15 @@ impl StripeProvider {
 
     async fn decode_response(&self, response: reqwest::Response) -> Result<Value, PaymentError> {
         let status = response.status().as_u16();
-        let body = response
-            .text()
-            .await
-            .map_err(|err| self.transport_error(err))?;
+        let retry_after_secs = parse_retry_after_header(response.headers());
+        let body = self.read_bounded_body(response, status).await?;
         if !(200..300).contains(&status) {
             let body_json = parse_error_json(&body);
-            return Err(map_stripe_error_payload(status, &body_json));
+            return Err(map_stripe_error_payload_with_retry_after(
+                status,
+                &body_json,
+                retry_after_secs,
+            ));
         }
         serde_json::from_str(&body).map_err(|err| PaymentError::ProviderError {
             provider: self.provider_id.clone(),
@@ -272,6 +291,66 @@ impl StripeProvider {
             vendor_code: None,
             message: format!("failed to parse Stripe JSON response: {err}"),
         })
+    }
+
+    async fn read_bounded_body(
+        &self,
+        mut response: reqwest::Response,
+        status: u16,
+    ) -> Result<String, PaymentError> {
+        let mut buf = Vec::new();
+        while let Some(chunk) = response
+            .chunk()
+            .await
+            .map_err(|err| self.transport_error(err))?
+        {
+            if buf.len().saturating_add(chunk.len()) > MAX_RESPONSE_BODY_BYTES {
+                return Err(PaymentError::ProviderError {
+                    provider: self.provider_id.clone(),
+                    http_status: Some(status),
+                    vendor_code: Some("response_too_large".to_owned()),
+                    message: format!(
+                        "Stripe response body exceeded maximum allowed size of {MAX_RESPONSE_BODY_BYTES} bytes"
+                    ),
+                });
+            }
+            buf.extend_from_slice(&chunk);
+        }
+        String::from_utf8(buf).map_err(|err| PaymentError::ProviderError {
+            provider: self.provider_id.clone(),
+            http_status: Some(status),
+            vendor_code: Some("invalid_utf8_response".to_owned()),
+            message: format!("Stripe response body is not valid UTF-8: {err}"),
+        })
+    }
+
+    async fn resolve_void_target<'a>(
+        &self,
+        reference: &'a ProviderReference,
+    ) -> Result<StripeTarget<'a>, PaymentError> {
+        if let (Some(cs_id), Some(pi_id)) = (
+            reference.checkout_session_id(),
+            resolve_payment_intent_id(reference),
+        ) {
+            return self.resolve_checkout_backed_void_target(cs_id, pi_id).await;
+        }
+        resolve_target(reference, "void_payment")
+    }
+
+    async fn resolve_checkout_backed_void_target<'a>(
+        &self,
+        cs_id: &'a str,
+        pi_id: &'a str,
+    ) -> Result<StripeTarget<'a>, PaymentError> {
+        let pi_path = encoded_resource_path("/v1/payment_intents", pi_id, "")?;
+        let pi_json = self
+            .send_request(StripeHttpRequest::new(Method::GET, &pi_path))
+            .await?;
+        let pi_status = pi_json.get("status").and_then(Value::as_str);
+        match resolve_checkout_void_action(pi_status) {
+            CheckoutVoidAction::CancelPaymentIntent => Ok(StripeTarget::PaymentIntent(pi_id)),
+            CheckoutVoidAction::ExpireCheckoutSession => Ok(StripeTarget::CheckoutSession(cs_id)),
+        }
     }
 
     fn transport_error(&self, err: reqwest::Error) -> PaymentError {
@@ -357,7 +436,7 @@ impl PaymentProvider for StripeProvider {
 
     async fn void_payment(&self, req: &VoidRequest) -> Result<PaymentResult, PaymentError> {
         req.validate()?;
-        let target = resolve_target(&req.reference, "void_payment")?;
+        let target = self.resolve_void_target(&req.reference).await?;
         let path = target_path(&target, "/cancel", "/expire")?;
         let mut params = Vec::new();
         if matches!(target, StripeTarget::PaymentIntent(_)) {
@@ -448,23 +527,20 @@ fn validate_non_empty(value: &str, field: &str) -> Result<String, PaymentError> 
 }
 
 fn validate_api_base(raw: &str) -> Result<String, PaymentError> {
-    let trimmed = raw.trim().trim_end_matches('/');
-    let rest = trimmed
-        .strip_prefix("https://")
-        .or_else(|| trimmed.strip_prefix("http://"));
-    let is_valid = rest.is_some_and(|r| {
-        !r.is_empty() && r.chars().all(|c| c.is_ascii() && !c.is_ascii_whitespace())
-    });
-    if !is_valid {
-        return Err(PaymentError::configuration(
-            "Stripe api_base must be a valid http:// or https:// URL",
-        ));
-    }
-    Ok(trimmed.to_owned())
+    validate_core_api_base(raw).map_err(|err| PaymentError::configuration(err.to_string()))
+}
+
+fn parse_retry_after_header(headers: &reqwest::header::HeaderMap) -> Option<u64> {
+    headers
+        .get(reqwest::header::RETRY_AFTER)
+        .and_then(|val| val.to_str().ok())
+        .and_then(|raw| raw.trim().parse::<u64>().ok())
 }
 
 fn build_default_http_client() -> Result<reqwest::Client, PaymentError> {
     reqwest::Client::builder()
+        .timeout(Duration::from_secs(DEFAULT_HTTP_TIMEOUT_SECS))
+        .connect_timeout(Duration::from_secs(DEFAULT_HTTP_CONNECT_TIMEOUT_SECS))
         .redirect(reqwest::redirect::Policy::none())
         .build()
         .map_err(|err| {
@@ -672,12 +748,31 @@ mod tests {
         let invalid_configs = [
             StripeProviderConfig::new("   "),
             StripeProviderConfig::new("sk_test_123").with_api_base("ftp://api.stripe.com"),
+            StripeProviderConfig::new("sk_test_123").with_api_base("http://api.stripe.com"),
+            StripeProviderConfig::new("sk_test_123")
+                .with_api_base("https://api.stripe.com@evil.example"),
+            StripeProviderConfig::new("sk_test_123").with_api_base("https://api.stripe.com?foo=bar"),
+            StripeProviderConfig::new("sk_test_123").with_api_base("https://api.stripe.com#frag"),
+            StripeProviderConfig::new("sk_test_123").with_api_base("https://"),
+            StripeProviderConfig::new("sk_test_123")
+                .with_api_base("https://api.stripe.com/\r\nX-Inject: 1"),
             StripeProviderConfig::new("sk_test_123").with_stripe_version("  "),
+            StripeProviderConfig::new("sk_test_123")
+                .with_stripe_version("2026-11-18\r\nX-Inject: 1"),
             StripeProviderConfig::new("sk_test_123").with_webhook_tolerance_secs(-1),
         ];
         for cfg in invalid_configs {
             let err = StripeProvider::new(cfg).unwrap_err();
             assert_eq!(err.kind(), ErrorKind::Configuration);
+        }
+
+        for valid_base in [
+            "https://api.stripe.com",
+            "http://127.0.0.1:8080",
+            "http://localhost:8080",
+        ] {
+            let cfg = StripeProviderConfig::new("sk_test_123").with_api_base(valid_base);
+            assert!(StripeProvider::new(cfg).is_ok());
         }
     }
 
@@ -733,6 +828,8 @@ mod tests {
     #[test]
     fn encode_stripe_id_blocks_path_traversal() {
         assert_eq!(encode_stripe_id("pi_12345").unwrap(), "pi_12345");
+        let dot_err = encode_stripe_id(".").unwrap_err();
+        assert_eq!(dot_err.kind(), ErrorKind::Validation);
         let err = encode_stripe_id("../customers/cus_1").unwrap_err();
         assert_eq!(err.kind(), ErrorKind::Validation);
     }

@@ -356,25 +356,60 @@ fn validate_stripe_version(raw: &str) -> Result<(), StripeError> {
     Ok(())
 }
 
-fn validate_api_base(raw: &str) -> Result<String, StripeError> {
-    let rest = raw
-        .strip_prefix("https://")
-        .or_else(|| raw.strip_prefix("http://"))
-        .ok_or_else(|| {
-            StripeError::Config("API base URL must start with 'https://' or 'http://'".to_owned())
-        })?;
-    let host_segment = rest.split('/').next().unwrap_or("");
-    if host_segment.is_empty() {
+fn is_loopback_host(host: &str) -> bool {
+    matches!(host, "localhost" | "127.0.0.1" | "[::1]" | "::1")
+}
+
+fn validate_url_components(url: &reqwest::Url) -> Result<(), StripeError> {
+    if !url.username().is_empty() || url.password().is_some() {
         return Err(StripeError::Config(
-            "API base URL must include a non-empty host".to_owned(),
+            "API base URL must not contain userinfo credentials".to_owned(),
         ));
     }
-    if !raw.bytes().all(|b| b.is_ascii_graphic()) {
+    if url.query().is_some() || url.fragment().is_some() {
         return Err(StripeError::Config(
-            "API base URL must contain only printable ASCII without whitespace or control chars"
+            "API base URL must not contain query parameters or fragments".to_owned(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_url_scheme_and_host(url: &reqwest::Url) -> Result<(), StripeError> {
+    let host = url.host_str().ok_or_else(|| {
+        StripeError::Config("API base URL must include a non-empty host".to_owned())
+    })?;
+    let scheme = url.scheme();
+    if scheme == "https" || (scheme == "http" && is_loopback_host(host)) {
+        return Ok(());
+    }
+    Err(StripeError::Config(
+        "API base URL must use 'https://' (plain 'http://' is permitted only for loopback hosts)"
+            .to_owned(),
+    ))
+}
+
+/// Validates and normalizes a Stripe API base URL.
+///
+/// Requires printable graphic ASCII characters without backslashes, valid URL
+/// syntax with a host, no userinfo/query/fragment components, and `https://`
+/// (plain `http://` is permitted only for loopback hosts: `localhost`,
+/// `127.0.0.1`, `[::1]`, or `::1`).
+///
+/// # Errors
+///
+/// Returns [`StripeError::Config`] if `raw` fails any URL or transport security
+/// check.
+pub fn validate_api_base(raw: &str) -> Result<String, StripeError> {
+    if raw.is_empty() || !raw.bytes().all(|b| b.is_ascii_graphic()) || raw.contains('\\') {
+        return Err(StripeError::Config(
+            "API base URL must contain only printable ASCII without whitespace, control chars, or backslashes"
                 .to_owned(),
         ));
     }
+    let url = reqwest::Url::parse(raw)
+        .map_err(|err| StripeError::Config(format!("API base URL is not a valid URL: {err}")))?;
+    validate_url_components(&url)?;
+    validate_url_scheme_and_host(&url)?;
     Ok(raw.trim_end_matches('/').to_owned())
 }
 
@@ -399,15 +434,11 @@ fn insert_idempotency_header(
     headers: &mut HeaderMap,
     idempotency_key: Option<&str>,
 ) -> Result<(), StripeError> {
-    let Some(key) = idempotency_key else {
+    let Some(raw_key) = idempotency_key else {
         return Ok(());
     };
-    if key.trim().is_empty() {
-        return Err(StripeError::InvalidRequest(
-            "Idempotency-Key must not be empty or whitespace-only".to_owned(),
-        ));
-    }
-    let value = HeaderValue::from_str(key).map_err(|_| {
+    let validated = crate::idempotency_passthrough::IdempotencyKey::try_new(raw_key)?;
+    let value = HeaderValue::from_str(validated.as_str()).map_err(|_| {
         StripeError::InvalidRequest(
             "Idempotency-Key contains invalid HTTP header characters".to_owned(),
         )
@@ -633,6 +664,12 @@ mod tests {
             "api.stripe.com",
             "ftp://api.stripe.com",
             "javascript:alert(1)",
+            "http://api.stripe.com",
+            "https://api.stripe.com@evil.example",
+            "https://user:pass@api.stripe.com",
+            "https://api.stripe.com?foo=bar",
+            "https://api.stripe.com#frag",
+            "https://api.stripe.com\\evil",
             "https://",
             "http://",
             "https://api.stripe.com/ bad",
@@ -649,9 +686,35 @@ mod tests {
             );
         }
 
+        for valid in [
+            "https://api.stripe.com",
+            "http://127.0.0.1:8080",
+            "http://localhost:8080",
+            "http://[::1]:8080",
+        ] {
+            let cfg = TransportConfig::new(SecretKey::new("sk_test_base_ok"))
+                .with_api_base(valid)
+                .expect("valid api_base must succeed");
+            assert_eq!(cfg.api_base(), valid);
+        }
+
         let timeout_err = TransportConfig::new(SecretKey::new("sk_test_timeout_check"))
             .with_timeout(Duration::ZERO)
             .expect_err("zero timeout must fail");
         assert!(matches!(timeout_err, StripeError::Config(_)));
+    }
+
+    #[test]
+    fn build_headers_enforces_idempotency_key_length_and_ascii() {
+        let cfg = TransportConfig::new(SecretKey::new("sk_test_idem_check"));
+        let oversized = "k".repeat(256);
+        assert!(matches!(
+            cfg.build_headers(Some(&oversized)),
+            Err(StripeError::InvalidRequest(_))
+        ));
+        assert!(matches!(
+            cfg.build_headers(Some("idem-non-ascii-é")),
+            Err(StripeError::InvalidRequest(_))
+        ));
     }
 }

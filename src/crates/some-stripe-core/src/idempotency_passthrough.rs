@@ -79,9 +79,10 @@ impl IdempotencyKey {
                 value.len()
             )));
         }
-        if contains_ascii_control(value) {
+        if !is_printable_ascii(value) {
             return Err(StripeError::InvalidRequest(
-                "Idempotency-Key must not contain ASCII control characters".to_string(),
+                "Idempotency-Key must contain only printable ASCII characters (0x20..=0x7E)"
+                    .to_string(),
             ));
         }
         Ok(Self(value.to_string()))
@@ -128,9 +129,9 @@ impl TryFrom<String> for IdempotencyKey {
     }
 }
 
-/// Returns `true` if `value` contains any ASCII control byte (`0x00..=0x1F` or `0x7F`).
-fn contains_ascii_control(value: &str) -> bool {
-    value.bytes().any(|b| b.is_ascii_control())
+/// Returns `true` if every byte in `value` is printable ASCII (`0x20..=0x7E`).
+fn is_printable_ascii(value: &str) -> bool {
+    value.bytes().all(|b| (0x20..=0x7E).contains(&b))
 }
 
 /// Returns `true` if the HTTP status code is retryable with a preserved [`IdempotencyKey`].
@@ -651,5 +652,14 @@ mod tests {
             .expect_err("non-retryable error must fail immediately");
         assert_eq!(attempts, 1);
         assert!(matches!(err, StripeError::Config(_)));
+    }
+
+    #[test]
+    fn rejects_non_ascii_utf8_idempotency_keys() {
+        for bad in ["idem-é-123", "idem-🚀-456", "idem-\u{00A0}-space"] {
+            let err = IdempotencyKey::try_new(bad)
+                .expect_err("non-ASCII UTF-8 idempotency key must fail");
+            assert!(matches!(err, StripeError::InvalidRequest(_)));
+        }
     }
 }

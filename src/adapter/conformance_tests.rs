@@ -376,10 +376,10 @@ fn test_capabilities_and_provider_id() {
         | PaymentCapabilities::PARTIAL_REFUND
         | PaymentCapabilities::NATIVE_CREATE_IDEMPOTENCY
         | PaymentCapabilities::NATIVE_MUTATION_IDEMPOTENCY
-        | PaymentCapabilities::SAVED_CARDS
-        | PaymentCapabilities::SPLITS;
+        | PaymentCapabilities::SAVED_CARDS;
 
     assert!(caps.contains(expected), "missing expected flags: {caps:?}");
+    assert!(!caps.contains(PaymentCapabilities::SPLITS));
     assert!(!caps.contains(PaymentCapabilities::WEBHOOK_VERIFICATION_HANDSHAKE));
 }
 
@@ -576,4 +576,145 @@ fn test_secret_redaction_in_debug() {
     assert!(provider_dbg.contains("[REDACTED]"));
     assert!(!provider_dbg.contains(TEST_API_KEY));
     assert!(!provider_dbg.contains(TEST_WEBHOOK_SECRET));
+}
+
+#[tokio::test]
+async fn test_void_payment_checkout_session_with_pi_enforces_tm6() {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/v1/payment_intents/pi_cs_open"))
+        .respond_with(json_ok(serde_json::json!({
+            "id": "pi_cs_open",
+            "amount": 3000,
+            "currency": "usd",
+            "status": "requires_payment_method",
+            "livemode": false
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/v1/checkout/sessions/cs_void_open/expire"))
+        .respond_with(json_ok(serde_json::json!({
+            "id": "cs_void_open",
+            "amount_total": 3000,
+            "currency": "usd",
+            "status": "expired",
+            "payment_status": "unpaid",
+            "payment_intent": "pi_cs_open",
+            "livemode": false
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/v1/payment_intents/pi_cs_open/cancel"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    let provider = make_provider(server.uri());
+    let dual_ref = ProviderReference::builder(ProviderId::new("stripe"))
+        .checkout_session_id("cs_void_open")
+        .payment_id("pi_cs_open")
+        .build()
+        .expect("valid dual reference");
+    let res = provider
+        .void_payment(&VoidRequest::new(dual_ref))
+        .await
+        .expect("should expire checkout session when PI is not requires_capture");
+    assert_eq!(res.status, PaymentStatus::Canceled);
+    assert_eq!(res.reference.checkout_session_id(), Some("cs_void_open"));
+
+    Mock::given(method("GET"))
+        .and(path("/v1/payment_intents/pi_cs_auth"))
+        .respond_with(json_ok(serde_json::json!({
+            "id": "pi_cs_auth",
+            "amount": 3000,
+            "currency": "usd",
+            "status": "requires_capture",
+            "livemode": false
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/v1/payment_intents/pi_cs_auth/cancel"))
+        .respond_with(json_ok(serde_json::json!({
+            "id": "pi_cs_auth",
+            "amount": 3000,
+            "currency": "usd",
+            "status": "canceled",
+            "livemode": false
+        })))
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let auth_ref = ProviderReference::builder(ProviderId::new("stripe"))
+        .checkout_session_id("cs_void_auth")
+        .payment_id("pi_cs_auth")
+        .build()
+        .expect("valid dual auth reference");
+    let canceled = provider
+        .void_payment(&VoidRequest::new(auth_ref))
+        .await
+        .expect("should cancel PI when status is requires_capture");
+    assert_eq!(canceled.status, PaymentStatus::Canceled);
+}
+
+#[tokio::test]
+async fn test_http_429_preserves_retry_after_header() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/payment_intents"))
+        .respond_with(
+            ResponseTemplate::new(429)
+                .insert_header("Retry-After", "42")
+                .set_body_json(serde_json::json!({
+                    "error": {
+                        "type": "rate_limit_error",
+                        "message": "Too many requests"
+                    }
+                })),
+        )
+        .expect(1)
+        .mount(&server)
+        .await;
+
+    let provider = make_provider(server.uri());
+    let req = CreatePaymentRequest::new(Money::new(1_000, "USD").expect("money"), "ord-429");
+    let err = provider
+        .create_payment(&req)
+        .await
+        .expect_err("HTTP 429 must map to RateLimited");
+    assert!(
+        matches!(
+            err,
+            PaymentError::RateLimited {
+                retry_after_secs: Some(42),
+                ..
+            }
+        ),
+        "expected RateLimited with retry_after_secs=Some(42), got {err:?}"
+    );
+}
+
+#[tokio::test]
+async fn test_idempotency_key_preflight_rejects_oversized_and_non_ascii() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/v1/payment_intents"))
+        .respond_with(ResponseTemplate::new(200))
+        .expect(0)
+        .mount(&server)
+        .await;
+
+    let provider = make_provider(server.uri());
+    for bad_key in ["k".repeat(256), "idem-non-ascii-é".to_owned()] {
+        let mut req = CreatePaymentRequest::new(Money::new(1_000, "USD").expect("money"), "ord-ik");
+        req.idempotency_key = Some(bad_key);
+        assert_error_kind(provider.create_payment(&req).await, ErrorKind::Validation);
+    }
 }

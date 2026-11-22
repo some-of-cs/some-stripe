@@ -26,7 +26,7 @@ default = []
 some-payment-adapter = ["dep:some-payment-core"]
 
 [dependencies]
-some-payment-core = { git = "https://github.com/some-of-cs/some-payment", package = "some-payment-core", optional = true }
+some-payment-core = { git = "https://github.com/some-of-cs/some-payment", rev = "b8e2ca4de3ec5f78afef4d368798738ad7afbcba", package = "some-payment-core", optional = true }
 some-stripe-core = { path = "src/crates/some-stripe-core" }
 some-stripe-types = { path = "src/crates/some-stripe-types" }
 some-stripe-webhooks = { path = "src/crates/some-stripe-webhooks" }
