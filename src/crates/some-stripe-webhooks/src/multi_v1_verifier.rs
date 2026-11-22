@@ -545,8 +545,9 @@ mod tests {
         for i in 0..20 {
             parts.push(format!("v1={i:064x}"));
         }
+        let header = parts.join(",");
         let (_, _, candidates) =
-            parse_signature_header_order_agnostic(&parts.join(",")).expect("cap should parse");
+            parse_signature_header_order_agnostic(&header).expect("cap should parse");
         assert_eq!(candidates.len(), MAX_V1_CANDIDATES);
     }
 
