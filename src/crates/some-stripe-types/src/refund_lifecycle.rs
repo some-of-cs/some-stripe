@@ -10,7 +10,7 @@
 //! ```
 //! use some_stripe_types::refund_lifecycle::{RefundRecord, RefundStatus, cancel_refund};
 //!
-//! let payload = r#"{
+//! let payload = serde_json::json!({
 //!     "id": "re_1N3T00LkdIwHu7ix",
 //!     "amount": 2500,
 //!     "currency": "usd",
@@ -22,9 +22,9 @@
 //!             "email_sent": { "email_sent_to": "customer@example.com" }
 //!         }
 //!     }
-//! }"#;
+//! });
 //!
-//! let record: RefundRecord = serde_json::from_str(payload).unwrap();
+//! let record: RefundRecord = serde_json::from_value(payload).unwrap();
 //! assert_eq!(record.status, RefundStatus::RequiresAction);
 //! assert!(record.is_cancellable());
 //!
@@ -265,30 +265,51 @@ mod tests {
         for (slug, expected) in cases {
             let quoted = format!("\"{slug}\"");
             let parsed: RefundStatus = serde_json::from_str(&quoted).unwrap();
-            assert_eq!(parsed, expected);
-            assert_eq!(serde_json::to_string(&parsed).unwrap(), quoted);
-            assert_eq!(parsed.as_str(), slug);
-            assert_eq!(parsed.to_string(), slug);
-            assert_eq!(RefundStatus::from_slug(slug), Some(expected));
+            let serialized = serde_json::to_string(&parsed).unwrap();
+            let actual = (
+                parsed,
+                serialized.as_str(),
+                parsed.as_str(),
+                parsed.to_string(),
+                RefundStatus::from_slug(slug),
+            );
+            let target = (
+                expected,
+                quoted.as_str(),
+                slug,
+                slug.to_owned(),
+                Some(expected),
+            );
+            assert_eq!(actual, target);
         }
+    }
 
-        assert_eq!(RefundStatus::from_slug("unknown_status"), None);
-        assert_eq!(RefundStatus::from_slug(""), None);
+    #[test]
+    fn tc_9_1_4_rejects_unknown_status_slugs() {
+        for slug in ["unknown_status", "", "PENDING"] {
+            assert_eq!(RefundStatus::from_slug(slug), None);
+        }
         assert!(serde_json::from_str::<RefundStatus>("\"invalid\"").is_err());
     }
 
     #[test]
     fn tc_9_1_4_cancellable_statuses() {
-        assert!(RefundStatus::Pending.is_cancellable());
-        assert!(RefundStatus::RequiresAction.is_cancellable());
-        assert!(!RefundStatus::Succeeded.is_cancellable());
-        assert!(!RefundStatus::Failed.is_cancellable());
-        assert!(!RefundStatus::Canceled.is_cancellable());
+        let cases = [
+            (RefundStatus::Pending, true),
+            (RefundStatus::RequiresAction, true),
+            (RefundStatus::Succeeded, false),
+            (RefundStatus::Failed, false),
+            (RefundStatus::Canceled, false),
+        ];
+
+        for (status, expected) in cases {
+            assert_eq!(status.is_cancellable(), expected);
+        }
     }
 
     #[test]
     fn tc_9_1_4_refund_record_with_pending_reason() {
-        let json = r#"{
+        let raw = serde_json::json!({
             "id": "re_pending_001",
             "amount": 1500,
             "currency": "eur",
@@ -297,111 +318,149 @@ mod tests {
             "charge": "ch_001",
             "reason": "requested_by_customer",
             "pending_reason": "processing"
-        }"#;
+        })
+        .to_string();
 
-        let record: RefundRecord = serde_json::from_str(json).unwrap();
-        assert_eq!(record.id, "re_pending_001");
-        assert_eq!(record.amount, 1500);
-        assert_eq!(record.currency, "eur");
-        assert_eq!(record.status, RefundStatus::Pending);
-        assert_eq!(record.payment_intent.as_deref(), Some("pi_001"));
-        assert_eq!(record.charge.as_deref(), Some("ch_001"));
-        assert_eq!(record.reason.as_deref(), Some("requested_by_customer"));
-        assert_eq!(record.pending_reason.as_deref(), Some("processing"));
-        assert!(record.failure_reason.is_none());
-        assert!(record.next_action.is_none());
+        let record: RefundRecord = serde_json::from_str(&raw).unwrap();
+        let expected = RefundRecord {
+            id: "re_pending_001".to_owned(),
+            amount: 1500,
+            currency: "eur".to_owned(),
+            status: RefundStatus::Pending,
+            payment_intent: Some("pi_001".to_owned()),
+            charge: Some("ch_001".to_owned()),
+            reason: Some("requested_by_customer".to_owned()),
+            pending_reason: Some("processing".to_owned()),
+            failure_reason: None,
+            next_action: None,
+        };
+        assert_eq!(record, expected);
         assert!(record.is_cancellable());
     }
 
     #[test]
     fn tc_9_1_4_refund_record_with_requires_action_and_next_action() {
-        let json = r#"{
+        let details = serde_json::json!({
+            "email_sent": {
+                "email_sent_at": 1_700_000_000,
+                "email_sent_to": "buyer@example.com"
+            },
+            "expires_at": 1_700_604_800
+        });
+        let raw = serde_json::json!({
             "id": "re_action_002",
             "amount": 4200,
             "currency": "usd",
             "status": "requires_action",
             "next_action": {
                 "type": "display_details",
-                "display_details": {
-                    "email_sent": {
-                        "email_sent_at": 1700000000,
-                        "email_sent_to": "buyer@example.com"
-                    },
-                    "expires_at": 1700604800
-                }
+                "display_details": details
             }
-        }"#;
+        })
+        .to_string();
 
-        let record: RefundRecord = serde_json::from_str(json).unwrap();
-        assert_eq!(record.status, RefundStatus::RequiresAction);
+        let record: RefundRecord = serde_json::from_str(&raw).unwrap();
+        let expected = RefundRecord {
+            id: "re_action_002".to_owned(),
+            amount: 4200,
+            currency: "usd".to_owned(),
+            status: RefundStatus::RequiresAction,
+            payment_intent: None,
+            charge: None,
+            reason: None,
+            pending_reason: None,
+            failure_reason: None,
+            next_action: Some(RefundNextAction {
+                action_type: Some("display_details".to_owned()),
+                display_details: Some(details),
+            }),
+        };
+        assert_eq!(record, expected);
         assert!(record.is_cancellable());
-
-        let next = record.next_action.as_ref().unwrap();
-        assert_eq!(next.action_type.as_deref(), Some("display_details"));
-        let details = next.display_details.as_ref().unwrap();
-        assert_eq!(details["expires_at"], 1_700_604_800);
     }
 
     #[test]
     fn tc_9_1_4_refund_record_with_failed_and_failure_reason() {
-        let json = r#"{
+        let raw = serde_json::json!({
             "id": "re_failed_003",
             "amount": 999,
             "currency": "gbp",
             "status": "failed",
             "failure_reason": "expired_or_canceled_card"
-        }"#;
+        })
+        .to_string();
 
-        let record: RefundRecord = serde_json::from_str(json).unwrap();
-        assert_eq!(record.status, RefundStatus::Failed);
-        assert_eq!(
-            record.failure_reason.as_deref(),
-            Some("expired_or_canceled_card")
-        );
+        let record: RefundRecord = serde_json::from_str(&raw).unwrap();
+        let expected = RefundRecord {
+            id: "re_failed_003".to_owned(),
+            amount: 999,
+            currency: "gbp".to_owned(),
+            status: RefundStatus::Failed,
+            payment_intent: None,
+            charge: None,
+            reason: None,
+            pending_reason: None,
+            failure_reason: Some("expired_or_canceled_card".to_owned()),
+            next_action: None,
+        };
+        assert_eq!(record, expected);
         assert!(!record.is_cancellable());
     }
 
     #[test]
     fn tc_9_1_4_refund_record_succeeded_and_canceled() {
-        let succeeded_json = r#"{
-            "id": "re_ok_004",
-            "amount": 5000,
-            "currency": "jpy",
-            "status": "succeeded"
-        }"#;
-        let succeeded: RefundRecord = serde_json::from_str(succeeded_json).unwrap();
-        assert_eq!(succeeded.status, RefundStatus::Succeeded);
-        assert!(!succeeded.is_cancellable());
+        let cases = [
+            ("re_ok_004", "succeeded", RefundStatus::Succeeded),
+            ("re_cancel_005", "canceled", RefundStatus::Canceled),
+        ];
 
-        let canceled_json = r#"{
-            "id": "re_cancel_005",
-            "amount": 5000,
-            "currency": "jpy",
-            "status": "canceled"
-        }"#;
-        let canceled: RefundRecord = serde_json::from_str(canceled_json).unwrap();
-        assert_eq!(canceled.status, RefundStatus::Canceled);
-        assert!(!canceled.is_cancellable());
+        for (id, slug, expected_status) in cases {
+            let raw = serde_json::json!({
+                "id": id,
+                "amount": 5000,
+                "currency": "jpy",
+                "status": slug
+            })
+            .to_string();
+            let record: RefundRecord = serde_json::from_str(&raw).unwrap();
+            let actual = (record.status, record.is_cancellable());
+            assert_eq!(actual, (expected_status, false));
+        }
     }
 
     #[test]
     fn tc_9_1_4_cancel_refund_valid_ids() {
-        let req = cancel_refund("re_1N3T00LkdIwHu7ix").unwrap();
-        assert_eq!(req.refund_id, "re_1N3T00LkdIwHu7ix");
-        assert_eq!(req.method, "POST");
-        assert_eq!(req.path, "/v1/refunds/re_1N3T00LkdIwHu7ix/cancel");
+        let cases = [
+            (
+                "re_1N3T00LkdIwHu7ix",
+                "/v1/refunds/re_1N3T00LkdIwHu7ix/cancel",
+            ),
+            ("re_test_2026_01", "/v1/refunds/re_test_2026_01/cancel"),
+        ];
 
-        let underscore_req = cancel_refund("re_test_2026_01").unwrap();
-        assert_eq!(underscore_req.method, "POST");
-        assert_eq!(underscore_req.path, "/v1/refunds/re_test_2026_01/cancel");
+        for (id, expected_path) in cases {
+            let req = cancel_refund(id).unwrap();
+            let expected = CancelRefundRequest {
+                refund_id: id.to_owned(),
+                method: "POST",
+                path: expected_path.to_owned(),
+            };
+            assert_eq!(req, expected);
+        }
     }
 
     #[test]
     fn tc_9_1_4_cancel_refund_rejects_invalid_prefix_and_empty_suffix() {
-        assert_eq!(cancel_refund(""), Err(RefundLifecycleError::InvalidPrefix));
-        assert_eq!(cancel_refund("pi_12345"), Err(RefundLifecycleError::InvalidPrefix));
-        assert_eq!(cancel_refund("ch_12345"), Err(RefundLifecycleError::InvalidPrefix));
-        assert_eq!(cancel_refund("re_"), Err(RefundLifecycleError::EmptySuffix));
+        let cases = [
+            ("", RefundLifecycleError::InvalidPrefix),
+            ("pi_12345", RefundLifecycleError::InvalidPrefix),
+            ("ch_12345", RefundLifecycleError::InvalidPrefix),
+            ("re_", RefundLifecycleError::EmptySuffix),
+        ];
+
+        for (input, expected) in cases {
+            assert_eq!(cancel_refund(input), Err(expected));
+        }
     }
 
     #[test]
