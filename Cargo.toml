@@ -58,7 +58,6 @@ tower-http = { version = "0.6", features = ["trace", "cors"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 rocket = { version = "0.5.1", features = ["json"] }
-rocket-stripe-example = { path = "examples/rocket_stripe" }
 
 [[example]]
 name = "actix_core_and_webhooks"
