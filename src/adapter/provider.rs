@@ -276,7 +276,7 @@ impl StripeProvider {
     async fn decode_response(&self, response: reqwest::Response) -> Result<Value, PaymentError> {
         let status = response.status().as_u16();
         let retry_after_secs = parse_retry_after_header(response.headers());
-        let body = self.read_bounded_body(response, status).await?;
+        let body = read_bounded_body(response, &self.provider_id, status).await?;
         if !(200..300).contains(&status) {
             let body_json = parse_error_json(&body);
             return Err(map_stripe_error_payload_with_retry_after(
@@ -291,66 +291,6 @@ impl StripeProvider {
             vendor_code: None,
             message: format!("failed to parse Stripe JSON response: {err}"),
         })
-    }
-
-    async fn read_bounded_body(
-        &self,
-        mut response: reqwest::Response,
-        status: u16,
-    ) -> Result<String, PaymentError> {
-        let mut buf = Vec::new();
-        while let Some(chunk) = response
-            .chunk()
-            .await
-            .map_err(|err| self.transport_error(err))?
-        {
-            if buf.len().saturating_add(chunk.len()) > MAX_RESPONSE_BODY_BYTES {
-                return Err(PaymentError::ProviderError {
-                    provider: self.provider_id.clone(),
-                    http_status: Some(status),
-                    vendor_code: Some("response_too_large".to_owned()),
-                    message: format!(
-                        "Stripe response body exceeded maximum allowed size of {MAX_RESPONSE_BODY_BYTES} bytes"
-                    ),
-                });
-            }
-            buf.extend_from_slice(&chunk);
-        }
-        String::from_utf8(buf).map_err(|err| PaymentError::ProviderError {
-            provider: self.provider_id.clone(),
-            http_status: Some(status),
-            vendor_code: Some("invalid_utf8_response".to_owned()),
-            message: format!("Stripe response body is not valid UTF-8: {err}"),
-        })
-    }
-
-    async fn resolve_void_target<'a>(
-        &self,
-        reference: &'a ProviderReference,
-    ) -> Result<StripeTarget<'a>, PaymentError> {
-        if let (Some(cs_id), Some(pi_id)) = (
-            reference.checkout_session_id(),
-            resolve_payment_intent_id(reference),
-        ) {
-            return self.resolve_checkout_backed_void_target(cs_id, pi_id).await;
-        }
-        resolve_target(reference, "void_payment")
-    }
-
-    async fn resolve_checkout_backed_void_target<'a>(
-        &self,
-        cs_id: &'a str,
-        pi_id: &'a str,
-    ) -> Result<StripeTarget<'a>, PaymentError> {
-        let pi_path = encoded_resource_path("/v1/payment_intents", pi_id, "")?;
-        let pi_json = self
-            .send_request(StripeHttpRequest::new(Method::GET, &pi_path))
-            .await?;
-        let pi_status = pi_json.get("status").and_then(Value::as_str);
-        match resolve_checkout_void_action(pi_status) {
-            CheckoutVoidAction::CancelPaymentIntent => Ok(StripeTarget::PaymentIntent(pi_id)),
-            CheckoutVoidAction::ExpireCheckoutSession => Ok(StripeTarget::CheckoutSession(cs_id)),
-        }
     }
 
     fn transport_error(&self, err: reqwest::Error) -> PaymentError {
@@ -436,7 +376,7 @@ impl PaymentProvider for StripeProvider {
 
     async fn void_payment(&self, req: &VoidRequest) -> Result<PaymentResult, PaymentError> {
         req.validate()?;
-        let target = self.resolve_void_target(&req.reference).await?;
+        let target = resolve_void_target(self, &req.reference).await?;
         let path = target_path(&target, "/cancel", "/expire")?;
         let mut params = Vec::new();
         if matches!(target, StripeTarget::PaymentIntent(_)) {
@@ -535,6 +475,63 @@ fn parse_retry_after_header(headers: &reqwest::header::HeaderMap) -> Option<u64>
         .get(reqwest::header::RETRY_AFTER)
         .and_then(|val| val.to_str().ok())
         .and_then(|raw| raw.trim().parse::<u64>().ok())
+}
+
+async fn read_bounded_body(
+    mut response: reqwest::Response,
+    provider_id: &ProviderId,
+    status: u16,
+) -> Result<String, PaymentError> {
+    let mut buf = Vec::new();
+    while let Some(chunk) = response
+        .chunk()
+        .await
+        .map_err(|err| PaymentError::ProviderUnavailable {
+            provider: provider_id.clone(),
+            http_status: err.status().map(|s| s.as_u16()),
+            indeterminate: true,
+            message: format!("Stripe HTTP transport error: {err}"),
+        })?
+    {
+        if buf.len().saturating_add(chunk.len()) > MAX_RESPONSE_BODY_BYTES {
+            return Err(PaymentError::ProviderError {
+                provider: provider_id.clone(),
+                http_status: Some(status),
+                vendor_code: Some("response_too_large".to_owned()),
+                message: format!(
+                    "Stripe response body exceeded maximum allowed size of {MAX_RESPONSE_BODY_BYTES} bytes"
+                ),
+            });
+        }
+        buf.extend_from_slice(&chunk);
+    }
+    String::from_utf8(buf).map_err(|err| PaymentError::ProviderError {
+        provider: provider_id.clone(),
+        http_status: Some(status),
+        vendor_code: Some("invalid_utf8_response".to_owned()),
+        message: format!("Stripe response body is not valid UTF-8: {err}"),
+    })
+}
+
+async fn resolve_void_target<'a>(
+    provider: &StripeProvider,
+    reference: &'a ProviderReference,
+) -> Result<StripeTarget<'a>, PaymentError> {
+    let Some(cs_id) = reference.checkout_session_id() else {
+        return resolve_target(reference, "void_payment");
+    };
+    let Some(pi_id) = resolve_payment_intent_id(reference) else {
+        return Ok(StripeTarget::CheckoutSession(cs_id));
+    };
+    let pi_path = encoded_resource_path("/v1/payment_intents", pi_id, "")?;
+    let pi_json = provider
+        .send_request(StripeHttpRequest::new(Method::GET, &pi_path))
+        .await?;
+    let pi_status = pi_json.get("status").and_then(Value::as_str);
+    match resolve_checkout_void_action(pi_status) {
+        CheckoutVoidAction::CancelPaymentIntent => Ok(StripeTarget::PaymentIntent(pi_id)),
+        CheckoutVoidAction::ExpireCheckoutSession => Ok(StripeTarget::CheckoutSession(cs_id)),
+    }
 }
 
 fn build_default_http_client() -> Result<reqwest::Client, PaymentError> {
@@ -751,7 +748,8 @@ mod tests {
             StripeProviderConfig::new("sk_test_123").with_api_base("http://api.stripe.com"),
             StripeProviderConfig::new("sk_test_123")
                 .with_api_base("https://api.stripe.com@evil.example"),
-            StripeProviderConfig::new("sk_test_123").with_api_base("https://api.stripe.com?foo=bar"),
+            StripeProviderConfig::new("sk_test_123")
+                .with_api_base("https://api.stripe.com?foo=bar"),
             StripeProviderConfig::new("sk_test_123").with_api_base("https://api.stripe.com#frag"),
             StripeProviderConfig::new("sk_test_123").with_api_base("https://"),
             StripeProviderConfig::new("sk_test_123")

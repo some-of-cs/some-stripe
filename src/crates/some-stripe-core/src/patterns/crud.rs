@@ -50,17 +50,13 @@ pub fn validate_and_encode_id(id: &str) -> Result<String, StripeError> {
         ));
     }
 
-    if has_forbidden_id_pattern(trimmed) {
+    if trimmed == "." || trimmed.contains("..") || trimmed.contains(['/', '\\', '?', '#']) {
         return Err(StripeError::InvalidRequest(format!(
             "Invalid resource ID '{id}': path traversal and URL control characters are not permitted"
         )));
     }
 
     Ok(percent_encode(trimmed))
-}
-
-fn has_forbidden_id_pattern(trimmed: &str) -> bool {
-    trimmed == "." || trimmed.contains("..") || trimmed.contains(['/', '\\', '?', '#'])
 }
 
 /// Assembles a normalized Stripe REST API endpoint URL.
