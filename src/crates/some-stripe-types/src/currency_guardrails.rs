@@ -332,7 +332,12 @@ mod tests {
     #[test]
     fn tc_9_1_2_three_decimal_currencies_enforce_multiple_of_10() {
         for code in ["KWD", "BHD", "JOD", "OMR", "TND"] {
-            assert_multiple_rule(code, 1050, 1055, StripeCurrencyRule::ThreeDecimalMultipleOfTen);
+            assert_multiple_rule(
+                code,
+                1050,
+                1055,
+                StripeCurrencyRule::ThreeDecimalMultipleOfTen,
+            );
         }
     }
 
@@ -368,7 +373,10 @@ mod tests {
             let expected = CurrencyGuardrailError::InvalidCurrencyCode {
                 code: invalid_code.to_owned(),
             };
-            assert_eq!(normalize_stripe_currency(invalid_code), Err(expected.clone()));
+            assert_eq!(
+                normalize_stripe_currency(invalid_code),
+                Err(expected.clone())
+            );
             assert_eq!(validate_stripe_money(1000, invalid_code), Err(expected));
         }
     }
