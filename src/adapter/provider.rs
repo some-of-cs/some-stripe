@@ -10,7 +10,7 @@ use async_trait::async_trait;
 use reqwest::Method;
 use serde_json::Value;
 use some_payment_core::{
-    CaptureMode, CaptureRequest, CheckoutSessionRequest, CreatePaymentRequest,
+    CaptureMode, CaptureRequest, CheckoutSessionRequest, CreatePaymentRequest, Money,
     NormalizedWebhookEvent, PaymentCapabilities, PaymentError, PaymentProvider, PaymentResult,
     ProviderId, ProviderReference, RawWebhookRequest, RefundRequest, RefundResult, VoidRequest,
 };
@@ -64,14 +64,14 @@ pub struct StripeProviderConfig {
 
 impl fmt::Debug for StripeProviderConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("StripeProviderConfig")
-            .field("api_key", &"[REDACTED]")
-            .field("webhook_secrets", &"[REDACTED]")
-            .field("api_base", &self.api_base)
-            .field("stripe_version", &self.stripe_version)
-            .field("has_http_client", &self.http_client.is_some())
-            .field("webhook_tolerance_secs", &self.webhook_tolerance_secs)
-            .finish()
+        let mut ds = f.debug_struct("StripeProviderConfig");
+        ds.field("has_http_client", &self.http_client.is_some());
+        finish_redacted_debug(
+            &mut ds,
+            &self.api_base,
+            &self.stripe_version,
+            self.webhook_tolerance_secs,
+        )
     }
 }
 
@@ -133,6 +133,32 @@ struct StripeHttpRequest<'a> {
     idempotency_key: Option<&'a str>,
 }
 
+impl<'a> StripeHttpRequest<'a> {
+    fn new(method: Method, path: &'a str) -> Self {
+        Self {
+            method,
+            path,
+            form: None,
+            idempotency_key: None,
+        }
+    }
+
+    fn with_form(mut self, form: Option<&'a [(String, String)]>) -> Self {
+        self.form = form;
+        self
+    }
+
+    fn with_idempotency_key(mut self, key: Option<&'a str>) -> Self {
+        self.idempotency_key = key;
+        self
+    }
+}
+
+enum StripeTarget<'a> {
+    PaymentIntent(&'a str),
+    CheckoutSession(&'a str),
+}
+
 /// Stripe gateway adapter implementing [`some_payment_core::PaymentProvider`].
 ///
 /// Implements a custom [`fmt::Debug`] that always redacts `api_key` and
@@ -166,14 +192,14 @@ pub struct StripeProvider {
 
 impl fmt::Debug for StripeProvider {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("StripeProvider")
-            .field("provider_id", &self.provider_id)
-            .field("api_key", &"[REDACTED]")
-            .field("webhook_secrets", &"[REDACTED]")
-            .field("api_base", &self.api_base)
-            .field("stripe_version", &self.stripe_version)
-            .field("webhook_tolerance_secs", &self.webhook_tolerance_secs)
-            .finish()
+        let mut ds = f.debug_struct("StripeProvider");
+        ds.field("provider_id", &self.provider_id);
+        finish_redacted_debug(
+            &mut ds,
+            &self.api_base,
+            &self.stripe_version,
+            self.webhook_tolerance_secs,
+        )
     }
 }
 
@@ -208,31 +234,6 @@ impl StripeProvider {
             stripe_version,
             webhook_tolerance_secs: config.webhook_tolerance_secs,
         })
-    }
-
-    async fn get_json(&self, path: &str) -> Result<Value, PaymentError> {
-        self.send_request(StripeHttpRequest {
-            method: Method::GET,
-            path,
-            form: None,
-            idempotency_key: None,
-        })
-        .await
-    }
-
-    async fn post_form(
-        &self,
-        path: &str,
-        form: Option<&[(String, String)]>,
-        idempotency_key: Option<&str>,
-    ) -> Result<Value, PaymentError> {
-        self.send_request(StripeHttpRequest {
-            method: Method::POST,
-            path,
-            form,
-            idempotency_key,
-        })
-        .await
     }
 
     async fn send_request(&self, req: StripeHttpRequest<'_>) -> Result<Value, PaymentError> {
@@ -281,6 +282,18 @@ impl StripeProvider {
             message: format!("Stripe HTTP transport error: {err}"),
         }
     }
+
+    async fn post_mapped<T, F>(
+        &self,
+        req: StripeHttpRequest<'_>,
+        mapper: F,
+    ) -> Result<T, PaymentError>
+    where
+        F: FnOnce(&Value) -> Result<T, PaymentError>,
+    {
+        let json = self.send_request(req).await?;
+        mapper(&json)
+    }
 }
 
 #[async_trait]
@@ -300,33 +313,20 @@ impl PaymentProvider for StripeProvider {
         req.validate()?;
         validate_stripe_money_for_adapter(&req.money)?;
         let params = build_create_payment_params(req);
-        let json = self
-            .post_form(
-                "/v1/payment_intents",
-                Some(&params),
-                req.idempotency_key.as_deref(),
-            )
-            .await?;
-        map_payment_intent_json(&json)
+        let http = StripeHttpRequest::new(Method::POST, "/v1/payment_intents")
+            .with_form(Some(&params))
+            .with_idempotency_key(req.idempotency_key.as_deref());
+        self.post_mapped(http, map_payment_intent_json).await
     }
 
     async fn get_payment(
         &self,
         reference: &ProviderReference,
     ) -> Result<PaymentResult, PaymentError> {
-        if let Some(raw_id) = resolve_payment_intent_id(reference) {
-            let path = encoded_resource_path("/v1/payment_intents", raw_id, "")?;
-            let json = self.get_json(&path).await?;
-            return map_payment_intent_json(&json);
-        }
-        if let Some(raw_cs) = reference.checkout_session_id() {
-            let path = encoded_resource_path("/v1/checkout/sessions", raw_cs, "")?;
-            let json = self.get_json(&path).await?;
-            return map_checkout_session_json(&json);
-        }
-        Err(PaymentError::validation(
-            "Stripe get_payment requires payment_id, intent_id, or checkout_session_id",
-        ))
+        let target = resolve_target(reference, "get_payment")?;
+        let path = target_path(&target, "", "")?;
+        let http = StripeHttpRequest::new(Method::GET, &path);
+        map_target_json(&target, &self.send_request(http).await?)
     }
 
     async fn create_checkout(
@@ -336,14 +336,10 @@ impl PaymentProvider for StripeProvider {
         req.validate()?;
         validate_stripe_money_for_adapter(&req.money)?;
         let params = build_checkout_params(req);
-        let json = self
-            .post_form(
-                "/v1/checkout/sessions",
-                Some(&params),
-                req.idempotency_key.as_deref(),
-            )
-            .await?;
-        map_checkout_session_json(&json)
+        let http = StripeHttpRequest::new(Method::POST, "/v1/checkout/sessions")
+            .with_form(Some(&params))
+            .with_idempotency_key(req.idempotency_key.as_deref());
+        self.post_mapped(http, map_checkout_session_json).await
     }
 
     async fn capture(&self, req: &CaptureRequest) -> Result<PaymentResult, PaymentError> {
@@ -351,39 +347,27 @@ impl PaymentProvider for StripeProvider {
         let raw_id = require_payment_intent_id(&req.reference, "capture")?;
         let path = encoded_resource_path("/v1/payment_intents", raw_id, "/capture")?;
         let mut params = Vec::new();
-        if let Some(money) = &req.amount {
-            validate_stripe_money_for_adapter(money)?;
-            params.push(("amount_to_capture".to_owned(), money.amount().to_string()));
-        }
+        push_opt_amount(&mut params, "amount_to_capture", req.amount.as_ref())?;
         let form = (!params.is_empty()).then_some(params.as_slice());
-        let json = self
-            .post_form(&path, form, req.idempotency_key.as_deref())
-            .await?;
-        map_payment_intent_json(&json)
+        let http = StripeHttpRequest::new(Method::POST, &path)
+            .with_form(form)
+            .with_idempotency_key(req.idempotency_key.as_deref());
+        self.post_mapped(http, map_payment_intent_json).await
     }
 
     async fn void_payment(&self, req: &VoidRequest) -> Result<PaymentResult, PaymentError> {
         req.validate()?;
-        if let Some(raw_pi) = resolve_payment_intent_id(&req.reference) {
-            let path = encoded_resource_path("/v1/payment_intents", raw_pi, "/cancel")?;
-            let mut params = Vec::new();
+        let target = resolve_target(&req.reference, "void_payment")?;
+        let path = target_path(&target, "/cancel", "/expire")?;
+        let mut params = Vec::new();
+        if matches!(target, StripeTarget::PaymentIntent(_)) {
             push_opt(&mut params, "cancellation_reason", req.reason.as_deref());
-            let form = (!params.is_empty()).then_some(params.as_slice());
-            let json = self
-                .post_form(&path, form, req.idempotency_key.as_deref())
-                .await?;
-            return map_payment_intent_json(&json);
         }
-        if let Some(raw_cs) = req.reference.checkout_session_id() {
-            let path = encoded_resource_path("/v1/checkout/sessions", raw_cs, "/expire")?;
-            let json = self
-                .post_form(&path, None, req.idempotency_key.as_deref())
-                .await?;
-            return map_checkout_session_json(&json);
-        }
-        Err(PaymentError::validation(
-            "Stripe void_payment requires payment_id, intent_id, or checkout_session_id",
-        ))
+        let form = (!params.is_empty()).then_some(params.as_slice());
+        let http = StripeHttpRequest::new(Method::POST, &path)
+            .with_form(form)
+            .with_idempotency_key(req.idempotency_key.as_deref());
+        map_target_json(&target, &self.send_request(http).await?)
     }
 
     async fn refund(&self, req: &RefundRequest) -> Result<RefundResult, PaymentError> {
@@ -391,14 +375,12 @@ impl PaymentProvider for StripeProvider {
         let raw_id = require_payment_intent_id(&req.reference, "refund")?;
         let _ = encode_stripe_id(raw_id)?;
         let mut params = vec![("payment_intent".to_owned(), raw_id.trim().to_owned())];
-        if let Some(money) = &req.amount {
-            validate_stripe_money_for_adapter(money)?;
-            params.push(("amount".to_owned(), money.amount().to_string()));
-        }
+        push_opt_amount(&mut params, "amount", req.amount.as_ref())?;
         push_opt(&mut params, "reason", req.reason.as_deref());
-        let json = self
-            .post_form("/v1/refunds", Some(&params), req.idempotency_key.as_deref())
-            .await?;
+        let http = StripeHttpRequest::new(Method::POST, "/v1/refunds")
+            .with_form(Some(&params))
+            .with_idempotency_key(req.idempotency_key.as_deref());
+        let json = self.send_request(http).await?;
         map_refund_json(&json, &req.reference)
     }
 
@@ -439,6 +421,20 @@ impl PaymentProvider for StripeProvider {
         };
         map_webhook_json_to_normalized(&meta, &verified.payload)
     }
+}
+
+fn finish_redacted_debug(
+    ds: &mut fmt::DebugStruct<'_, '_>,
+    api_base: &str,
+    stripe_version: &str,
+    webhook_tolerance_secs: i64,
+) -> fmt::Result {
+    ds.field("api_key", &"[REDACTED]")
+        .field("webhook_secrets", &"[REDACTED]")
+        .field("api_base", &api_base)
+        .field("stripe_version", &stripe_version)
+        .field("webhook_tolerance_secs", &webhook_tolerance_secs)
+        .finish()
 }
 
 fn validate_non_empty(value: &str, field: &str) -> Result<String, PaymentError> {
@@ -497,6 +493,43 @@ fn resolve_payment_intent_id(reference: &ProviderReference) -> Option<&str> {
     reference.payment_id().or_else(|| reference.intent_id())
 }
 
+fn resolve_target<'a>(
+    reference: &'a ProviderReference,
+    operation: &str,
+) -> Result<StripeTarget<'a>, PaymentError> {
+    if let Some(pi_id) = resolve_payment_intent_id(reference) {
+        return Ok(StripeTarget::PaymentIntent(pi_id));
+    }
+    if let Some(cs_id) = reference.checkout_session_id() {
+        return Ok(StripeTarget::CheckoutSession(cs_id));
+    }
+    Err(PaymentError::validation(format!(
+        "Stripe {operation} requires payment_id, intent_id, or checkout_session_id"
+    )))
+}
+
+fn target_path(
+    target: &StripeTarget<'_>,
+    pi_suffix: &str,
+    cs_suffix: &str,
+) -> Result<String, PaymentError> {
+    match target {
+        StripeTarget::PaymentIntent(id) => {
+            encoded_resource_path("/v1/payment_intents", id, pi_suffix)
+        }
+        StripeTarget::CheckoutSession(id) => {
+            encoded_resource_path("/v1/checkout/sessions", id, cs_suffix)
+        }
+    }
+}
+
+fn map_target_json(target: &StripeTarget<'_>, json: &Value) -> Result<PaymentResult, PaymentError> {
+    match target {
+        StripeTarget::PaymentIntent(_) => map_payment_intent_json(json),
+        StripeTarget::CheckoutSession(_) => map_checkout_session_json(json),
+    }
+}
+
 fn require_payment_intent_id<'a>(
     reference: &'a ProviderReference,
     operation: &str,
@@ -519,6 +552,18 @@ fn push_opt(params: &mut Vec<(String, String)>, key: &str, value: Option<&str>) 
     if let Some(val) = value {
         params.push((key.to_owned(), val.to_owned()));
     }
+}
+
+fn push_opt_amount(
+    params: &mut Vec<(String, String)>,
+    key: &str,
+    amount: Option<&Money>,
+) -> Result<(), PaymentError> {
+    if let Some(money) = amount {
+        validate_stripe_money_for_adapter(money)?;
+        params.push((key.to_owned(), money.amount().to_string()));
+    }
+    Ok(())
 }
 
 fn append_metadata_params(
@@ -590,7 +635,7 @@ fn build_checkout_params(req: &CheckoutSessionRequest) -> Vec<(String, String)> 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use some_payment_core::{ErrorKind, Money};
+    use some_payment_core::ErrorKind;
 
     fn assert_secrets_redacted(debug: &str) {
         assert!(debug.contains("[REDACTED]"));
@@ -599,8 +644,13 @@ mod tests {
         assert!(!debug.contains("whsec_canary_secondary_222"));
     }
 
-    fn has_param(params: &[(String, String)], key: &str, value: &str) -> bool {
-        params.iter().any(|(k, v)| k == key && v == value)
+    fn assert_params_contain(params: &[(String, String)], expected: &[(&str, &str)]) {
+        for (key, value) in expected {
+            assert!(
+                params.iter().any(|(k, v)| k == key && v == value),
+                "missing param {key}={value}"
+            );
+        }
     }
 
     #[test]
@@ -630,24 +680,30 @@ mod tests {
             StripeProviderConfig::new("sk_test_123").with_webhook_tolerance_secs(-1),
         ];
         for cfg in invalid_configs {
-            assert_eq!(StripeProvider::new(cfg).unwrap_err().kind(), ErrorKind::Configuration);
+            let err = StripeProvider::new(cfg).unwrap_err();
+            assert_eq!(err.kind(), ErrorKind::Configuration);
         }
     }
 
     #[test]
     fn create_payment_params_populate_expected_fields() {
         let money = Money::new(2_500, "USD").unwrap();
-        let mut req = CreatePaymentRequest::new(money, "ORD-100")
-            .with_capture_mode(CaptureMode::Manual);
+        let mut req =
+            CreatePaymentRequest::new(money, "ORD-100").with_capture_mode(CaptureMode::Manual);
         req.description = Some("Order 100".to_owned());
         req.metadata.insert("tenant".to_owned(), "acme".to_owned());
 
         let params = build_create_payment_params(&req);
-        assert!(has_param(&params, "amount", "2500"));
-        assert!(has_param(&params, "currency", "usd"));
-        assert!(has_param(&params, "capture_method", "manual"));
-        assert!(has_param(&params, "metadata[order_id]", "ORD-100"));
-        assert!(has_param(&params, "metadata[tenant]", "acme"));
+        assert_params_contain(
+            &params,
+            &[
+                ("amount", "2500"),
+                ("currency", "usd"),
+                ("capture_method", "manual"),
+                ("metadata[order_id]", "ORD-100"),
+                ("metadata[tenant]", "acme"),
+            ],
+        );
     }
 
     #[test]
@@ -668,9 +724,14 @@ mod tests {
         };
 
         let params = build_checkout_params(&req);
-        assert!(has_param(&params, "mode", "payment"));
-        assert!(has_param(&params, "payment_intent_data[capture_method]", "manual"));
-        assert!(has_param(&params, "line_items[0][price_data][product_data][name]", "Pro Plan"));
+        assert_params_contain(
+            &params,
+            &[
+                ("mode", "payment"),
+                ("payment_intent_data[capture_method]", "manual"),
+                ("line_items[0][price_data][product_data][name]", "Pro Plan"),
+            ],
+        );
     }
 
     #[test]
