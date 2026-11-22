@@ -512,15 +512,17 @@ mod tests {
 
     #[test]
     fn resolve_checkout_void_action_selects_cancel_only_for_requires_capture() {
+        use CheckoutVoidAction::{CancelPaymentIntent, ExpireCheckoutSession};
+
         let cases = [
-            (Some("requires_capture"), CheckoutVoidAction::CancelPaymentIntent),
-            (Some("requires_payment_method"), CheckoutVoidAction::ExpireCheckoutSession),
-            (Some("requires_confirmation"), CheckoutVoidAction::ExpireCheckoutSession),
-            (Some("requires_action"), CheckoutVoidAction::ExpireCheckoutSession),
-            (Some("processing"), CheckoutVoidAction::ExpireCheckoutSession),
-            (Some("canceled"), CheckoutVoidAction::ExpireCheckoutSession),
-            (Some("succeeded"), CheckoutVoidAction::ExpireCheckoutSession),
-            (None, CheckoutVoidAction::ExpireCheckoutSession),
+            (Some("requires_capture"), CancelPaymentIntent),
+            (Some("requires_payment_method"), ExpireCheckoutSession),
+            (Some("requires_confirmation"), ExpireCheckoutSession),
+            (Some("requires_action"), ExpireCheckoutSession),
+            (Some("processing"), ExpireCheckoutSession),
+            (Some("canceled"), ExpireCheckoutSession),
+            (Some("succeeded"), ExpireCheckoutSession),
+            (None, ExpireCheckoutSession),
         ];
         for (status, expected) in cases {
             assert_eq!(resolve_checkout_void_action(status), expected);
