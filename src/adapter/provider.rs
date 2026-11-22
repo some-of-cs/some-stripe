@@ -225,8 +225,13 @@ impl StripeProvider {
     /// is empty, `webhook_tolerance_secs` is negative, or the default HTTP
     /// client fails to initialize.
     pub fn new(config: StripeProviderConfig) -> Result<Self, PaymentError> {
-        validate_non_empty(config.api_key.expose_secret(), "api_key")?;
-        let api_base = validate_api_base(&config.api_base)?;
+        if config.api_key.expose_secret().trim().is_empty() {
+            return Err(PaymentError::configuration(
+                "Stripe api_key must not be empty",
+            ));
+        }
+        let api_base = validate_core_api_base(&config.api_base)
+            .map_err(|err| PaymentError::configuration(err.to_string()))?;
         let stripe_version = StripeVersion::try_new(&config.stripe_version)
             .map_err(|err| PaymentError::configuration(err.to_string()))?
             .as_str()
@@ -275,10 +280,15 @@ impl StripeProvider {
 
     async fn decode_response(&self, response: reqwest::Response) -> Result<Value, PaymentError> {
         let status = response.status().as_u16();
-        let retry_after_secs = parse_retry_after_header(response.headers());
-        let body = read_bounded_body(response, &self.provider_id, status).await?;
+        let retry_after_secs = response
+            .headers()
+            .get(reqwest::header::RETRY_AFTER)
+            .and_then(|val| val.to_str().ok())
+            .and_then(|raw| raw.trim().parse::<u64>().ok());
+        let body = read_bounded_body(self, response, status).await?;
         if !(200..300).contains(&status) {
-            let body_json = parse_error_json(&body);
+            let body_json: Value =
+                serde_json::from_str(&body).unwrap_or_else(|_| serde_json::json!({}));
             return Err(map_stripe_error_payload_with_retry_after(
                 status,
                 &body_json,
@@ -456,46 +466,20 @@ fn finish_redacted_debug(
         .finish()
 }
 
-fn validate_non_empty(value: &str, field: &str) -> Result<String, PaymentError> {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        return Err(PaymentError::configuration(format!(
-            "Stripe {field} must not be empty"
-        )));
-    }
-    Ok(trimmed.to_owned())
-}
-
-fn validate_api_base(raw: &str) -> Result<String, PaymentError> {
-    validate_core_api_base(raw).map_err(|err| PaymentError::configuration(err.to_string()))
-}
-
-fn parse_retry_after_header(headers: &reqwest::header::HeaderMap) -> Option<u64> {
-    headers
-        .get(reqwest::header::RETRY_AFTER)
-        .and_then(|val| val.to_str().ok())
-        .and_then(|raw| raw.trim().parse::<u64>().ok())
-}
-
 async fn read_bounded_body(
+    provider: &StripeProvider,
     mut response: reqwest::Response,
-    provider_id: &ProviderId,
     status: u16,
 ) -> Result<String, PaymentError> {
     let mut buf = Vec::new();
     while let Some(chunk) = response
         .chunk()
         .await
-        .map_err(|err| PaymentError::ProviderUnavailable {
-            provider: provider_id.clone(),
-            http_status: err.status().map(|s| s.as_u16()),
-            indeterminate: true,
-            message: format!("Stripe HTTP transport error: {err}"),
-        })?
+        .map_err(|err| provider.transport_error(err))?
     {
         if buf.len().saturating_add(chunk.len()) > MAX_RESPONSE_BODY_BYTES {
             return Err(PaymentError::ProviderError {
-                provider: provider_id.clone(),
+                provider: provider.provider_id.clone(),
                 http_status: Some(status),
                 vendor_code: Some("response_too_large".to_owned()),
                 message: format!(
@@ -506,7 +490,7 @@ async fn read_bounded_body(
         buf.extend_from_slice(&chunk);
     }
     String::from_utf8(buf).map_err(|err| PaymentError::ProviderError {
-        provider: provider_id.clone(),
+        provider: provider.provider_id.clone(),
         http_status: Some(status),
         vendor_code: Some("invalid_utf8_response".to_owned()),
         message: format!("Stripe response body is not valid UTF-8: {err}"),
@@ -543,10 +527,6 @@ fn build_default_http_client() -> Result<reqwest::Client, PaymentError> {
         .map_err(|err| {
             PaymentError::configuration(format!("failed to build Stripe HTTP client: {err}"))
         })
-}
-
-fn parse_error_json(body: &str) -> Value {
-    serde_json::from_str(body).unwrap_or_else(|_| serde_json::json!({}))
 }
 
 fn encode_stripe_id(id: &str) -> Result<String, PaymentError> {
