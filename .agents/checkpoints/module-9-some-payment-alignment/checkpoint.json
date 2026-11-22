@@ -1,0 +1,83 @@
+{
+  "module": "module-9-some-payment-alignment",
+  "repository": "some-of-cs/some-stripe",
+  "version_bump": "0.8.0 -> 0.9.0",
+  "module_branch": "feat/module-9-some-payment-alignment",
+  "base_main_sha": "da7e3fa8bbb39054bc2f59bf2960d192b5466ba1",
+  "some_payment_core_sha": "b8e2ca4de3ec5f78afef4d368798738ad7afbcba",
+  "status": "MODULE_PR_OPEN",
+  "stories": {
+    "us-9.1.0": {
+      "branch": "feat/us-9.1.0-stripe-core-hardening-and-currency-guardrails",
+      "story_pr": 170,
+      "merge_sha": "859da9b5d6a25a079cfdbb2da9906d2d492ff161",
+      "council_verdict": "GATE G-REVIEW APPROVED",
+      "codescene": "10.00",
+      "units": [
+        {
+          "unit": 1,
+          "pr": 168,
+          "file": "src/crates/some-stripe-core/src/version_transport.rs",
+          "merge_sha": "8b59db23"
+        },
+        {
+          "unit": 2,
+          "pr": 163,
+          "file": "src/crates/some-stripe-types/src/currency_guardrails.rs",
+          "merge_sha": "520abed4"
+        },
+        {
+          "unit": 3,
+          "pr": 161,
+          "file": "src/crates/some-stripe-types/src/payment_error_detail.rs",
+          "merge_sha": "78b8724c"
+        },
+        {
+          "unit": 4,
+          "pr": 164,
+          "file": "src/crates/some-stripe-types/src/refund_lifecycle.rs",
+          "merge_sha": "634603e3"
+        },
+        {
+          "unit": 5,
+          "pr": 165,
+          "file": "src/crates/some-stripe-core/src/idempotency_passthrough.rs",
+          "merge_sha": "197c07f0"
+        }
+      ]
+    },
+    "us-9.2.0": {
+      "branch": "feat/us-9.2.0-stripe-webhook-hardening-and-adapter",
+      "story_pr": 171,
+      "merge_sha": "963dff7f22b0433b00a25b2401dab9458454755a",
+      "council_verdict": "GATE G-REVIEW APPROVED",
+      "codescene": "10.00",
+      "units": [
+        {
+          "unit": 1,
+          "pr": 162,
+          "file": "src/crates/some-stripe-webhooks/src/multi_v1_verifier.rs",
+          "merge_sha": "cf24a337"
+        },
+        {
+          "unit": 2,
+          "pr": 167,
+          "file": "src/adapter/mappers.rs",
+          "merge_sha": "6f0f1fbf"
+        },
+        {
+          "unit": 3,
+          "pr": 166,
+          "file": "src/adapter/provider.rs",
+          "merge_sha": "4c076a85"
+        },
+        {
+          "unit": 4,
+          "pr": 169,
+          "file": "src/adapter/conformance_tests.rs",
+          "merge_sha": "ff1c487b"
+        }
+      ]
+    }
+  }
+}

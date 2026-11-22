@@ -47,6 +47,7 @@ pub mod escalation;
 pub mod header;
 pub mod tolerance;
 pub mod v2_events;
+pub mod multi_v1_verifier;
 pub mod validation;
 
 pub use escalation::{

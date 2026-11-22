@@ -80,6 +80,8 @@ pub mod env_secret;
 pub mod error;
 pub mod patterns;
 pub mod v2_pagination;
+pub mod idempotency_passthrough;
+pub mod version_transport;
 pub mod workflow;
 
 pub use bytes::Bytes;

@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: ["main", "feat/**", "patch/**"]
+  pull_request:
+    branches: ["main", "feat/**"]
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_BUILD_JOBS: "1"
+
+jobs:
+  check:
+    name: Format, Clippy, Test & Doc-Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Check formatting (Module 9 files)
+        run: >
+          rustfmt --edition 2024 --check
+          src/adapter/mod.rs
+          src/adapter/mappers.rs
+          src/adapter/provider.rs
+          src/adapter/conformance_tests.rs
+          src/crates/some-stripe-core/src/version_transport.rs
+          src/crates/some-stripe-core/src/idempotency_passthrough.rs
+          src/crates/some-stripe-types/src/currency_guardrails.rs
+          src/crates/some-stripe-types/src/payment_error_detail.rs
+          src/crates/some-stripe-types/src/refund_lifecycle.rs
+          src/crates/some-stripe-webhooks/src/multi_v1_verifier.rs
+      - name: Run Clippy (standalone)
+        run: cargo clippy -p some-stripe-core -p some-stripe-types -p some-stripe-webhooks -p some-stripe --lib -- -D warnings
+      - name: Run Clippy (some-payment-adapter)
+        run: cargo clippy -p some-stripe --features some-payment-adapter --lib -- -D warnings
+      - name: Run unit & integration tests (standalone)
+        run: cargo test -p some-stripe-core -p some-stripe-types -p some-stripe-webhooks --lib && cargo test -p some-stripe --lib
+      - name: Run unit & integration tests (some-payment-adapter)
+        run: cargo test -p some-stripe --features some-payment-adapter --lib
+      - name: Run doc-tests (all crates + adapter)
+        run: cargo test --doc -p some-stripe-core -p some-stripe-types -p some-stripe-webhooks && cargo test --doc -p some-stripe --features some-payment-adapter

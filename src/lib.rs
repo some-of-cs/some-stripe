@@ -87,6 +87,8 @@ pub use some_stripe_webhooks::{
     verify_stripe_signature,
 };
 
+#[cfg(feature = "some-payment-adapter")]
+pub mod adapter;
 pub mod resources;
 pub use resources::v2::{
     CollectorStats, IngestionEngineOptions, MeterIngestionEngine, MeterStreamCollector, V2Billing,
