@@ -642,9 +642,9 @@ mod tests {
             .execute(&key, |_, _| {
                 attempts += 1;
                 async {
-                    Err::<(), _>(RetryableDispatchError::non_retryable(
-                        StripeError::Config("invalid endpoint".to_string()),
-                    ))
+                    Err::<(), _>(RetryableDispatchError::non_retryable(StripeError::Config(
+                        "invalid endpoint".to_string(),
+                    )))
                 }
             })
             .await
