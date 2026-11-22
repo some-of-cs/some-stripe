@@ -621,7 +621,11 @@ async fn test_void_payment_checkout_session_with_pi_enforces_tm6() {
         .build()
         .expect("valid dual reference");
     let res = provider
-        .void_payment(&VoidRequest::new(dual_ref))
+        .void_payment(&VoidRequest {
+            reference: dual_ref,
+            reason: None,
+            idempotency_key: None,
+        })
         .await
         .expect("should expire checkout session when PI is not requires_capture");
     assert_eq!(res.status, PaymentStatus::Canceled);
@@ -658,7 +662,11 @@ async fn test_void_payment_checkout_session_with_pi_enforces_tm6() {
         .build()
         .expect("valid dual auth reference");
     let canceled = provider
-        .void_payment(&VoidRequest::new(auth_ref))
+        .void_payment(&VoidRequest {
+            reference: auth_ref,
+            reason: None,
+            idempotency_key: None,
+        })
         .await
         .expect("should cancel PI when status is requires_capture");
     assert_eq!(canceled.status, PaymentStatus::Canceled);
