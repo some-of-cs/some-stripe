@@ -10,6 +10,8 @@ use some_payment_core::{
     PaymentStatus, ProviderId, ProviderReference, RefundResult, RefundStatus,
 };
 use some_stripe_core::StripeError;
+use some_stripe_types::currency_guardrails::validate_stripe_money;
+use some_stripe_types::payment_error_detail::THREE_DS_FAILURE_CODES;
 
 /// Canonical lowercase provider slug identifying Stripe inside `some-payment`.
 pub const STRIPE_PROVIDER_SLUG: &str = "stripe";
@@ -73,19 +75,23 @@ const KNOWN_WEBHOOK_EVENT_STATUSES: &[(&str, PaymentStatus)] = &[
     ("charge.refunded", PaymentStatus::Refunded),
 ];
 
-const THREE_DS_ERROR_CODES: &[&str] = &[
-    "payment_intent_authentication_failure",
-    "setup_intent_authentication_failure",
-    "authentication_required",
-    "three_d_secure_failed",
-    "3ds_auth_error",
+const TERMINAL_FAILURE_WEBHOOK_EVENTS: &[&str] = &[
+    "checkout.session.async_payment_failed",
+    "payment_intent.payment_failed",
 ];
 
-const SENSITIVE_KEY_SUBSTRINGS: &[&str] = &["secret", "token", "password", "api_key", "signature"];
-
-const STRIPE_CURRENCY_DIVISIBILITY_RULES: &[(&[&str], u64, &str)] = &[
-    (&["isk", "ugx"], 100, "divisible by 100"),
-    (&["bhd", "jod", "kwd", "omr", "tnd"], 10, "divisible by 10"),
+const SENSITIVE_KEY_SUBSTRINGS: &[&str] = &[
+    "secret",
+    "token",
+    "password",
+    "api_key",
+    "apikey",
+    "signature",
+    "authorization",
+    "bearer",
+    "credential",
+    "private_key",
+    "passphrase",
 ];
 
 /// Metadata describing a verified Stripe webhook event envelope.
@@ -154,7 +160,6 @@ pub fn map_stripe_capabilities() -> PaymentCapabilities {
         | PaymentCapabilities::NATIVE_CREATE_IDEMPOTENCY
         | PaymentCapabilities::NATIVE_MUTATION_IDEMPOTENCY
         | PaymentCapabilities::SAVED_CARDS
-        | PaymentCapabilities::SPLITS
 }
 
 fn lookup_table<T: Copy>(table: &[(&str, T)], raw: &str) -> Option<T> {
@@ -270,7 +275,7 @@ fn non_empty_str(raw: Option<&str>) -> Option<String> {
 
 fn is_three_ds_code(code: &str) -> bool {
     let lower = code.trim().to_ascii_lowercase();
-    THREE_DS_ERROR_CODES.contains(&lower.as_str()) || lower.contains("3ds")
+    THREE_DS_FAILURE_CODES.contains(&lower.as_str()) || lower.contains("3ds")
 }
 
 fn map_card_or_three_ds_error(fields: StripeHttpErrorFields<'_>) -> PaymentError {
@@ -417,16 +422,30 @@ pub fn map_stripe_error(err: &StripeError) -> PaymentError {
 /// assert_eq!(err.decline_code(), Some("insufficient_funds"));
 /// ```
 pub fn map_stripe_error_payload(status: u16, body: &Value) -> PaymentError {
+    map_stripe_error_payload_with_retry_after(status, body, None)
+}
+
+/// Maps an HTTP status code, Stripe JSON error body, and optional HTTP
+/// `Retry-After` duration (in seconds) into a [`PaymentError`].
+///
+/// Prefers `retry_after_secs` from the HTTP `Retry-After` header over any
+/// JSON body fallback when constructing [`PaymentError::RateLimited`].
+pub fn map_stripe_error_payload_with_retry_after(
+    status: u16,
+    body: &Value,
+    retry_after_secs: Option<u64>,
+) -> PaymentError {
     let err_obj = body.get("error").unwrap_or(body);
     let fields = StripeHttpErrorFields {
         status,
         code: err_obj.get("code").and_then(Value::as_str),
         decline_code: err_obj.get("decline_code").and_then(Value::as_str),
         advice_code: err_obj.get("advice_code").and_then(Value::as_str),
-        retry_after_secs: body
-            .get("retry_after_secs")
-            .or_else(|| err_obj.get("retry_after_secs"))
-            .and_then(Value::as_u64),
+        retry_after_secs: retry_after_secs.or_else(|| {
+            body.get("retry_after_secs")
+                .or_else(|| err_obj.get("retry_after_secs"))
+                .and_then(Value::as_u64)
+        }),
         message: err_obj
             .get("message")
             .and_then(Value::as_str)
@@ -756,6 +775,10 @@ fn extract_webhook_reference(obj: &Value) -> Option<ProviderReference> {
 }
 
 fn extract_webhook_status(event_type: &str, obj: &Value) -> Option<PaymentStatus> {
+    let normalized_event = event_type.trim().to_ascii_lowercase();
+    if TERMINAL_FAILURE_WEBHOOK_EVENTS.contains(&normalized_event.as_str()) {
+        return Some(PaymentStatus::Failed);
+    }
     let object_kind = obj.get("object").and_then(Value::as_str).unwrap_or("");
     if object_kind == "payment_intent" {
         let raw_status = obj.get("status").and_then(Value::as_str)?;
@@ -904,19 +927,15 @@ pub fn map_webhook_json_to_normalized(
 /// assert!(validate_stripe_money_for_adapter(&kwd_bad).is_err());
 /// ```
 pub fn validate_stripe_money_for_adapter(money: &Money) -> Result<(u64, String), PaymentError> {
-    let currency = money.currency().to_lowercase();
-    let amount = money.amount();
-    let violation = STRIPE_CURRENCY_DIVISIBILITY_RULES
-        .iter()
-        .find(|(codes, divisor, _)| {
-            codes.contains(&currency.as_str()) && amount.rem_euclid(*divisor) != 0
-        });
-    if let Some((_, _, rule)) = violation {
-        return Err(PaymentError::validation(format!(
-            "Stripe requires '{currency}' amounts to be {rule}"
-        )));
-    }
-    Ok((amount, currency))
+    let amount_i64 = i64::try_from(money.amount()).map_err(|_| {
+        PaymentError::validation(format!(
+            "Stripe minor-unit amount {} exceeds i64::MAX",
+            money.amount()
+        ))
+    })?;
+    let validated = validate_stripe_money(amount_i64, money.currency().as_str())
+        .map_err(|err| PaymentError::validation(err.to_string()))?;
+    Ok((money.amount(), validated.currency))
 }
 
 #[cfg(test)]
@@ -972,9 +991,9 @@ mod tests {
             | PaymentCapabilities::PARTIAL_REFUND
             | PaymentCapabilities::NATIVE_CREATE_IDEMPOTENCY
             | PaymentCapabilities::NATIVE_MUTATION_IDEMPOTENCY
-            | PaymentCapabilities::SAVED_CARDS
-            | PaymentCapabilities::SPLITS;
+            | PaymentCapabilities::SAVED_CARDS;
         assert_eq!(caps, expected);
+        assert!(!caps.contains(PaymentCapabilities::SPLITS));
         assert!(!caps.contains(PaymentCapabilities::VOID_SETTLED_WINDOW));
         assert!(!caps.contains(PaymentCapabilities::WEBHOOK_VERIFICATION_HANDSHAKE));
     }
@@ -1297,5 +1316,98 @@ mod tests {
             validate_stripe_money_for_adapter(&usd).unwrap(),
             (1999, "usd".into())
         );
+
+        assert!(
+            Money::new(0, "USD")
+                .and_then(|m| validate_stripe_money_for_adapter(&m))
+                .is_err()
+        );
+        let overflow = Money::new((i64::MAX as u64) + 1, "USD").unwrap();
+        assert_eq!(
+            validate_stripe_money_for_adapter(&overflow)
+                .unwrap_err()
+                .kind(),
+            ErrorKind::Validation
+        );
+        assert!(validate_stripe_money(0, "USD").is_err());
+        assert!(validate_stripe_money(100, "U1D").is_err());
+    }
+
+    #[test]
+    fn scrub_webhook_payload_redacts_expanded_sensitive_keys() {
+        let scrubbed = scrub_webhook_payload(&json!({
+            "nested": {
+                "authorization": "Bearer sk_live_hidden",
+                "apikey": "key_123",
+                "bearer_header": "tok_456",
+                "credential_id": "cred_789",
+                "private_key": "-----BEGIN KEY-----",
+                "passphrase": "hunter2",
+                "safe_field": "visible"
+            }
+        }));
+        let nested = &scrubbed["nested"];
+        for key in [
+            "authorization",
+            "apikey",
+            "bearer_header",
+            "credential_id",
+            "private_key",
+            "passphrase",
+        ] {
+            assert_eq!(nested[key], "[REDACTED]", "expected {key} to be redacted");
+        }
+        assert_eq!(nested["safe_field"], "visible");
+    }
+
+    #[test]
+    fn async_payment_failed_checkout_webhook_maps_to_failed() {
+        let meta = WebhookEventMeta {
+            event_id: "evt_async_fail_1",
+            event_type: "checkout.session.async_payment_failed",
+            livemode: false,
+            is_thin_event: false,
+        };
+        let payload = json!({
+            "data": {
+                "object": {
+                    "object": "checkout.session",
+                    "id": "cs_test_async_fail",
+                    "status": "complete",
+                    "payment_status": "unpaid",
+                    "amount_total": 4200,
+                    "currency": "usd"
+                }
+            }
+        });
+        let event = map_webhook_json_to_normalized(&meta, &payload).unwrap();
+        assert_eq!(event.status, Some(PaymentStatus::Failed));
+    }
+
+    #[test]
+    fn three_ds_failure_codes_cover_shared_core_catalog() {
+        for code in [
+            "three_d_secure_authentication_failed",
+            "off_session_authentication_required",
+        ] {
+            let err = map_stripe_error_payload(402, &json!({"error": {"code": code}}));
+            assert_eq!(err.kind(), ErrorKind::ThreeDsFailed);
+        }
+    }
+
+    #[test]
+    fn retry_after_header_populates_rate_limited_error() {
+        let err = map_stripe_error_payload_with_retry_after(
+            429,
+            &json!({"error": {"message": "Too many requests"}}),
+            Some(42),
+        );
+        assert!(matches!(
+            err,
+            PaymentError::RateLimited {
+                retry_after_secs: Some(42),
+                ..
+            }
+        ));
     }
 }

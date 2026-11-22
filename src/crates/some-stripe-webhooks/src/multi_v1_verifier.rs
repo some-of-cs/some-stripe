@@ -22,6 +22,8 @@
 //! - **Thin Event Detection**: After cryptographic verification succeeds, parses
 //!   `raw_body` as [`serde_json::Value`] and identifies Stripe v2 thin events.
 
+use std::fmt;
+
 use crate::constants::MAX_WEBHOOK_PAYLOAD_BYTES;
 use crate::crypto::compute_streaming_hmac_bytes;
 use crate::error::StripeWebhookError;
@@ -57,7 +59,10 @@ impl WebhookVerificationOptions {
 }
 
 /// Cryptographically verified Stripe webhook envelope and parsed JSON payload.
-#[derive(Clone, Debug, PartialEq, Eq)]
+///
+/// Implements a custom [`fmt::Debug`] that always redacts [`Self::payload`] as
+/// `"[REDACTED]"` while preserving non-secret envelope metadata.
+#[derive(Clone, PartialEq, Eq)]
 pub struct VerifiedStripeWebhook {
     /// UNIX epoch timestamp extracted from the verified `t=` signature parameter.
     pub timestamp: i64,
@@ -71,6 +76,19 @@ pub struct VerifiedStripeWebhook {
     pub is_thin_event: bool,
     /// Parsed JSON payload produced only after constant-time HMAC verification succeeded.
     pub payload: serde_json::Value,
+}
+
+impl fmt::Debug for VerifiedStripeWebhook {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("VerifiedStripeWebhook")
+            .field("timestamp", &self.timestamp)
+            .field("event_id", &self.event_id)
+            .field("event_type", &self.event_type)
+            .field("livemode", &self.livemode)
+            .field("is_thin_event", &self.is_thin_event)
+            .field("payload", &"[REDACTED]")
+            .finish()
+    }
 }
 
 struct ParsedSignatureHeader<'a> {
@@ -92,24 +110,33 @@ impl<'a> HeaderAccumulator<'a> {
         }
     }
 
-    fn collect_segment(&mut self, segment: &'a str) {
+    fn collect_segment(&mut self, segment: &'a str) -> Result<(), StripeWebhookError> {
         let Some((raw_key, raw_val)) = segment.trim().split_once('=') else {
-            return;
+            return Ok(());
         };
         let key = raw_key.trim();
         let value = raw_val.trim();
         if value.is_empty() {
-            return;
+            return Ok(());
         }
 
         match key {
-            "t" if self.raw_timestamp.is_none() => self.raw_timestamp = Some(value),
+            "t" => self.record_timestamp(value)?,
             "v1" if is_v1_candidate_eligible(value, self.v1_candidates.len()) => {
                 self.v1_candidates.push(value);
             }
             // Explicitly ignore `v0` and unsigned debug keys (`secret`, `destination`, `payload`).
             _ => {}
         }
+        Ok(())
+    }
+
+    fn record_timestamp(&mut self, value: &'a str) -> Result<(), StripeWebhookError> {
+        if self.raw_timestamp.is_some() {
+            return Err(StripeWebhookError::InvalidTimestamp);
+        }
+        self.raw_timestamp = Some(value);
+        Ok(())
     }
 
     fn finish(self) -> Result<ParsedSignatureHeader<'a>, StripeWebhookError> {
@@ -253,7 +280,7 @@ fn parse_signature_header_internal(
 
     let mut accumulator = HeaderAccumulator::new();
     for segment in header.split(',') {
-        accumulator.collect_segment(segment);
+        accumulator.collect_segment(segment)?;
     }
     accumulator.finish()
 }
@@ -565,5 +592,24 @@ mod tests {
             verify_with(malformed_json, &valid_header, &[DEFAULT_SECRET]),
             Err(StripeWebhookError::MalformedPayload(_))
         ));
+    }
+
+    #[test]
+    fn test_verified_webhook_debug_redacts_payload() {
+        let secret_body = br#"{"id":"evt_dbg_1","object":"event","type":"payment_intent.succeeded","livemode":false,"data":{"object":{"client_secret":"pi_secret_never_log_me"}}}"#;
+        let verified = verify_signed_body(secret_body);
+        let rendered = format!("{verified:?}");
+        assert!(rendered.contains("[REDACTED]"));
+        assert!(rendered.contains("evt_dbg_1"));
+        assert!(!rendered.contains("pi_secret_never_log_me"));
+    }
+
+    #[test]
+    fn test_duplicate_timestamp_parameter_rejected() {
+        let header = format!("t={SAMPLE_TS_STR},t=1728345601,v1={}", "a".repeat(64));
+        assert_eq!(
+            parse_signature_header_order_agnostic(&header),
+            Err(StripeWebhookError::InvalidTimestamp)
+        );
     }
 }

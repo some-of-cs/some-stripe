@@ -50,12 +50,7 @@ pub fn validate_and_encode_id(id: &str) -> Result<String, StripeError> {
         ));
     }
 
-    if trimmed.contains("..")
-        || trimmed.contains('/')
-        || trimmed.contains('\\')
-        || trimmed.contains('?')
-        || trimmed.contains('#')
-    {
+    if trimmed == "." || trimmed.contains("..") || trimmed.contains(['/', '\\', '?', '#']) {
         return Err(StripeError::InvalidRequest(format!(
             "Invalid resource ID '{id}': path traversal and URL control characters are not permitted"
         )));
@@ -219,6 +214,8 @@ mod tests {
 
     #[test]
     fn test_validate_and_encode_id_rejects_path_traversal() {
+        assert!(validate_and_encode_id(".").is_err());
+        assert!(validate_and_encode_id(" . ").is_err());
         assert!(validate_and_encode_id("../cus_123").is_err());
         assert!(validate_and_encode_id("cus/123").is_err());
         assert!(validate_and_encode_id("cus\\123").is_err());
