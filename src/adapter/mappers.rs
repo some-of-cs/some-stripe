@@ -81,16 +81,36 @@ const THREE_DS_ERROR_CODES: &[&str] = &[
     "3ds_auth_error",
 ];
 
-const SENSITIVE_KEY_SUBSTRINGS: &[&str] = &[
-    "secret",
-    "token",
-    "password",
-    "api_key",
-    "signature",
+const SENSITIVE_KEY_SUBSTRINGS: &[&str] = &["secret", "token", "password", "api_key", "signature"];
+
+const STRIPE_CURRENCY_DIVISIBILITY_RULES: &[(&[&str], u64, &str)] = &[
+    (&["isk", "ugx"], 100, "divisible by 100"),
+    (&["bhd", "jod", "kwd", "omr", "tnd"], 10, "divisible by 10"),
 ];
 
-const STRIPE_HUNDRED_DIVISIBLE_CURRENCIES: &[&str] = &["isk", "ugx"];
-const STRIPE_TEN_DIVISIBLE_CURRENCIES: &[&str] = &["bhd", "jod", "kwd", "omr", "tnd"];
+/// Metadata describing a verified Stripe webhook event envelope.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WebhookEventMeta<'a> {
+    /// Provider-unique event identifier (e.g., `"evt_..."`).
+    pub event_id: &'a str,
+    /// Raw Stripe event type (e.g., `"payment_intent.succeeded"`).
+    pub event_type: &'a str,
+    /// Whether the event originated in live mode (`false` for test mode).
+    pub livemode: bool,
+    /// Whether this is a thin v2 event requiring API hydration.
+    pub is_thin_event: bool,
+}
+
+struct StripeHttpErrorFields<'a> {
+    status: u16,
+    code: Option<&'a str>,
+    decline_code: Option<&'a str>,
+    advice_code: Option<&'a str>,
+    retry_after_secs: Option<u64>,
+    message: String,
+}
+
+type EventExtractedFields = (Option<ProviderReference>, Option<PaymentStatus>, Option<Money>);
 
 /// Returns the canonical [`ProviderId`] for Stripe (`"stripe"`).
 ///
@@ -249,57 +269,48 @@ fn is_three_ds_code(code: &str) -> bool {
     THREE_DS_ERROR_CODES.contains(&lower.as_str()) || lower.contains("3ds")
 }
 
-fn map_card_or_three_ds_error(
-    code: Option<&str>,
-    decline_code: Option<&str>,
-    advice_code: Option<&str>,
-    message: String,
-) -> PaymentError {
+fn map_card_or_three_ds_error(fields: StripeHttpErrorFields<'_>) -> PaymentError {
     let provider = stripe_provider_id();
-    let is_three_ds =
-        code.is_some_and(is_three_ds_code) || decline_code.is_some_and(is_three_ds_code);
+    let is_three_ds = fields.code.is_some_and(is_three_ds_code)
+        || fields.decline_code.is_some_and(is_three_ds_code);
     if is_three_ds {
         return PaymentError::ThreeDsFailed {
             provider,
-            code: non_empty_str(code.or(decline_code)),
-            message,
+            code: non_empty_str(fields.code.or(fields.decline_code)),
+            message: fields.message,
         };
     }
     PaymentError::CardDeclined {
         provider,
-        decline_code: non_empty_str(decline_code.or(code)),
-        advice_code: non_empty_str(advice_code),
-        message,
+        decline_code: non_empty_str(fields.decline_code.or(fields.code)),
+        advice_code: non_empty_str(fields.advice_code),
+        message: fields.message,
     }
 }
 
-fn map_stripe_http_error(
-    status: u16,
-    code: Option<&str>,
-    decline_code: Option<&str>,
-    advice_code: Option<&str>,
-    retry_after_secs: Option<u64>,
-    message: String,
-) -> PaymentError {
+fn map_stripe_http_error(fields: StripeHttpErrorFields<'_>) -> PaymentError {
     let provider = stripe_provider_id();
-    match status {
-        401 => PaymentError::AuthenticationError { provider, message },
-        402 => map_card_or_three_ds_error(code, decline_code, advice_code, message),
+    match fields.status {
+        401 => PaymentError::AuthenticationError {
+            provider,
+            message: fields.message,
+        },
+        402 => map_card_or_three_ds_error(fields),
         429 => PaymentError::RateLimited {
             provider,
-            retry_after_secs,
+            retry_after_secs: fields.retry_after_secs,
         },
         408 | 500..=599 => PaymentError::ProviderUnavailable {
             provider,
-            http_status: Some(status),
-            indeterminate: matches!(status, 408 | 504),
-            message,
+            http_status: Some(fields.status),
+            indeterminate: matches!(fields.status, 408 | 504),
+            message: fields.message,
         },
         _ => PaymentError::ProviderError {
             provider,
-            http_status: Some(status),
-            vendor_code: non_empty_str(code),
-            message,
+            http_status: Some(fields.status),
+            vendor_code: non_empty_str(fields.code),
+            message: fields.message,
         },
     }
 }
@@ -324,14 +335,14 @@ fn map_stripe_transport_or_api_error(err: &StripeError) -> PaymentError {
             code,
             message,
             ..
-        } => map_stripe_http_error(
-            *status,
-            Some(code.as_str()),
-            None,
-            None,
-            None,
-            message.clone(),
-        ),
+        } => map_stripe_http_error(StripeHttpErrorFields {
+            status: *status,
+            code: Some(code.as_str()),
+            decline_code: None,
+            advice_code: None,
+            retry_after_secs: None,
+            message: message.clone(),
+        }),
         StripeError::Http(http_err) => PaymentError::ProviderUnavailable {
             provider: stripe_provider_id(),
             http_status: http_err.status().map(|s| s.as_u16()),
@@ -403,26 +414,22 @@ pub fn map_stripe_error(err: &StripeError) -> PaymentError {
 /// ```
 pub fn map_stripe_error_payload(status: u16, body: &Value) -> PaymentError {
     let err_obj = body.get("error").unwrap_or(body);
-    let code = err_obj.get("code").and_then(Value::as_str);
-    let decline_code = err_obj.get("decline_code").and_then(Value::as_str);
-    let advice_code = err_obj.get("advice_code").and_then(Value::as_str);
-    let retry_after_secs = body
-        .get("retry_after_secs")
-        .or_else(|| err_obj.get("retry_after_secs"))
-        .and_then(Value::as_u64);
-    let message = err_obj
-        .get("message")
-        .and_then(Value::as_str)
-        .unwrap_or("Stripe API error")
-        .to_owned();
-    map_stripe_http_error(
+    let fields = StripeHttpErrorFields {
         status,
-        code,
-        decline_code,
-        advice_code,
-        retry_after_secs,
-        message,
-    )
+        code: err_obj.get("code").and_then(Value::as_str),
+        decline_code: err_obj.get("decline_code").and_then(Value::as_str),
+        advice_code: err_obj.get("advice_code").and_then(Value::as_str),
+        retry_after_secs: body
+            .get("retry_after_secs")
+            .or_else(|| err_obj.get("retry_after_secs"))
+            .and_then(Value::as_u64),
+        message: err_obj
+            .get("message")
+            .and_then(Value::as_str)
+            .unwrap_or("Stripe API error")
+            .to_owned(),
+    };
+    map_stripe_http_error(fields)
 }
 
 fn non_empty_trimmed(raw: Option<String>) -> Option<String> {
@@ -780,6 +787,19 @@ fn extract_thin_reference(payload: &Value) -> Option<ProviderReference> {
         .ok()
 }
 
+fn extract_event_fields(meta: &WebhookEventMeta<'_>, payload: &Value) -> EventExtractedFields {
+    if meta.is_thin_event {
+        return (extract_thin_reference(payload), None, None);
+    }
+    let obj = payload.pointer("/data/object");
+    let reference = obj.and_then(extract_webhook_reference);
+    let status = obj
+        .and_then(|o| extract_webhook_status(meta.event_type, o))
+        .or_else(|| lookup_table(KNOWN_WEBHOOK_EVENT_STATUSES, meta.event_type));
+    let money = obj.and_then(extract_webhook_money);
+    (reference, status, money)
+}
+
 /// Maps a verified Stripe webhook JSON payload into a [`NormalizedWebhookEvent`].
 ///
 /// Always scrubs sensitive keys from `raw_redacted`. Thin events set
@@ -788,15 +808,15 @@ fn extract_thin_reference(payload: &Value) -> Option<ProviderReference> {
 ///
 /// # Errors
 ///
-/// Returns [`PaymentError::ValidationError`] if `event_id` or `event_type` is
-/// empty or whitespace-only.
+/// Returns [`PaymentError::ValidationError`] if `meta.event_id` or
+/// `meta.event_type` is empty or whitespace-only.
 ///
 /// # Examples
 ///
 /// ```
 /// use serde_json::json;
 /// use some_payment_core::PaymentStatus;
-/// use some_stripe::adapter::mappers::map_webhook_json_to_normalized;
+/// use some_stripe::adapter::mappers::{WebhookEventMeta, map_webhook_json_to_normalized};
 ///
 /// let payload = json!({
 ///     "data": {
@@ -810,14 +830,13 @@ fn extract_thin_reference(payload: &Value) -> Option<ProviderReference> {
 ///         }
 ///     }
 /// });
-/// let event = map_webhook_json_to_normalized(
-///     "evt_1".into(),
-///     "payment_intent.succeeded".into(),
-///     false,
-///     false,
-///     &payload,
-/// )
-/// .unwrap();
+/// let meta = WebhookEventMeta {
+///     event_id: "evt_1",
+///     event_type: "payment_intent.succeeded",
+///     livemode: false,
+///     is_thin_event: false,
+/// };
+/// let event = map_webhook_json_to_normalized(&meta, &payload).unwrap();
 /// assert_eq!(event.status, Some(PaymentStatus::Paid));
 /// assert_eq!(
 ///     event.raw_redacted["data"]["object"]["client_secret"],
@@ -825,54 +844,31 @@ fn extract_thin_reference(payload: &Value) -> Option<ProviderReference> {
 /// );
 /// ```
 pub fn map_webhook_json_to_normalized(
-    event_id: String,
-    event_type: String,
-    livemode: bool,
-    is_thin_event: bool,
+    meta: &WebhookEventMeta<'_>,
     payload: &Value,
 ) -> Result<NormalizedWebhookEvent, PaymentError> {
-    if event_id.trim().is_empty() {
+    if meta.event_id.trim().is_empty() {
         return Err(PaymentError::validation(
             "webhook event_id must not be empty",
         ));
     }
-    if event_type.trim().is_empty() {
+    if meta.event_type.trim().is_empty() {
         return Err(PaymentError::validation(
             "webhook event_type must not be empty",
         ));
     }
-    let raw_redacted = scrub_webhook_payload(payload);
-    if is_thin_event {
-        return Ok(NormalizedWebhookEvent {
-            provider_id: stripe_provider_id(),
-            event_id,
-            event_type,
-            livemode,
-            requires_hydration: true,
-            reference: extract_thin_reference(payload),
-            status: None,
-            money: None,
-            verification_challenge: None,
-            raw_redacted,
-        });
-    }
-    let obj = payload.pointer("/data/object");
-    let reference = obj.and_then(extract_webhook_reference);
-    let status = obj
-        .and_then(|o| extract_webhook_status(&event_type, o))
-        .or_else(|| lookup_table(KNOWN_WEBHOOK_EVENT_STATUSES, &event_type));
-    let money = obj.and_then(extract_webhook_money);
+    let (reference, status, money) = extract_event_fields(meta, payload);
     Ok(NormalizedWebhookEvent {
         provider_id: stripe_provider_id(),
-        event_id,
-        event_type,
-        livemode,
-        requires_hydration: false,
+        event_id: meta.event_id.to_owned(),
+        event_type: meta.event_type.to_owned(),
+        livemode: meta.livemode,
+        requires_hydration: meta.is_thin_event,
         reference,
         status,
         money,
         verification_challenge: None,
-        raw_redacted,
+        raw_redacted: scrub_webhook_payload(payload),
     })
 }
 
@@ -906,16 +902,14 @@ pub fn map_webhook_json_to_normalized(
 pub fn validate_stripe_money_for_adapter(money: &Money) -> Result<(u64, String), PaymentError> {
     let currency = money.currency().to_lowercase();
     let amount = money.amount();
-    if STRIPE_HUNDRED_DIVISIBLE_CURRENCIES.contains(&currency.as_str())
-        && amount.rem_euclid(100) != 0
-    {
+    let violation = STRIPE_CURRENCY_DIVISIBILITY_RULES
+        .iter()
+        .find(|(codes, divisor, _)| {
+            codes.contains(&currency.as_str()) && amount.rem_euclid(*divisor) != 0
+        });
+    if let Some((_, _, rule)) = violation {
         return Err(PaymentError::validation(format!(
-            "Stripe requires '{currency}' amounts to be divisible by 100"
-        )));
-    }
-    if STRIPE_TEN_DIVISIBLE_CURRENCIES.contains(&currency.as_str()) && amount.rem_euclid(10) != 0 {
-        return Err(PaymentError::validation(format!(
-            "Stripe requires three-decimal currency '{currency}' amounts to be divisible by 10"
+            "Stripe requires '{currency}' amounts to be {rule}"
         )));
     }
     Ok((amount, currency))
@@ -931,6 +925,33 @@ mod tests {
     use some_stripe_core::{RedirectError, StripeError, StripeWebhookError};
 
     use super::*;
+
+    fn sample_api_error(status: u16, code: &str) -> StripeError {
+        StripeError::Api {
+            status,
+            code: code.into(),
+            message: "stripe api failure".into(),
+            error_type: "api_error".into(),
+            doc_url: None,
+        }
+    }
+
+    fn assert_currency_guardrail(currencies: &[&str], valid_amount: u64, invalid_amount: u64) {
+        for currency in currencies {
+            let valid = Money::new(valid_amount, currency).unwrap();
+            assert_eq!(
+                validate_stripe_money_for_adapter(&valid).unwrap(),
+                (valid_amount, currency.to_ascii_lowercase())
+            );
+            let invalid = Money::new(invalid_amount, currency).unwrap();
+            assert_eq!(
+                validate_stripe_money_for_adapter(&invalid)
+                    .unwrap_err()
+                    .kind(),
+                ErrorKind::Validation
+            );
+        }
+    }
 
     #[test]
     fn tc_9_2_2_provider_id_and_capabilities() {
@@ -970,37 +991,27 @@ mod tests {
             ("unknown_future_status", false, PaymentStatus::Initiated),
         ];
         for (raw, has_err, expected) in cases {
-            assert_eq!(
-                map_payment_intent_status(raw, has_err),
-                expected,
-                "status={raw}, has_last_payment_error={has_err}"
-            );
+            assert_eq!(map_payment_intent_status(raw, has_err), expected);
         }
     }
 
     #[test]
     fn tc_9_2_2_checkout_session_statuses() {
-        assert_eq!(
-            map_checkout_status(Some("open"), Some("unpaid")),
-            PaymentStatus::Initiated
-        );
-        assert_eq!(
-            map_checkout_status(Some("complete"), Some("paid")),
-            PaymentStatus::Paid
-        );
-        assert_eq!(
-            map_checkout_status(Some("complete"), Some("no_payment_required")),
-            PaymentStatus::Paid
-        );
-        assert_eq!(
-            map_checkout_status(Some("complete"), Some("unpaid")),
-            PaymentStatus::Processing
-        );
-        assert_eq!(
-            map_checkout_status(Some("expired"), Some("unpaid")),
-            PaymentStatus::Canceled
-        );
-        assert_eq!(map_checkout_status(None, None), PaymentStatus::Initiated);
+        let cases = [
+            (Some("open"), Some("unpaid"), PaymentStatus::Initiated),
+            (Some("complete"), Some("paid"), PaymentStatus::Paid),
+            (
+                Some("complete"),
+                Some("no_payment_required"),
+                PaymentStatus::Paid,
+            ),
+            (Some("complete"), Some("unpaid"), PaymentStatus::Processing),
+            (Some("expired"), Some("unpaid"), PaymentStatus::Canceled),
+            (None, None, PaymentStatus::Initiated),
+        ];
+        for (status, payment_status, expected) in cases {
+            assert_eq!(map_checkout_status(status, payment_status), expected);
+        }
     }
 
     #[test]
@@ -1015,7 +1026,7 @@ mod tests {
             ("unknown", RefundStatus::Pending),
         ];
         for (raw, expected) in cases {
-            assert_eq!(map_refund_status(raw), expected, "refund status={raw}");
+            assert_eq!(map_refund_status(raw), expected);
         }
     }
 
@@ -1047,7 +1058,7 @@ mod tests {
     }
 
     #[test]
-    fn tc_9_2_2_http_error_payload_mapping() {
+    fn tc_9_2_2_http_error_payload_auth_and_card() {
         let auth = map_stripe_error_payload(401, &json!({"error": {"message": "Invalid API Key"}}));
         assert_eq!(auth.kind(), ErrorKind::Authentication);
 
@@ -1087,7 +1098,10 @@ mod tests {
                 ..
             } if c == "payment_intent_authentication_failure"
         ));
+    }
 
+    #[test]
+    fn tc_9_2_2_http_error_payload_transport_and_generic() {
         let rate_limited = map_stripe_error_payload(429, &json!({"retry_after_secs": 15}));
         assert!(matches!(
             rate_limited,
@@ -1133,46 +1147,35 @@ mod tests {
 
     #[test]
     fn tc_9_2_2_stripe_error_enum_mapping() {
-        let api_401 = StripeError::Api {
-            status: 401,
-            code: "invalid_key".into(),
-            message: "bad key".into(),
-            error_type: "authentication_error".into(),
-            doc_url: None,
-        };
-        assert_eq!(map_stripe_error(&api_401).kind(), ErrorKind::Authentication);
-
-        let api_429 = StripeError::Api {
-            status: 429,
-            code: "rate_limit".into(),
-            message: "slow down".into(),
-            error_type: "api_error".into(),
-            doc_url: None,
-        };
-        assert_eq!(map_stripe_error(&api_429).kind(), ErrorKind::RateLimited);
-
-        let invalid = StripeError::InvalidRequest("bad amount".into());
-        assert_eq!(map_stripe_error(&invalid).kind(), ErrorKind::Validation);
-
-        let cfg = StripeError::Config("missing secret".into());
-        assert_eq!(map_stripe_error(&cfg).kind(), ErrorKind::Configuration);
-
-        let wh = StripeError::Webhook(StripeWebhookError::BadSignature);
-        assert_eq!(
-            map_stripe_error(&wh).kind(),
-            ErrorKind::WebhookVerificationFailed
-        );
-
-        let redir = StripeError::Redirect(RedirectError::MissingHost {
-            url: "https://".into(),
-        });
-        assert_eq!(map_stripe_error(&redir).kind(), ErrorKind::Validation);
-
-        let conn = StripeError::ConnectionError("reset by peer".into());
-        assert_eq!(
-            map_stripe_error(&conn).kind(),
-            ErrorKind::ProviderUnavailable
-        );
+        let cases = [
+            (sample_api_error(401, "invalid_key"), ErrorKind::Authentication),
+            (sample_api_error(429, "rate_limit"), ErrorKind::RateLimited),
+            (
+                StripeError::InvalidRequest("bad amount".into()),
+                ErrorKind::Validation,
+            ),
+            (
+                StripeError::Config("missing secret".into()),
+                ErrorKind::Configuration,
+            ),
+            (
+                StripeError::Webhook(StripeWebhookError::BadSignature),
+                ErrorKind::WebhookVerificationFailed,
+            ),
+            (
+                StripeError::Redirect(RedirectError::MissingHost {
+                    url: "https://".into(),
+                }),
+                ErrorKind::Validation,
+            ),
+            (
+                StripeError::ConnectionError("reset by peer".into()),
+                ErrorKind::ProviderUnavailable,
+            ),
+        ];
+        for (err, expected) in cases {
+            assert_eq!(map_stripe_error(&err).kind(), expected);
+        }
     }
 
     #[test]
@@ -1187,9 +1190,7 @@ mod tests {
                 "webhook_signature": "v1=deadbeef",
                 "safe_field": "visible"
             },
-            "items": [
-                {"token_id": "tok_1", "amount": 500}
-            ]
+            "items": [{"token_id": "tok_1", "amount": 500}]
         });
         let scrubbed = scrub_webhook_payload(&payload);
         assert_eq!(scrubbed["id"], "evt_123");
@@ -1204,7 +1205,7 @@ mod tests {
     }
 
     #[test]
-    fn tc_9_2_2_json_dto_mappers_and_webhook_normalization() {
+    fn tc_9_2_2_payment_intent_and_checkout_json_mappers() {
         let pi = json!({
             "id": "pi_failed_1",
             "amount": 10000,
@@ -1236,7 +1237,14 @@ mod tests {
         assert_eq!(cs_res.reference.checkout_session_id(), Some("cs_live_1"));
         assert_eq!(cs_res.reference.intent_id(), Some("pi_from_cs_1"));
         assert_eq!(cs_res.reference.order_id(), Some("ORD-99"));
+    }
 
+    #[test]
+    fn tc_9_2_2_refund_and_thin_webhook_normalization() {
+        let payment_ref = ProviderReference::builder(stripe_provider_id())
+            .payment_id("pi_from_cs_1")
+            .build()
+            .unwrap();
         let refund_res = map_refund_json(
             &json!({
                 "id": "re_55",
@@ -1245,17 +1253,20 @@ mod tests {
                 "status": "requires_action",
                 "pending_reason": "processing"
             }),
-            &cs_res.reference,
+            &payment_ref,
         )
         .unwrap();
         assert_eq!(refund_res.status, RefundStatus::RequiresAction);
         assert_eq!(refund_res.reason_detail.as_deref(), Some("processing"));
 
+        let meta = WebhookEventMeta {
+            event_id: "evt_thin_1",
+            event_type: "v2.core.event_destination.ping",
+            livemode: false,
+            is_thin_event: true,
+        };
         let thin = map_webhook_json_to_normalized(
-            "evt_thin_1".into(),
-            "v2.core.event_destination.ping".into(),
-            false,
-            true,
+            &meta,
             &json!({
                 "related_object": {"id": "pi_thin_99"},
                 "secret_token": "whsec_leak"
@@ -1271,35 +1282,8 @@ mod tests {
 
     #[test]
     fn tc_9_2_2_currency_divisibility_guardrails() {
-        for currency in ["ISK", "UGX"] {
-            let valid = Money::new(1500, currency).unwrap();
-            assert_eq!(
-                validate_stripe_money_for_adapter(&valid).unwrap(),
-                (1500, currency.to_ascii_lowercase())
-            );
-            let invalid = Money::new(1550, currency).unwrap();
-            assert_eq!(
-                validate_stripe_money_for_adapter(&invalid)
-                    .unwrap_err()
-                    .kind(),
-                ErrorKind::Validation
-            );
-        }
-
-        for currency in ["BHD", "JOD", "KWD", "OMR", "TND"] {
-            let valid = Money::new(1250, currency).unwrap();
-            assert_eq!(
-                validate_stripe_money_for_adapter(&valid).unwrap(),
-                (1250, currency.to_ascii_lowercase())
-            );
-            let invalid = Money::new(1255, currency).unwrap();
-            assert_eq!(
-                validate_stripe_money_for_adapter(&invalid)
-                    .unwrap_err()
-                    .kind(),
-                ErrorKind::Validation
-            );
-        }
+        assert_currency_guardrail(&["ISK", "UGX"], 1500, 1550);
+        assert_currency_guardrail(&["BHD", "JOD", "KWD", "OMR", "TND"], 1250, 1255);
 
         let usd = Money::new(1999, "USD").unwrap();
         assert_eq!(
