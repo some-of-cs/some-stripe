@@ -66,3 +66,15 @@ Every story must pass the mandatory quality gates before release:
 - **G4 (Integrated Acceptance)**: End-to-end wire verification against `stripe-mock` and live sandbox flows.
 
 *(Note: The UI/UX gate `G-UI` has been omitted as `some-stripe` is an API client library with no graphical user interface).*
+
+---
+
+## Module 9 — `some-payment` Orchestrator Alignment & Optional Adapter (9 Units)
+
+- **Module Execution Prompt:** [`module-9-some-payment-alignment/README.md`](./module-9-some-payment-alignment/README.md)
+- **Branch:** `feat/module-9-some-payment-alignment` | **Merge Order Position:** 9th (After `some-payment` Module 1 `some-payment-core` merges to `main`; prerequisite for `some-payment` Module 4)
+
+| Story ID | Title | $S_{\text{story}}$ | Parallel Units ($K$) | Specification File |
+| :--- | :--- | :---: | :---: | :--- |
+| `US-9.1.0` | Stripe Pre-Integration Hardening (`Stripe-Version: 2026-11-18.endive`, `last_payment_error`, 5-Status Refunds, ISK/UGX/3-Decimal Guardrails & `Idempotency-Key`) | `2.60` | `5` | [`us-9.1.0-stripe-core-hardening-and-currency-guardrails.md`](./module-9-some-payment-alignment/us-9.1.0-stripe-core-hardening-and-currency-guardrails.md) |
+| `US-9.2.0` | Raw-Body Multi-`v1` Webhook Hardening & Optional `some-payment-adapter` (`PaymentProvider` Impl) | `2.45` | `4` | [`us-9.2.0-stripe-webhook-hardening-and-adapter.md`](./module-9-some-payment-alignment/us-9.2.0-stripe-webhook-hardening-and-adapter.md) |
