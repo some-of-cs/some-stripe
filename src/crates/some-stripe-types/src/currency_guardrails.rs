@@ -268,138 +268,96 @@ pub fn validate_stripe_money(
 mod tests {
     use super::*;
 
+    fn assert_any_positive_rule(code: &str, amount: i64, rule: StripeCurrencyRule) {
+        assert_eq!(currency_rule(code), rule);
+        assert_eq!(
+            validate_stripe_money(amount, code),
+            Ok(ValidatedStripeMoney {
+                amount,
+                currency: code.to_ascii_lowercase(),
+                rule,
+            })
+        );
+    }
+
+    fn assert_multiple_rule(
+        code: &str,
+        valid_amount: i64,
+        invalid_amount: i64,
+        rule: StripeCurrencyRule,
+    ) {
+        let expected_currency = code.to_ascii_lowercase();
+        assert_eq!(currency_rule(code), rule);
+        assert_eq!(
+            validate_stripe_money(valid_amount, code),
+            Ok(ValidatedStripeMoney {
+                amount: valid_amount,
+                currency: expected_currency.clone(),
+                rule,
+            })
+        );
+        assert_eq!(
+            validate_stripe_money(invalid_amount, code),
+            Err(CurrencyGuardrailError::InvalidMinorUnitMultiple {
+                amount: invalid_amount,
+                currency: expected_currency,
+                required_multiple: rule.required_multiple(),
+            })
+        );
+    }
+
     #[test]
     fn tc_9_1_2_zero_decimal_currencies_accept_any_positive_integer() {
         for &code in ZERO_DECIMAL {
-            assert_eq!(currency_rule(code), StripeCurrencyRule::ZeroDecimal);
             let upper = code.to_ascii_uppercase();
-            let validated = validate_stripe_money(1, &upper).expect("positive zero-decimal ok");
-            assert_eq!(
-                validated,
-                ValidatedStripeMoney {
-                    amount: 1,
-                    currency: code.to_owned(),
-                    rule: StripeCurrencyRule::ZeroDecimal,
-                }
-            );
-            let odd = validate_stripe_money(1055, code).expect("odd zero-decimal ok");
-            assert_eq!(odd.amount, 1055);
-            assert_eq!(odd.rule, StripeCurrencyRule::ZeroDecimal);
+            assert_any_positive_rule(&upper, 1, StripeCurrencyRule::ZeroDecimal);
+            assert_any_positive_rule(code, 1055, StripeCurrencyRule::ZeroDecimal);
         }
     }
 
     #[test]
     fn tc_9_1_2_standard_two_decimal_currencies_accept_any_positive_integer() {
         for code in ["USD", "eur", "GbP", "SAR", "EGP"] {
-            let expected = code.to_ascii_lowercase();
-            assert_eq!(currency_rule(code), StripeCurrencyRule::TwoDecimalStandard);
-            let validated = validate_stripe_money(1055, code).expect("standard 2-decimal ok");
-            assert_eq!(
-                validated,
-                ValidatedStripeMoney {
-                    amount: 1055,
-                    currency: expected,
-                    rule: StripeCurrencyRule::TwoDecimalStandard,
-                }
-            );
+            assert_any_positive_rule(code, 1055, StripeCurrencyRule::TwoDecimalStandard);
         }
     }
 
     #[test]
-    fn tc_9_1_2_isk_enforces_zero_zero_multiple_of_100() {
-        let ok = validate_stripe_money(1000, "ISK").expect("ISK 1000 should pass");
-        assert_eq!(
-            ok,
-            ValidatedStripeMoney {
-                amount: 1000,
-                currency: "isk".to_owned(),
-                rule: StripeCurrencyRule::TwoDecimalZeroZero,
-            }
-        );
-
-        let err = validate_stripe_money(1050, "ISK").unwrap_err();
-        assert_eq!(
-            err,
-            CurrencyGuardrailError::InvalidMinorUnitMultiple {
-                amount: 1050,
-                currency: "isk".to_owned(),
-                required_multiple: 100,
-            }
-        );
-    }
-
-    #[test]
-    fn tc_9_1_2_ugx_enforces_zero_zero_multiple_of_100() {
-        let ok = validate_stripe_money(5000, "UGX").expect("UGX 5000 should pass");
-        assert_eq!(
-            ok,
-            ValidatedStripeMoney {
-                amount: 5000,
-                currency: "ugx".to_owned(),
-                rule: StripeCurrencyRule::TwoDecimalZeroZero,
-            }
-        );
-
-        let err = validate_stripe_money(5005, "UGX").unwrap_err();
-        assert_eq!(
-            err,
-            CurrencyGuardrailError::InvalidMinorUnitMultiple {
-                amount: 5005,
-                currency: "ugx".to_owned(),
-                required_multiple: 100,
-            }
-        );
+    fn tc_9_1_2_two_decimal_zero_zero_currencies_enforce_multiple_of_100() {
+        for (code, valid, invalid) in [("ISK", 1000, 1050), ("UGX", 5000, 5005)] {
+            assert_multiple_rule(code, valid, invalid, StripeCurrencyRule::TwoDecimalZeroZero);
+        }
     }
 
     #[test]
     fn tc_9_1_2_three_decimal_currencies_enforce_multiple_of_10() {
         for code in ["KWD", "BHD", "JOD", "OMR", "TND"] {
-            let expected = code.to_ascii_lowercase();
-            assert_eq!(
-                currency_rule(code),
-                StripeCurrencyRule::ThreeDecimalMultipleOfTen
-            );
-
-            let ok = validate_stripe_money(1050, code).expect("3-decimal 1050 should pass");
-            assert_eq!(
-                ok,
-                ValidatedStripeMoney {
-                    amount: 1050,
-                    currency: expected.clone(),
-                    rule: StripeCurrencyRule::ThreeDecimalMultipleOfTen,
-                }
-            );
-
-            let err = validate_stripe_money(1055, code).unwrap_err();
-            assert_eq!(
-                err,
-                CurrencyGuardrailError::InvalidMinorUnitMultiple {
-                    amount: 1055,
-                    currency: expected,
-                    required_multiple: 10,
-                }
-            );
+            assert_multiple_rule(code, 1050, 1055, StripeCurrencyRule::ThreeDecimalMultipleOfTen);
         }
     }
 
     #[test]
     fn tc_9_1_2_normalizes_uppercase_and_mixed_case_codes() {
-        assert_eq!(normalize_stripe_currency("JPY"), Ok("jpy".to_owned()));
-        assert_eq!(normalize_stripe_currency("USD"), Ok("usd".to_owned()));
-        assert_eq!(normalize_stripe_currency("KwD"), Ok("kwd".to_owned()));
-        assert_eq!(normalize_stripe_currency("IsK"), Ok("isk".to_owned()));
-        assert_eq!(normalize_stripe_currency("ugx"), Ok("ugx".to_owned()));
+        let cases = [
+            ("JPY", "jpy"),
+            ("USD", "usd"),
+            ("KwD", "kwd"),
+            ("IsK", "isk"),
+            ("ugx", "ugx"),
+        ];
+        for (input, expected) in cases {
+            assert_eq!(normalize_stripe_currency(input), Ok(expected.to_owned()));
+        }
     }
 
     #[test]
     fn tc_9_1_2_rejects_zero_and_negative_amounts() {
         for invalid_amount in [0, -1, -100, -1050, i64::MIN] {
-            let err = validate_stripe_money(invalid_amount, "USD").unwrap_err();
             assert_eq!(
-                err,
-                CurrencyGuardrailError::NonPositiveAmount {
+                validate_stripe_money(invalid_amount, "USD"),
+                Err(CurrencyGuardrailError::NonPositiveAmount {
                     amount: invalid_amount,
-                }
+                })
             );
         }
     }
@@ -407,42 +365,35 @@ mod tests {
     #[test]
     fn tc_9_1_2_rejects_invalid_currency_codes() {
         for invalid_code in ["", "U", "US", "USDD", "123", "u$d", "usd ", " usd", "€ur"] {
-            let err = normalize_stripe_currency(invalid_code).unwrap_err();
-            assert_eq!(
-                err,
-                CurrencyGuardrailError::InvalidCurrencyCode {
-                    code: invalid_code.to_owned(),
-                }
-            );
-
-            let money_err = validate_stripe_money(1000, invalid_code).unwrap_err();
-            assert_eq!(
-                money_err,
-                CurrencyGuardrailError::InvalidCurrencyCode {
-                    code: invalid_code.to_owned(),
-                }
-            );
+            let expected = CurrencyGuardrailError::InvalidCurrencyCode {
+                code: invalid_code.to_owned(),
+            };
+            assert_eq!(normalize_stripe_currency(invalid_code), Err(expected.clone()));
+            assert_eq!(validate_stripe_money(1000, invalid_code), Err(expected));
         }
     }
 
     #[test]
     fn error_messages_are_descriptive() {
-        let invalid_code = CurrencyGuardrailError::InvalidCurrencyCode {
-            code: "US1".to_owned(),
-        };
-        assert!(invalid_code.to_string().contains("US1"));
-
-        let non_positive = CurrencyGuardrailError::NonPositiveAmount { amount: 0 };
-        assert!(non_positive.to_string().contains('0'));
-
-        let bad_multiple = CurrencyGuardrailError::InvalidMinorUnitMultiple {
-            amount: 1055,
-            currency: "kwd".to_owned(),
-            required_multiple: 10,
-        };
-        let rendered = bad_multiple.to_string();
-        assert!(rendered.contains("1055"));
-        assert!(rendered.contains("kwd"));
-        assert!(rendered.contains("10"));
+        let cases = [
+            (
+                CurrencyGuardrailError::InvalidCurrencyCode {
+                    code: "US1".to_owned(),
+                },
+                "US1",
+            ),
+            (CurrencyGuardrailError::NonPositiveAmount { amount: 0 }, "0"),
+            (
+                CurrencyGuardrailError::InvalidMinorUnitMultiple {
+                    amount: 1055,
+                    currency: "kwd".to_owned(),
+                    required_multiple: 10,
+                },
+                "1055",
+            ),
+        ];
+        for (err, expected) in cases {
+            assert!(err.to_string().contains(expected));
+        }
     }
 }
