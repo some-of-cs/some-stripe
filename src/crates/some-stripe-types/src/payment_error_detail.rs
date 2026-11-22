@@ -376,20 +376,17 @@ mod tests {
 
         let err: LastPaymentError =
             serde_json::from_str(json).expect("valid Stripe last_payment_error payload");
-        assert_eq!(err.error_type.as_deref(), Some("card_error"));
-        assert_eq!(err.code.as_deref(), Some("card_declined"));
-        assert_eq!(err.decline_code.as_deref(), Some("insufficient_funds"));
-        assert_eq!(err.advice_code.as_deref(), Some("try_again_later"));
-        assert_eq!(err.network_decline_code.as_deref(), Some("51"));
-        assert_eq!(
-            err.doc_url.as_deref(),
-            Some("https://stripe.com/docs/error-codes/card-declined")
-        );
-        assert_eq!(
-            err.message.as_deref(),
-            Some("Your card has insufficient funds.")
-        );
-        assert_eq!(err.param.as_deref(), Some("payment_method"));
+        let expected = LastPaymentError {
+            error_type: Some("card_error".to_string()),
+            code: Some("card_declined".to_string()),
+            decline_code: Some("insufficient_funds".to_string()),
+            advice_code: Some("try_again_later".to_string()),
+            network_decline_code: Some("51".to_string()),
+            doc_url: Some("https://stripe.com/docs/error-codes/card-declined".to_string()),
+            message: Some("Your card has insufficient funds.".to_string()),
+            param: Some("payment_method".to_string()),
+        };
+        assert_eq!(err, expected);
     }
 
     #[test]
@@ -415,14 +412,20 @@ mod tests {
         };
 
         let rendered = format!("{err:?}");
-        assert!(rendered.contains("[REDACTED]"));
-        assert!(!rendered.contains("John Smith"));
-        assert!(!rendered.contains("4242"));
-        assert!(rendered.contains("card_error"));
-        assert!(rendered.contains("card_declined"));
-        assert!(rendered.contains("do_not_honor"));
-        assert!(rendered.contains("do_not_try_again"));
-        assert!(rendered.contains("05"));
+        let expected_tokens = [
+            "[REDACTED]",
+            "card_error",
+            "card_declined",
+            "do_not_honor",
+            "do_not_try_again",
+            "05",
+        ];
+        for token in expected_tokens {
+            assert!(rendered.contains(token), "missing {token}");
+        }
+        for sensitive in ["John Smith", "4242"] {
+            assert!(!rendered.contains(sensitive), "leaked {sensitive}");
+        }
     }
 
     #[test]
@@ -509,38 +512,19 @@ mod tests {
 
     #[test]
     fn resolve_checkout_void_action_selects_cancel_only_for_requires_capture() {
-        assert_eq!(
-            resolve_checkout_void_action(Some("requires_capture")),
-            CheckoutVoidAction::CancelPaymentIntent
-        );
-        assert_eq!(
-            resolve_checkout_void_action(Some("requires_payment_method")),
-            CheckoutVoidAction::ExpireCheckoutSession
-        );
-        assert_eq!(
-            resolve_checkout_void_action(Some("requires_confirmation")),
-            CheckoutVoidAction::ExpireCheckoutSession
-        );
-        assert_eq!(
-            resolve_checkout_void_action(Some("requires_action")),
-            CheckoutVoidAction::ExpireCheckoutSession
-        );
-        assert_eq!(
-            resolve_checkout_void_action(Some("processing")),
-            CheckoutVoidAction::ExpireCheckoutSession
-        );
-        assert_eq!(
-            resolve_checkout_void_action(Some("canceled")),
-            CheckoutVoidAction::ExpireCheckoutSession
-        );
-        assert_eq!(
-            resolve_checkout_void_action(Some("succeeded")),
-            CheckoutVoidAction::ExpireCheckoutSession
-        );
-        assert_eq!(
-            resolve_checkout_void_action(None),
-            CheckoutVoidAction::ExpireCheckoutSession
-        );
+        let cases = [
+            (Some("requires_capture"), CheckoutVoidAction::CancelPaymentIntent),
+            (Some("requires_payment_method"), CheckoutVoidAction::ExpireCheckoutSession),
+            (Some("requires_confirmation"), CheckoutVoidAction::ExpireCheckoutSession),
+            (Some("requires_action"), CheckoutVoidAction::ExpireCheckoutSession),
+            (Some("processing"), CheckoutVoidAction::ExpireCheckoutSession),
+            (Some("canceled"), CheckoutVoidAction::ExpireCheckoutSession),
+            (Some("succeeded"), CheckoutVoidAction::ExpireCheckoutSession),
+            (None, CheckoutVoidAction::ExpireCheckoutSession),
+        ];
+        for (status, expected) in cases {
+            assert_eq!(resolve_checkout_void_action(status), expected);
+        }
     }
 
     #[test]
@@ -554,7 +538,10 @@ mod tests {
             assert_eq!(expected.as_wire_status(), wire);
             assert_eq!(expected.to_string(), wire);
         }
-        assert_eq!(PaymentIntentLifecycleState::from_wire_status("failed"), None);
+        assert_eq!(
+            PaymentIntentLifecycleState::from_wire_status("failed"),
+            None
+        );
         assert_eq!(PaymentIntentLifecycleState::from_wire_status(""), None);
     }
 
@@ -581,12 +568,18 @@ mod tests {
             ..LastPaymentError::default()
         };
 
-        assert!(is_failed_attempt("requires_payment_method", Some(&err)));
-        assert!(!is_failed_attempt("requires_payment_method", None));
-        assert!(!is_failed_attempt("requires_action", Some(&err)));
-        assert!(!is_failed_attempt("requires_capture", Some(&err)));
-        assert!(!is_failed_attempt("processing", Some(&err)));
-        assert!(!is_failed_attempt("canceled", Some(&err)));
-        assert!(!is_failed_attempt("succeeded", Some(&err)));
+        let cases = [
+            ("requires_payment_method", true, true),
+            ("requires_payment_method", false, false),
+            ("requires_action", true, false),
+            ("requires_capture", true, false),
+            ("processing", true, false),
+            ("canceled", true, false),
+            ("succeeded", true, false),
+        ];
+        for (status, has_err, expected) in cases {
+            let err_ref = has_err.then_some(&err);
+            assert_eq!(is_failed_attempt(status, err_ref), expected);
+        }
     }
 }
