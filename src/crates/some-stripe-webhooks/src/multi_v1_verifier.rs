@@ -449,8 +449,8 @@ mod tests {
             parse_signature_header_order_agnostic(&header).expect("v1 before t must parse");
         assert_eq!((ts, raw_ts, cands), (SAMPLE_TS, SAMPLE_TS_STR, vec![sig.as_str()]));
 
-        let verified =
-            verify_with(SNAPSHOT_BODY, &header, &[DEFAULT_SECRET]).expect("v1 before t must verify");
+        let verified = verify_with(SNAPSHOT_BODY, &header, &[DEFAULT_SECRET])
+            .expect("v1 before t must verify");
         assert_eq!(verified.event_id, "evt_snap_001");
     }
 
