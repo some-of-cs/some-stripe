@@ -36,6 +36,26 @@ pub const MAX_HEADER_BYTES: usize = 4096;
 /// Maximum number of `v1=` signature candidates collected from a single header.
 pub const MAX_V1_CANDIDATES: usize = 16;
 
+/// Clock and replay-window configuration for Stripe webhook verification.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct WebhookVerificationOptions {
+    /// Current UNIX epoch timestamp in seconds.
+    pub now_unix_secs: i64,
+    /// Maximum allowed clock drift and replay window in seconds.
+    pub tolerance_secs: i64,
+}
+
+impl WebhookVerificationOptions {
+    /// Creates verification options using [`DEFAULT_TOLERANCE_SECS`] (300 seconds).
+    #[must_use]
+    pub const fn new(now_unix_secs: i64) -> Self {
+        Self {
+            now_unix_secs,
+            tolerance_secs: DEFAULT_TOLERANCE_SECS,
+        }
+    }
+}
+
 /// Cryptographically verified Stripe webhook envelope and parsed JSON payload.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VerifiedStripeWebhook {
@@ -51,6 +71,62 @@ pub struct VerifiedStripeWebhook {
     pub is_thin_event: bool,
     /// Parsed JSON payload produced only after constant-time HMAC verification succeeded.
     pub payload: serde_json::Value,
+}
+
+struct ParsedSignatureHeader<'a> {
+    timestamp: i64,
+    raw_timestamp: &'a str,
+    v1_candidates: Vec<&'a str>,
+}
+
+struct HeaderAccumulator<'a> {
+    raw_timestamp: Option<&'a str>,
+    v1_candidates: Vec<&'a str>,
+}
+
+impl<'a> HeaderAccumulator<'a> {
+    fn new() -> Self {
+        Self {
+            raw_timestamp: None,
+            v1_candidates: Vec::new(),
+        }
+    }
+
+    fn collect_segment(&mut self, segment: &'a str) {
+        let Some((raw_key, raw_val)) = segment.trim().split_once('=') else {
+            return;
+        };
+        let key = raw_key.trim();
+        let value = raw_val.trim();
+        if value.is_empty() {
+            return;
+        }
+
+        match key {
+            "t" if self.raw_timestamp.is_none() => self.raw_timestamp = Some(value),
+            "v1" if is_v1_candidate_eligible(value, self.v1_candidates.len()) => {
+                self.v1_candidates.push(value);
+            }
+            // Explicitly ignore `v0` and unsigned debug keys (`secret`, `destination`, `payload`).
+            _ => {}
+        }
+    }
+
+    fn finish(self) -> Result<ParsedSignatureHeader<'a>, StripeWebhookError> {
+        let raw_timestamp = self
+            .raw_timestamp
+            .ok_or(StripeWebhookError::InvalidTimestamp)?;
+        let timestamp = parse_unix_timestamp(raw_timestamp)?;
+        if self.v1_candidates.is_empty() {
+            return Err(StripeWebhookError::MissingSignature);
+        }
+
+        Ok(ParsedSignatureHeader {
+            timestamp,
+            raw_timestamp,
+            v1_candidates: self.v1_candidates,
+        })
+    }
 }
 
 /// Parses a `Stripe-Signature` header in an order-agnostic manner.
@@ -83,28 +159,8 @@ pub struct VerifiedStripeWebhook {
 pub fn parse_signature_header_order_agnostic(
     header: &str,
 ) -> Result<(i64, &str, Vec<&str>), StripeWebhookError> {
-    if header.trim().is_empty() {
-        return Err(StripeWebhookError::MissingSignatureHeader);
-    }
-    if header.len() > MAX_HEADER_BYTES {
-        return Err(StripeWebhookError::InvalidHeader(
-            "Stripe-Signature header exceeds maximum allowed size",
-        ));
-    }
-
-    let mut raw_timestamp: Option<&str> = None;
-    let mut v1_candidates: Vec<&str> = Vec::new();
-    for segment in header.split(',') {
-        collect_header_segment(segment, &mut raw_timestamp, &mut v1_candidates);
-    }
-
-    let raw_ts = raw_timestamp.ok_or(StripeWebhookError::InvalidTimestamp)?;
-    let timestamp = parse_unix_timestamp(raw_ts)?;
-    if v1_candidates.is_empty() {
-        return Err(StripeWebhookError::MissingSignature);
-    }
-
-    Ok((timestamp, raw_ts, v1_candidates))
+    let parsed = parse_signature_header_internal(header)?;
+    Ok((parsed.timestamp, parsed.raw_timestamp, parsed.v1_candidates))
 }
 
 /// Verifies a raw Stripe webhook body against one or more signing secrets and parses
@@ -132,7 +188,7 @@ pub fn parse_signature_header_order_agnostic(
 /// ```
 /// use some_stripe_webhooks::crypto::compute_streaming_hmac_bytes;
 /// use some_stripe_webhooks::multi_v1_verifier::{
-///     DEFAULT_TOLERANCE_SECS, verify_stripe_raw_webhook,
+///     WebhookVerificationOptions, verify_stripe_raw_webhook,
 /// };
 ///
 /// let raw_body = br#"{"id":"evt_123","object":"event","type":"payment_intent.succeeded","livemode":false,"data":{"object":{"id":"pi_123"}}}"#;
@@ -145,8 +201,7 @@ pub fn parse_signature_header_order_agnostic(
 ///     raw_body,
 ///     &header,
 ///     &[secret],
-///     ts + 10,
-///     DEFAULT_TOLERANCE_SECS,
+///     WebhookVerificationOptions::new(ts + 10),
 /// )
 /// .unwrap();
 ///
@@ -160,9 +215,18 @@ pub fn verify_stripe_raw_webhook(
     raw_body: &[u8],
     signature_header: &str,
     secrets: &[&str],
-    now_unix_secs: i64,
-    tolerance_secs: i64,
+    options: WebhookVerificationOptions,
 ) -> Result<VerifiedStripeWebhook, StripeWebhookError> {
+    validate_raw_body_bounds(raw_body)?;
+    let valid_secrets = collect_valid_secrets(secrets)?;
+    let parsed = parse_signature_header_internal(signature_header)?;
+    check_timestamp_tolerance(parsed.timestamp, options)?;
+    verify_any_secret_matches(&valid_secrets, raw_body, &parsed)?;
+
+    parse_verified_payload(raw_body, parsed.timestamp)
+}
+
+fn validate_raw_body_bounds(raw_body: &[u8]) -> Result<(), StripeWebhookError> {
     if raw_body.is_empty() {
         return Err(StripeWebhookError::EmptyPayload);
     }
@@ -172,38 +236,26 @@ pub fn verify_stripe_raw_webhook(
             max_allowed: MAX_WEBHOOK_PAYLOAD_BYTES,
         });
     }
-
-    let valid_secrets = collect_valid_secrets(secrets)?;
-    let (timestamp, raw_timestamp, v1_candidates) =
-        parse_signature_header_order_agnostic(signature_header)?;
-    check_timestamp_tolerance(timestamp, now_unix_secs, tolerance_secs)?;
-    verify_any_secret_matches(&valid_secrets, raw_timestamp, raw_body, &v1_candidates)?;
-
-    parse_verified_payload(raw_body, timestamp)
+    Ok(())
 }
 
-fn collect_header_segment<'a>(
-    segment: &'a str,
-    raw_timestamp: &mut Option<&'a str>,
-    v1_candidates: &mut Vec<&'a str>,
-) {
-    let Some((raw_key, raw_val)) = segment.trim().split_once('=') else {
-        return;
-    };
-    let key = raw_key.trim();
-    let value = raw_val.trim();
-    if value.is_empty() {
-        return;
+fn parse_signature_header_internal(
+    header: &str,
+) -> Result<ParsedSignatureHeader<'_>, StripeWebhookError> {
+    if header.trim().is_empty() {
+        return Err(StripeWebhookError::MissingSignatureHeader);
+    }
+    if header.len() > MAX_HEADER_BYTES {
+        return Err(StripeWebhookError::InvalidHeader(
+            "Stripe-Signature header exceeds maximum allowed size",
+        ));
     }
 
-    match key {
-        "t" if raw_timestamp.is_none() => *raw_timestamp = Some(value),
-        "v1" if is_v1_candidate_eligible(value, v1_candidates.len()) => {
-            v1_candidates.push(value);
-        }
-        // Explicitly ignore `v0` and unsigned debug keys (`secret`, `destination`, `payload`, etc.).
-        _ => {}
+    let mut accumulator = HeaderAccumulator::new();
+    for segment in header.split(',') {
+        accumulator.collect_segment(segment);
     }
+    accumulator.finish()
 }
 
 fn is_v1_candidate_eligible(value: &str, current_count: usize) -> bool {
@@ -233,22 +285,21 @@ fn collect_valid_secrets<'a>(secrets: &'a [&'a str]) -> Result<Vec<&'a str>, Str
 
 fn check_timestamp_tolerance(
     timestamp: i64,
-    now_unix_secs: i64,
-    tolerance_secs: i64,
+    options: WebhookVerificationOptions,
 ) -> Result<(), StripeWebhookError> {
-    if tolerance_secs < 0 {
+    if options.tolerance_secs < 0 {
         return Err(StripeWebhookError::TimestampOutsideTolerance {
             timestamp,
-            now: now_unix_secs,
+            now: options.now_unix_secs,
             tolerance: 0,
         });
     }
-    let delta = now_unix_secs.abs_diff(timestamp);
-    let max_tolerance = u64::try_from(tolerance_secs).unwrap_or(0);
+    let delta = options.now_unix_secs.abs_diff(timestamp);
+    let max_tolerance = u64::try_from(options.tolerance_secs).unwrap_or(0);
     if delta > max_tolerance {
         return Err(StripeWebhookError::TimestampOutsideTolerance {
             timestamp,
-            now: now_unix_secs,
+            now: options.now_unix_secs,
             tolerance: max_tolerance,
         });
     }
@@ -257,14 +308,16 @@ fn check_timestamp_tolerance(
 
 fn verify_secret_candidates(
     secret: &str,
-    raw_timestamp: &str,
     raw_body: &[u8],
-    v1_candidates: &[&str],
+    parsed: &ParsedSignatureHeader<'_>,
 ) -> Result<Choice, StripeWebhookError> {
-    let expected =
-        compute_streaming_hmac_bytes(secret.as_bytes(), raw_timestamp.as_bytes(), raw_body)?;
+    let expected = compute_streaming_hmac_bytes(
+        secret.as_bytes(),
+        parsed.raw_timestamp.as_bytes(),
+        raw_body,
+    )?;
     let mut matched = Choice::from(0u8);
-    for candidate in v1_candidates {
+    for candidate in &parsed.v1_candidates {
         matched |= expected.as_bytes().ct_eq(candidate.as_bytes());
     }
     Ok(matched)
@@ -272,13 +325,12 @@ fn verify_secret_candidates(
 
 fn verify_any_secret_matches(
     valid_secrets: &[&str],
-    raw_timestamp: &str,
     raw_body: &[u8],
-    v1_candidates: &[&str],
+    parsed: &ParsedSignatureHeader<'_>,
 ) -> Result<(), StripeWebhookError> {
     let mut matched = Choice::from(0u8);
     for secret in valid_secrets {
-        matched |= verify_secret_candidates(secret, raw_timestamp, raw_body, v1_candidates)?;
+        matched |= verify_secret_candidates(secret, raw_body, parsed)?;
     }
     if !bool::from(matched) {
         return Err(StripeWebhookError::BadSignature);
@@ -298,20 +350,15 @@ fn parse_verified_payload(
         ));
     }
 
-    let event_id = extract_string_field(&payload, "id");
-    let event_type = extract_string_field(&payload, "type");
-    let livemode = payload
-        .get("livemode")
-        .and_then(serde_json::Value::as_bool)
-        .unwrap_or(false);
-    let is_thin_event = detect_thin_event(&payload);
-
     Ok(VerifiedStripeWebhook {
         timestamp,
-        event_id,
-        event_type,
-        livemode,
-        is_thin_event,
+        event_id: extract_string_field(&payload, "id"),
+        event_type: extract_string_field(&payload, "type"),
+        livemode: payload
+            .get("livemode")
+            .and_then(serde_json::Value::as_bool)
+            .unwrap_or(false),
+        is_thin_event: detect_thin_event(&payload),
         payload,
     })
 }
@@ -339,154 +386,143 @@ fn detect_thin_event(payload: &serde_json::Value) -> bool {
 mod tests {
     use super::*;
 
+    const DEFAULT_SECRET: &str = "whsec_unit1_test_secret";
     const SAMPLE_TS: i64 = 1_728_345_600;
     const SAMPLE_TS_STR: &str = "1728345600";
     const SNAPSHOT_BODY: &[u8] = br#"{"id":"evt_snap_001","object":"event","type":"payment_intent.succeeded","livemode":true,"data":{"object":{"id":"pi_123"}}}"#;
     const THIN_V2_BODY: &[u8] = br#"{"id":"v2_evt_001","object":"v2.core.event","type":"v1.billing.meter.error_report_triggered","livemode":false,"related_object":{"id":"mtr_123","type":"billing.meter","url":"/v2/billing/meters/mtr_123"}}"#;
     const THIN_RELATED_ONLY_BODY: &[u8] = br#"{"id":"evt_thin_002","object":"event","type":"billing.meter.updated","livemode":false,"related_object":{"id":"mtr_456","type":"billing.meter"}}"#;
 
-    fn sign(secret: &str, ts_str: &str, body: &[u8]) -> String {
-        compute_streaming_hmac_bytes(secret.as_bytes(), ts_str.as_bytes(), body)
+    fn sign(secret: &str, body: &[u8]) -> String {
+        compute_streaming_hmac_bytes(secret.as_bytes(), SAMPLE_TS_STR.as_bytes(), body)
             .expect("HMAC-SHA256 signing must succeed")
+    }
+
+    fn signed_header(secret: &str, body: &[u8]) -> String {
+        format!("t={SAMPLE_TS_STR},v1={}", sign(secret, body))
+    }
+
+    fn verify_with(
+        body: &[u8],
+        header: &str,
+        secrets: &[&str],
+    ) -> Result<VerifiedStripeWebhook, StripeWebhookError> {
+        verify_stripe_raw_webhook(
+            body,
+            header,
+            secrets,
+            WebhookVerificationOptions::new(SAMPLE_TS),
+        )
+    }
+
+    fn verify_signed_body(body: &[u8]) -> VerifiedStripeWebhook {
+        let header = signed_header(DEFAULT_SECRET, body);
+        verify_with(body, &header, &[DEFAULT_SECRET]).expect("signed body must verify")
     }
 
     #[test]
     fn test_dual_v1_secret_rotation_succeeds() {
         let old_secret = "whsec_old_rotated_secret";
         let new_secret = "whsec_new_active_secret";
-        let sig_old = sign(old_secret, SAMPLE_TS_STR, SNAPSHOT_BODY);
-        let sig_new = sign(new_secret, SAMPLE_TS_STR, SNAPSHOT_BODY);
-        let header = format!("t={SAMPLE_TS_STR},v1={sig_old},v1={sig_new}");
+        let header = format!(
+            "t={SAMPLE_TS_STR},v1={},v1={}",
+            sign(old_secret, SNAPSHOT_BODY),
+            sign(new_secret, SNAPSHOT_BODY)
+        );
 
-        let verified_new = verify_stripe_raw_webhook(
-            SNAPSHOT_BODY,
-            &header,
-            &["whsec_unrelated", new_secret],
-            SAMPLE_TS + 5,
-            DEFAULT_TOLERANCE_SECS,
-        )
-        .expect("dual-v1 secret rotation should accept active secret");
-        assert_eq!(verified_new.timestamp, SAMPLE_TS);
-        assert_eq!(verified_new.event_id, "evt_snap_001");
-        assert_eq!(verified_new.event_type, "payment_intent.succeeded");
-        assert!(verified_new.livemode);
-        assert!(!verified_new.is_thin_event);
+        let via_new = verify_with(SNAPSHOT_BODY, &header, &["whsec_unused", new_secret])
+            .expect("active rotated secret must succeed");
+        let via_old = verify_with(SNAPSHOT_BODY, &header, &[old_secret])
+            .expect("previous secret must succeed during rotation");
 
-        let verified_old = verify_stripe_raw_webhook(
-            SNAPSHOT_BODY,
-            &header,
-            &[old_secret],
-            SAMPLE_TS + 5,
-            DEFAULT_TOLERANCE_SECS,
-        )
-        .expect("dual-v1 secret rotation should accept previous secret during rollover");
-        assert_eq!(verified_old.event_id, "evt_snap_001");
+        assert_eq!(via_new.event_id, "evt_snap_001");
+        assert_eq!(via_old.event_id, "evt_snap_001");
+        assert!(via_new.livemode && !via_new.is_thin_event);
     }
 
     #[test]
     fn test_order_agnostic_v1_before_t_succeeds() {
-        let secret = "whsec_order_test";
-        let sig = sign(secret, SAMPLE_TS_STR, SNAPSHOT_BODY);
+        let sig = sign(DEFAULT_SECRET, SNAPSHOT_BODY);
         let header = format!("v1={sig},t={SAMPLE_TS_STR}");
 
         let (ts, raw_ts, cands) =
             parse_signature_header_order_agnostic(&header).expect("v1 before t must parse");
-        assert_eq!(ts, SAMPLE_TS);
-        assert_eq!(raw_ts, SAMPLE_TS_STR);
-        assert_eq!(cands, vec![sig.as_str()]);
+        assert_eq!((ts, raw_ts, cands), (SAMPLE_TS, SAMPLE_TS_STR, vec![sig.as_str()]));
 
-        let verified = verify_stripe_raw_webhook(
-            SNAPSHOT_BODY,
-            &header,
-            &[secret],
-            SAMPLE_TS,
-            DEFAULT_TOLERANCE_SECS,
-        )
-        .expect("v1 before t must verify");
+        let verified =
+            verify_with(SNAPSHOT_BODY, &header, &[DEFAULT_SECRET]).expect("v1 before t must verify");
         assert_eq!(verified.event_id, "evt_snap_001");
     }
 
     #[test]
     fn test_v0_only_downgrade_rejected_fail_closed() {
-        let secret = "whsec_downgrade_test";
-        let forged_v0 = sign(secret, SAMPLE_TS_STR, SNAPSHOT_BODY);
-        let header = format!("t={SAMPLE_TS_STR},v0={forged_v0}");
+        let header = format!("t={SAMPLE_TS_STR},v0={}", sign(DEFAULT_SECRET, SNAPSHOT_BODY));
 
-        let parse_err = parse_signature_header_order_agnostic(&header).unwrap_err();
-        assert_eq!(parse_err, StripeWebhookError::MissingSignature);
-
-        let verify_err = verify_stripe_raw_webhook(
-            SNAPSHOT_BODY,
-            &header,
-            &[secret],
-            SAMPLE_TS,
-            DEFAULT_TOLERANCE_SECS,
-        )
-        .unwrap_err();
-        assert_eq!(verify_err, StripeWebhookError::MissingSignature);
+        assert_eq!(
+            parse_signature_header_order_agnostic(&header),
+            Err(StripeWebhookError::MissingSignature)
+        );
+        assert_eq!(
+            verify_with(SNAPSHOT_BODY, &header, &[DEFAULT_SECRET]),
+            Err(StripeWebhookError::MissingSignature)
+        );
     }
 
     #[test]
     fn test_unsigned_debug_entries_and_v0_ignored() {
-        let secret = "whsec_debug_filter";
-        let sig = sign(secret, SAMPLE_TS_STR, SNAPSHOT_BODY);
+        let sig = sign(DEFAULT_SECRET, SNAPSHOT_BODY);
         let header = format!(
             "secret=leaked,destination=https://attacker.example,payload=fake,v0=deadbeef,v1={sig},t={SAMPLE_TS_STR}"
         );
 
-        let (ts, raw_ts, cands) =
+        let (_, _, cands) =
             parse_signature_header_order_agnostic(&header).expect("debug entries must be ignored");
-        assert_eq!(ts, SAMPLE_TS);
-        assert_eq!(raw_ts, SAMPLE_TS_STR);
         assert_eq!(cands, vec![sig.as_str()]);
 
-        let verified = verify_stripe_raw_webhook(
-            SNAPSHOT_BODY,
-            &header,
-            &[secret],
-            SAMPLE_TS,
-            DEFAULT_TOLERANCE_SECS,
-        )
-        .expect("verification should succeed while ignoring unsigned debug keys");
+        let verified = verify_with(SNAPSHOT_BODY, &header, &[DEFAULT_SECRET])
+            .expect("verification should succeed while ignoring unsigned debug keys");
         assert_eq!(verified.event_id, "evt_snap_001");
     }
 
     #[test]
-    fn test_stale_and_future_timestamps_outside_tolerance_rejected() {
-        let secret = "whsec_tolerance_test";
-        let sig = sign(secret, SAMPLE_TS_STR, SNAPSHOT_BODY);
-        let header = format!("t={SAMPLE_TS_STR},v1={sig}");
-
-        let stale_err = verify_stripe_raw_webhook(
+    fn test_stale_timestamp_outside_tolerance_rejected() {
+        let header = signed_header(DEFAULT_SECRET, SNAPSHOT_BODY);
+        let stale_now = SAMPLE_TS + DEFAULT_TOLERANCE_SECS + 1;
+        let err = verify_stripe_raw_webhook(
             SNAPSHOT_BODY,
             &header,
-            &[secret],
-            SAMPLE_TS + DEFAULT_TOLERANCE_SECS + 1,
-            DEFAULT_TOLERANCE_SECS,
+            &[DEFAULT_SECRET],
+            WebhookVerificationOptions::new(stale_now),
         )
         .unwrap_err();
+
         assert_eq!(
-            stale_err,
+            err,
             StripeWebhookError::TimestampOutsideTolerance {
                 timestamp: SAMPLE_TS,
-                now: SAMPLE_TS + DEFAULT_TOLERANCE_SECS + 1,
+                now: stale_now,
                 tolerance: 300,
             }
         );
+    }
 
-        let future_err = verify_stripe_raw_webhook(
+    #[test]
+    fn test_future_drift_outside_tolerance_rejected() {
+        let header = signed_header(DEFAULT_SECRET, SNAPSHOT_BODY);
+        let past_now = SAMPLE_TS - DEFAULT_TOLERANCE_SECS - 1;
+        let err = verify_stripe_raw_webhook(
             SNAPSHOT_BODY,
             &header,
-            &[secret],
-            SAMPLE_TS - DEFAULT_TOLERANCE_SECS - 1,
-            DEFAULT_TOLERANCE_SECS,
+            &[DEFAULT_SECRET],
+            WebhookVerificationOptions::new(past_now),
         )
         .unwrap_err();
+
         assert_eq!(
-            future_err,
+            err,
             StripeWebhookError::TimestampOutsideTolerance {
                 timestamp: SAMPLE_TS,
-                now: SAMPLE_TS - DEFAULT_TOLERANCE_SECS - 1,
+                now: past_now,
                 tolerance: 300,
             }
         );
@@ -494,73 +530,28 @@ mod tests {
 
     #[test]
     fn test_reserialized_whitespace_json_rejected() {
-        let secret = "whsec_raw_bytes_only";
-        let sig = sign(secret, SAMPLE_TS_STR, SNAPSHOT_BODY);
-        let header = format!("t={SAMPLE_TS_STR},v1={sig}");
-
+        let header = signed_header(DEFAULT_SECRET, SNAPSHOT_BODY);
         let parsed: serde_json::Value =
             serde_json::from_slice(SNAPSHOT_BODY).expect("fixture must be valid JSON");
         let reserialized =
             serde_json::to_vec_pretty(&parsed).expect("pretty serialization must succeed");
-        assert_ne!(reserialized.as_slice(), SNAPSHOT_BODY);
 
-        let err = verify_stripe_raw_webhook(
-            &reserialized,
-            &header,
-            &[secret],
-            SAMPLE_TS,
-            DEFAULT_TOLERANCE_SECS,
-        )
-        .unwrap_err();
-        assert_eq!(err, StripeWebhookError::BadSignature);
+        assert_ne!(reserialized.as_slice(), SNAPSHOT_BODY);
+        assert_eq!(
+            verify_with(&reserialized, &header, &[DEFAULT_SECRET]),
+            Err(StripeWebhookError::BadSignature)
+        );
     }
 
     #[test]
     fn test_thin_event_vs_snapshot_event_detection() {
-        let secret = "whsec_thin_detection";
+        let v2_thin = verify_signed_body(THIN_V2_BODY);
+        let related_thin = verify_signed_body(THIN_RELATED_ONLY_BODY);
+        let snapshot = verify_signed_body(SNAPSHOT_BODY);
 
-        let sig_v2 = sign(secret, SAMPLE_TS_STR, THIN_V2_BODY);
-        let header_v2 = format!("t={SAMPLE_TS_STR},v1={sig_v2}");
-        let verified_v2 = verify_stripe_raw_webhook(
-            THIN_V2_BODY,
-            &header_v2,
-            &[secret],
-            SAMPLE_TS,
-            DEFAULT_TOLERANCE_SECS,
-        )
-        .expect("v2.core.event thin event must verify");
-        assert!(verified_v2.is_thin_event);
-        assert_eq!(verified_v2.event_id, "v2_evt_001");
-        assert_eq!(
-            verified_v2.event_type,
-            "v1.billing.meter.error_report_triggered"
-        );
-        assert!(!verified_v2.livemode);
-
-        let sig_related = sign(secret, SAMPLE_TS_STR, THIN_RELATED_ONLY_BODY);
-        let header_related = format!("t={SAMPLE_TS_STR},v1={sig_related}");
-        let verified_related = verify_stripe_raw_webhook(
-            THIN_RELATED_ONLY_BODY,
-            &header_related,
-            &[secret],
-            SAMPLE_TS,
-            DEFAULT_TOLERANCE_SECS,
-        )
-        .expect("related_object without data must be flagged as thin event");
-        assert!(verified_related.is_thin_event);
-        assert_eq!(verified_related.event_id, "evt_thin_002");
-
-        let sig_snap = sign(secret, SAMPLE_TS_STR, SNAPSHOT_BODY);
-        let header_snap = format!("t={SAMPLE_TS_STR},v1={sig_snap}");
-        let verified_snap = verify_stripe_raw_webhook(
-            SNAPSHOT_BODY,
-            &header_snap,
-            &[secret],
-            SAMPLE_TS,
-            DEFAULT_TOLERANCE_SECS,
-        )
-        .expect("snapshot event must verify");
-        assert!(!verified_snap.is_thin_event);
+        assert!(v2_thin.is_thin_event && v2_thin.event_id == "v2_evt_001");
+        assert!(related_thin.is_thin_event && related_thin.event_id == "evt_thin_002");
+        assert!(!snapshot.is_thin_event && snapshot.event_type == "payment_intent.succeeded");
     }
 
     #[test]
@@ -568,76 +559,45 @@ mod tests {
         let header = format!("t={SAMPLE_TS_STR},v1={}", "a".repeat(64));
 
         assert_eq!(
-            verify_stripe_raw_webhook(
-                SNAPSHOT_BODY,
-                &header,
-                &[],
-                SAMPLE_TS,
-                DEFAULT_TOLERANCE_SECS,
-            )
-            .unwrap_err(),
-            StripeWebhookError::BadKey
+            verify_with(SNAPSHOT_BODY, &header, &[]),
+            Err(StripeWebhookError::BadKey)
         );
         assert_eq!(
-            verify_stripe_raw_webhook(
-                SNAPSHOT_BODY,
-                &header,
-                &["", "   \t\n "],
-                SAMPLE_TS,
-                DEFAULT_TOLERANCE_SECS,
-            )
-            .unwrap_err(),
-            StripeWebhookError::BadKey
+            verify_with(SNAPSHOT_BODY, &header, &["", "   \t\n "]),
+            Err(StripeWebhookError::BadKey)
         );
     }
 
     #[test]
     fn test_oversized_header_and_v1_candidate_cap() {
         let oversized = format!("t={SAMPLE_TS_STR},v1={}", "a".repeat(MAX_HEADER_BYTES));
-        assert!(oversized.len() > MAX_HEADER_BYTES);
-        let err = parse_signature_header_order_agnostic(&oversized).unwrap_err();
-        assert!(matches!(err, StripeWebhookError::InvalidHeader(_)));
+        assert!(matches!(
+            parse_signature_header_order_agnostic(&oversized),
+            Err(StripeWebhookError::InvalidHeader(_))
+        ));
 
         let mut parts = vec![format!("t={SAMPLE_TS_STR}")];
         for i in 0..20 {
             parts.push(format!("v1={i:064x}"));
         }
-        let many_header = parts.join(",");
         let (_, _, candidates) =
-            parse_signature_header_order_agnostic(&many_header).expect("cap should parse");
+            parse_signature_header_order_agnostic(&parts.join(",")).expect("cap should parse");
         assert_eq!(candidates.len(), MAX_V1_CANDIDATES);
     }
 
     #[test]
     fn test_crypto_verification_precedes_json_parsing() {
-        let secret = "whsec_crypto_first";
         let malformed_json = b"{not valid json";
-        let wrong_sig = "0".repeat(64);
-        let bad_header = format!("t={SAMPLE_TS_STR},v1={wrong_sig}");
+        let bad_header = format!("t={SAMPLE_TS_STR},v1={}", "0".repeat(64));
+        let valid_header = signed_header(DEFAULT_SECRET, malformed_json);
 
-        let bad_sig_err = verify_stripe_raw_webhook(
-            malformed_json,
-            &bad_header,
-            &[secret],
-            SAMPLE_TS,
-            DEFAULT_TOLERANCE_SECS,
-        )
-        .unwrap_err();
-        assert_eq!(bad_sig_err, StripeWebhookError::BadSignature);
-
-        let valid_sig = sign(secret, SAMPLE_TS_STR, malformed_json);
-        let valid_header = format!("t={SAMPLE_TS_STR},v1={valid_sig}");
-        let malformed_err = verify_stripe_raw_webhook(
-            malformed_json,
-            &valid_header,
-            &[secret],
-            SAMPLE_TS,
-            DEFAULT_TOLERANCE_SECS,
-        )
-        .unwrap_err();
+        assert_eq!(
+            verify_with(malformed_json, &bad_header, &[DEFAULT_SECRET]),
+            Err(StripeWebhookError::BadSignature)
+        );
         assert!(matches!(
-            malformed_err,
-            StripeWebhookError::MalformedPayload(_)
+            verify_with(malformed_json, &valid_header, &[DEFAULT_SECRET]),
+            Err(StripeWebhookError::MalformedPayload(_))
         ));
     }
 }
