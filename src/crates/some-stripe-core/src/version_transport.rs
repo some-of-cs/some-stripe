@@ -420,12 +420,53 @@ fn insert_idempotency_header(
 mod tests {
     use super::*;
 
+    fn assert_header_eq(headers: &HeaderMap, name: &str, expected: &str) {
+        assert_eq!(
+            headers.get(name).and_then(|v| v.to_str().ok()),
+            Some(expected),
+        );
+    }
+
+    fn assert_debug_redacted(rendered: &str, secret: &str) {
+        assert!(rendered.contains("[REDACTED]"));
+        for forbidden in [secret, "sk_test_", "sk_live_"] {
+            assert!(!rendered.contains(forbidden));
+        }
+    }
+
+    fn build_isolated_configs() -> (TransportConfig, TransportConfig) {
+        let client_a = reqwest::Client::builder().build().expect("client a");
+        let client_b = reqwest::Client::builder().build().expect("client b");
+
+        let cfg_a = TransportConfig::new(SecretKey::new("sk_test_tenant_alpha"))
+            .with_api_base("https://api.stripe.com/")
+            .expect("valid https base")
+            .with_stripe_version(StripeVersion::try_new("2026-11-18.endive").expect("ver a"))
+            .with_timeout(Duration::from_secs(10))
+            .expect("valid timeout a")
+            .with_http_client(client_a);
+
+        let live_beta = format!("{}{}", "sk_live", "_tenant_beta");
+        let cfg_b = TransportConfig::new(SecretKey::new(live_beta))
+            .with_api_base("http://127.0.0.1:12111")
+            .expect("valid http local mock base")
+            .with_stripe_version(StripeVersion::try_new("2025-02-24.acacia").expect("ver b"))
+            .with_timeout(Duration::from_secs(45))
+            .expect("valid timeout b")
+            .with_http_client(client_b);
+
+        (cfg_a, cfg_b)
+    }
+
     #[test]
-    fn tc_9_1_1_constants_and_pinned_default_version() {
+    fn tc_9_1_1_default_constants() {
         assert_eq!(DEFAULT_STRIPE_VERSION, "2026-11-18.endive");
         assert_eq!(STRIPE_VERSION_HEADER, "Stripe-Version");
         assert_eq!(DEFAULT_TIMEOUT_SECS, 30);
+    }
 
+    #[test]
+    fn tc_9_1_1_pinned_default_version_traits() {
         let version = StripeVersion::pinned_default();
         assert_eq!(version.as_str(), "2026-11-18.endive");
         assert_eq!(version.to_string(), "2026-11-18.endive");
@@ -471,20 +512,19 @@ mod tests {
     }
 
     #[test]
-    fn tc_9_1_1_transport_config_defaults_and_explicit_headers() {
+    fn tc_9_1_1_transport_config_defaults() {
         let config = TransportConfig::new(SecretKey::new("sk_test_default_headers"));
         assert_eq!(config.api_base(), DEFAULT_API_BASE);
         assert_eq!(config.stripe_version().as_str(), DEFAULT_STRIPE_VERSION);
         assert_eq!(config.timeout(), Duration::from_secs(DEFAULT_TIMEOUT_SECS));
         assert!(config.http_client().is_none());
+    }
 
+    #[test]
+    fn tc_9_1_1_build_headers_default_version_and_auth() {
+        let config = TransportConfig::new(SecretKey::new("sk_test_default_headers"));
         let headers = config.build_headers(None).expect("headers should build");
-        assert_eq!(
-            headers
-                .get(STRIPE_VERSION_HEADER)
-                .and_then(|v| v.to_str().ok()),
-            Some("2026-11-18.endive"),
-        );
+        assert_header_eq(&headers, STRIPE_VERSION_HEADER, "2026-11-18.endive");
 
         let auth = headers
             .get(AUTHORIZATION)
@@ -504,22 +544,12 @@ mod tests {
             .build_headers(Some("idem_abc_123"))
             .expect("headers with idempotency key should build");
 
-        assert_eq!(
-            headers
-                .get(STRIPE_VERSION_HEADER)
-                .and_then(|v| v.to_str().ok()),
-            Some("2026-01-01.custom"),
-        );
-        assert_eq!(
-            headers
-                .get(IDEMPOTENCY_KEY_HEADER)
-                .and_then(|v| v.to_str().ok()),
-            Some("idem_abc_123"),
-        );
+        assert_header_eq(&headers, STRIPE_VERSION_HEADER, "2026-01-01.custom");
+        assert_header_eq(&headers, IDEMPOTENCY_KEY_HEADER, "idem_abc_123");
     }
 
     #[test]
-    fn tc_9_1_1_build_headers_rejects_invalid_key_and_idempotency_key() {
+    fn tc_9_1_1_build_headers_rejects_invalid_api_key() {
         let empty_key_cfg = TransportConfig::new(SecretKey::new(""));
         assert!(matches!(
             empty_key_cfg.build_headers(None),
@@ -532,16 +562,17 @@ mod tests {
             .build_headers(None)
             .expect_err("CRLF in API key must fail");
         assert!(!err.to_string().contains("sk_test_secret"));
+    }
 
+    #[test]
+    fn tc_9_1_1_build_headers_rejects_invalid_idempotency_key() {
         let valid_cfg = TransportConfig::new(SecretKey::new("sk_test_valid_key"));
-        assert!(matches!(
-            valid_cfg.build_headers(Some("   ")),
-            Err(StripeError::InvalidRequest(_))
-        ));
-        assert!(matches!(
-            valid_cfg.build_headers(Some("idem\r\nInject: 1")),
-            Err(StripeError::InvalidRequest(_))
-        ));
+        for bad_key in ["   ", "idem\r\nInject: 1"] {
+            assert!(matches!(
+                valid_cfg.build_headers(Some(bad_key)),
+                Err(StripeError::InvalidRequest(_))
+            ));
+        }
     }
 
     #[test]
@@ -565,46 +596,21 @@ mod tests {
     }
 
     #[test]
-    fn tc_9_1_1_instance_isolation_without_global_state() {
-        let client_a = reqwest::Client::builder().build().expect("client a");
-        let client_b = reqwest::Client::builder().build().expect("client b");
-
-        let cfg_a = TransportConfig::new(SecretKey::new("sk_test_tenant_alpha"))
-            .with_api_base("https://api.stripe.com/")
-            .expect("valid https base")
-            .with_stripe_version(StripeVersion::try_new("2026-11-18.endive").expect("ver a"))
-            .with_timeout(Duration::from_secs(10))
-            .expect("valid timeout a")
-            .with_http_client(client_a);
-
-        let live_beta = format!("{}{}", "sk_live", "_tenant_beta");
-        let cfg_b = TransportConfig::new(SecretKey::new(live_beta))
-            .with_api_base("http://127.0.0.1:12111")
-            .expect("valid http local mock base")
-            .with_stripe_version(StripeVersion::try_new("2025-02-24.acacia").expect("ver b"))
-            .with_timeout(Duration::from_secs(45))
-            .expect("valid timeout b")
-            .with_http_client(client_b);
-
+    fn tc_9_1_1_instance_isolation_config_fields() {
+        let (cfg_a, cfg_b) = build_isolated_configs();
         assert_eq!(cfg_a.api_base(), "https://api.stripe.com");
         assert_eq!(cfg_b.api_base(), "http://127.0.0.1:12111");
         assert_eq!(cfg_a.timeout(), Duration::from_secs(10));
         assert_eq!(cfg_b.timeout(), Duration::from_secs(45));
+    }
 
+    #[test]
+    fn tc_9_1_1_instance_isolation_headers() {
+        let (cfg_a, cfg_b) = build_isolated_configs();
         let headers_a = cfg_a.build_headers(None).expect("headers a");
         let headers_b = cfg_b.build_headers(None).expect("headers b");
-        assert_eq!(
-            headers_a
-                .get(STRIPE_VERSION_HEADER)
-                .and_then(|v| v.to_str().ok()),
-            Some("2026-11-18.endive"),
-        );
-        assert_eq!(
-            headers_b
-                .get(STRIPE_VERSION_HEADER)
-                .and_then(|v| v.to_str().ok()),
-            Some("2025-02-24.acacia"),
-        );
+        assert_header_eq(&headers_a, STRIPE_VERSION_HEADER, "2026-11-18.endive");
+        assert_header_eq(&headers_b, STRIPE_VERSION_HEADER, "2025-02-24.acacia");
         assert_ne!(headers_a.get(AUTHORIZATION), headers_b.get(AUTHORIZATION));
     }
 
@@ -615,15 +621,8 @@ mod tests {
 
         for secret in [&test_secret, &live_secret] {
             let cfg = TransportConfig::new(SecretKey::new(secret.as_str()));
-            let compact = format!("{cfg:?}");
-            let pretty = format!("{cfg:#?}");
-
-            for rendered in [&compact, &pretty] {
-                assert!(rendered.contains("[REDACTED]"));
-                assert!(!rendered.contains(secret.as_str()));
-                assert!(!rendered.contains("sk_test_"));
-                assert!(!rendered.contains("sk_live_"));
-            }
+            assert_debug_redacted(&format!("{cfg:?}"), secret);
+            assert_debug_redacted(&format!("{cfg:#?}"), secret);
         }
     }
 
