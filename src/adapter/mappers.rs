@@ -110,7 +110,11 @@ struct StripeHttpErrorFields<'a> {
     message: String,
 }
 
-type EventExtractedFields = (Option<ProviderReference>, Option<PaymentStatus>, Option<Money>);
+type EventExtractedFields = (
+    Option<ProviderReference>,
+    Option<PaymentStatus>,
+    Option<Money>,
+);
 
 /// Returns the canonical [`ProviderId`] for Stripe (`"stripe"`).
 ///
@@ -1148,7 +1152,10 @@ mod tests {
     #[test]
     fn tc_9_2_2_stripe_error_enum_mapping() {
         let cases = [
-            (sample_api_error(401, "invalid_key"), ErrorKind::Authentication),
+            (
+                sample_api_error(401, "invalid_key"),
+                ErrorKind::Authentication,
+            ),
             (sample_api_error(429, "rate_limit"), ErrorKind::RateLimited),
             (
                 StripeError::InvalidRequest("bad amount".into()),
