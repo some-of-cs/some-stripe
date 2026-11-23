@@ -3,7 +3,7 @@
 //! Provides CRUD operations and lifecycle actions for commercial bank-replacement financial accounts,
 //! balance monitoring, feature toggling, and account closure.
 
-use some_stripe_core::patterns::serializer::to_form_params;
+use some_stripe_core::patterns::serializer::{percent_encode, to_form_params};
 use some_stripe_core::{StripeClient, StripeError, validate_and_encode_id};
 use some_stripe_types::{
     CloseFinancialAccountParams, CreateFinancialAccountParams, FinancialAccount,
@@ -241,8 +241,26 @@ fn append_query_string(url: &mut String, query_params: &[(&'static str, String)]
     }
     let encoded_pairs: Vec<String> = query_params
         .iter()
-        .map(|(k, v)| format!("{k}={v}"))
+        .map(|(k, v)| format!("{}={}", percent_encode(k), percent_encode(v)))
         .collect();
     url.push('?');
     url.push_str(&encoded_pairs.join("&"));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_append_query_string_percent_encodes_reserved_chars() {
+        let mut url = "https://api.stripe.com/v1/fa".to_string();
+        append_query_string(
+            &mut url,
+            &[("starting_after", "fa_1&status=open#frag%20".to_string())],
+        );
+        assert_eq!(
+            url,
+            "https://api.stripe.com/v1/fa?starting_after=fa_1%26status%3Dopen%23frag%2520"
+        );
+    }
 }

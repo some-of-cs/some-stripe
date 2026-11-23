@@ -72,30 +72,26 @@ pub fn generate_uuid_v4() -> String {
 /// assert!(!is_valid_uuid_v4("invalid-uuid-string"));
 /// ```
 pub fn is_valid_uuid_v4(key: &str) -> bool {
-    if key.len() != 36 {
-        return false;
-    }
-    let b = key.as_bytes();
-    if b[8] != b'-' || b[13] != b'-' || b[18] != b'-' || b[23] != b'-' {
-        return false;
-    }
-    // Version 4 check
-    if b[14] != b'4' {
-        return false;
-    }
-    // Variant 1 (RFC 4122) check: 8, 9, a, b (case-insensitive)
-    if !matches!(b[19], b'8' | b'9' | b'a' | b'b' | b'A' | b'B') {
-        return false;
-    }
-    for (i, &byte) in b.iter().enumerate() {
-        if i == 8 || i == 13 || i == 18 || i == 23 {
-            continue;
-        }
-        if !byte.is_ascii_hexdigit() {
-            return false;
-        }
-    }
-    true
+    let bytes = key.as_bytes();
+    bytes.len() == 36
+        && has_valid_uuid_v4_markers(bytes)
+        && has_only_hex_digits_outside_hyphens(bytes)
+}
+
+const UUID_HYPHEN_POSITIONS: [usize; 4] = [8, 13, 18, 23];
+
+fn has_valid_uuid_v4_markers(bytes: &[u8]) -> bool {
+    let hyphens_ok = UUID_HYPHEN_POSITIONS.iter().all(|&pos| bytes[pos] == b'-');
+    let version_ok = bytes[14] == b'4';
+    let variant_ok = matches!(bytes[19], b'8' | b'9' | b'a' | b'b' | b'A' | b'B');
+    hyphens_ok && version_ok && variant_ok
+}
+
+fn has_only_hex_digits_outside_hyphens(bytes: &[u8]) -> bool {
+    bytes
+        .iter()
+        .enumerate()
+        .all(|(i, &b)| UUID_HYPHEN_POSITIONS.contains(&i) || b.is_ascii_hexdigit())
 }
 
 /// Resource for managing Stripe PaymentIntents (`stripe.payment_intents()`).
