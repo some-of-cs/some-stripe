@@ -627,22 +627,24 @@ pub fn is_bsa_sar_threshold_exceeded(amount: i64) -> bool {
     amount >= BSA_SAR_THRESHOLD_CENTS
 }
 
+fn luhn_digit_value(byte: u8, double: bool) -> u32 {
+    let d = u32::from(byte - b'0');
+    if !double {
+        return d;
+    }
+    let doubled = d * 2;
+    if doubled > 9 { doubled - 9 } else { doubled }
+}
+
 /// Computes the standard Luhn checksum algorithm over a digit slice.
 fn is_valid_luhn(digits: &[u8]) -> bool {
-    if digits.len() < 13 || digits.len() > 19 {
+    if !(13..=19).contains(&digits.len()) {
         return false;
     }
     let mut sum = 0u32;
     let mut double = false;
     for &byte in digits.iter().rev() {
-        let mut d = u32::from(byte - b'0');
-        if double {
-            d *= 2;
-            if d > 9 {
-                d -= 9;
-            }
-        }
-        sum += d;
+        sum += luhn_digit_value(byte, double);
         double = !double;
     }
     sum.is_multiple_of(10)
@@ -653,30 +655,13 @@ fn is_valid_luhn(digits: &[u8]) -> bool {
 /// Ignores non-digit separators like hyphens or spaces when analyzing contiguous card number patterns.
 #[must_use]
 pub fn contains_raw_pan(input: &str) -> bool {
-    let clean: Vec<u8> = input
-        .bytes()
-        .filter(|&b| b.is_ascii_digit() || b == b'-' || b == b' ')
-        .collect();
-
-    let digits: Vec<u8> = clean
-        .iter()
-        .copied()
-        .filter(|b| b.is_ascii_digit())
-        .collect();
-
+    let digits: Vec<u8> = input.bytes().filter(u8::is_ascii_digit).collect();
     if digits.len() < 13 {
         return false;
     }
 
     // Check sliding windows of lengths 13 through 19
-    for len in 13..=19.min(digits.len()) {
-        for window in digits.windows(len) {
-            if is_valid_luhn(window) {
-                return true;
-            }
-        }
-    }
-    false
+    (13..=19.min(digits.len())).any(|len| digits.windows(len).any(is_valid_luhn))
 }
 
 /// Enforces the zero PAN leakage invariant on arbitrary text fields (PCI-DSS 4.0 SAQ A).
