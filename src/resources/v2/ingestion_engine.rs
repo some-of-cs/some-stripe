@@ -144,7 +144,8 @@ impl CollectorWorkerContext {
                 s.batches_sent += 1;
                 Ok(Some(resp))
             }
-            Err((err, mut unsent)) => {
+            Err(boxed) => {
+                let (err, mut unsent) = *boxed;
                 unsent.append(buffer);
                 *buffer = unsent;
                 let mut s = self.stats.lock().unwrap_or_else(|e| e.into_inner());
@@ -568,7 +569,8 @@ impl MeterIngestionEngine {
     ) -> Result<BatchIngestionResponse, StripeError> {
         match self.send_batch_preserving(events).await {
             Ok(resp) => Ok(resp),
-            Err((err, unsent)) => {
+            Err(boxed) => {
+                let (err, unsent) = *boxed;
                 self.restore_unsent_events(unsent).await;
                 Err(err)
             }
@@ -609,11 +611,11 @@ impl MeterIngestionEngine {
     async fn send_batch_preserving(
         &self,
         events: Vec<MeterEventPayload>,
-    ) -> Result<BatchIngestionResponse, (StripeError, Vec<MeterEventPayload>)> {
+    ) -> Result<BatchIngestionResponse, Box<(StripeError, Vec<MeterEventPayload>)>> {
         let params = CreateMeterEventStreamParams { events };
         match self.dispatch_batch_request(&params).await {
             Ok(resp) => Ok(resp),
-            Err(err) => Err((err, params.events)),
+            Err(err) => Err(Box::new((err, params.events))),
         }
     }
 
@@ -627,7 +629,7 @@ impl MeterIngestionEngine {
     ) -> Result<BatchIngestionResponse, StripeError> {
         self.send_batch_preserving(events)
             .await
-            .map_err(|(err, _)| err)
+            .map_err(|boxed| boxed.0)
     }
 
     /// Spawns a background task that periodically flushes buffered events every `interval`.
