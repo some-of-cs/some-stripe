@@ -114,7 +114,7 @@ impl StripeHeaderExt for reqwest::RequestBuilder {
 
 /// Per-request options allowing callers to override multi-tenant headers, idempotency keys,
 /// API versions, or network timeouts on a specific call without mutating the base client.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Clone, Default, PartialEq, Eq)]
 pub struct RequestOptions {
     /// Connected account ID for Stripe Connect multi-tenancy (`Stripe-Account` header).
     pub stripe_account: Option<String>,
@@ -126,6 +126,25 @@ pub struct RequestOptions {
     pub timeout: Option<Duration>,
     /// Ephemeral bearer token override (e.g. for Meter Event Sessions: `Authorization: Bearer <token>`).
     pub bearer_token: Option<String>,
+}
+
+impl std::fmt::Debug for RequestOptions {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let redacted_token = self.bearer_token.as_ref().map(|_| "[REDACTED]");
+        f.debug_struct("RequestOptions")
+            .field("stripe_account", &self.stripe_account)
+            .field("idempotency_key", &self.idempotency_key)
+            .field("stripe_version", &self.stripe_version)
+            .field("timeout", &self.timeout)
+            .field("bearer_token", &redacted_token)
+            .finish()
+    }
+}
+
+impl Drop for RequestOptions {
+    fn drop(&mut self) {
+        self.bearer_token.zeroize();
+    }
 }
 
 impl RequestOptions {
@@ -212,6 +231,17 @@ impl StripeConfig {
     pub fn with_api_base(mut self, api_base: impl Into<String>) -> Self {
         self.api_base = api_base.into();
         self
+    }
+
+    /// Validates and overrides the base URL, rejecting invalid schemes, credentials,
+    /// query strings, fragments, or control characters.
+    ///
+    /// # Errors
+    /// Returns [`StripeError::Config`] if `api_base` fails URL validation.
+    pub fn try_with_api_base(mut self, api_base: impl Into<String>) -> Result<Self, StripeError> {
+        let raw = api_base.into();
+        self.api_base = crate::version_transport::validate_api_base(&raw)?;
+        Ok(self)
     }
 
     /// Overrides the network timeout.
@@ -400,30 +430,17 @@ impl StripeClient {
         mut request: reqwest::RequestBuilder,
         options: Option<&RequestOptions>,
     ) -> Result<reqwest::Request, StripeError> {
-        let mut bearer = None;
+        crate::version_transport::validate_api_base(&self.inner.config.api_base)?;
         if let Some(opts) = options {
-            if let Some(acct) = &opts.stripe_account {
-                request = request.header("Stripe-Account", acct);
-            }
-            if let Some(idemp) = &opts.idempotency_key {
-                request = request.header("Idempotency-Key", idemp);
-            }
-            if let Some(ver) = &opts.stripe_version {
-                request = request.header("Stripe-Version", ver);
-            }
-            if let Some(to) = opts.timeout {
-                request = request.timeout(to);
-            }
-            if let Some(tok) = &opts.bearer_token {
-                bearer = Some(tok.as_str());
-            }
+            request = apply_request_options(request, opts);
         }
 
-        if let Some(tok) = bearer {
-            request = request.bearer_auth(tok);
+        let bearer = options.and_then(|opts| opts.bearer_token.as_deref());
+        request = if let Some(tok) = bearer {
+            request.bearer_auth(tok)
         } else {
-            request = request.basic_auth(self.config.secret_key.expose_secret(), None::<&str>);
-        }
+            request.basic_auth(self.config.secret_key.expose_secret(), None::<&str>)
+        };
         request.build().map_err(StripeError::Http)
     }
 
@@ -434,23 +451,24 @@ impl StripeClient {
         has_next_req: bool,
         retries_taken: u32,
     ) -> bool {
-        if can_retry_network && has_next_req {
-            let action = self
-                .config
-                .error_workflow
-                .on_api_error(
-                    503,
-                    "network_error",
-                    &err.to_string(),
-                    retries_taken,
-                    self.config.max_retries,
-                )
-                .await;
-            if action == ErrorAction::Retry {
-                let delay = compute_backoff_delay(retries_taken, 50, 5000);
-                tokio::time::sleep(delay).await;
-                return true;
-            }
+        if !can_retry_network || !has_next_req {
+            return false;
+        }
+        let action = self
+            .config
+            .error_workflow
+            .on_api_error(
+                503,
+                "network_error",
+                &err.to_string(),
+                retries_taken,
+                self.config.max_retries,
+            )
+            .await;
+        if action == ErrorAction::Retry {
+            let delay = compute_backoff_delay(retries_taken, 50, 5000);
+            tokio::time::sleep(delay).await;
+            return true;
         }
         false
     }
@@ -473,6 +491,11 @@ impl StripeClient {
             return false;
         };
 
+        let can_retry_status = *status_code == 429 || can_retry_network;
+        if !can_retry_status || !has_next_req {
+            return false;
+        }
+
         let action = self
             .config
             .error_workflow
@@ -485,14 +508,56 @@ impl StripeClient {
             )
             .await;
 
-        let can_retry_status = *status_code == 429 || can_retry_network;
-        if action == ErrorAction::Retry && can_retry_status && has_next_req {
+        if action == ErrorAction::Retry {
             let delay =
                 retry_after_delay.unwrap_or_else(|| compute_backoff_delay(retries_taken, 50, 5000));
             tokio::time::sleep(delay).await;
             return true;
         }
         false
+    }
+
+    async fn dispatch_attempt(
+        &self,
+        req: reqwest::Request,
+        can_retry_network: bool,
+        has_next_req: bool,
+        retries_taken: u32,
+    ) -> Result<Option<bytes::Bytes>, StripeError> {
+        let response = match self.http.execute(req).await {
+            Ok(resp) => resp,
+            Err(err) => {
+                let retry = self
+                    .should_retry_network_error(
+                        &err,
+                        can_retry_network,
+                        has_next_req,
+                        retries_taken,
+                    )
+                    .await;
+                return if retry { Ok(None) } else { Err(StripeError::Http(err)) };
+            }
+        };
+
+        let retry_after_delay = parse_retry_after_delay(&response);
+        let status = response.status();
+        let body_bytes = response.bytes().await?;
+
+        if status.is_success() {
+            return Ok(Some(body_bytes));
+        }
+
+        let api_error = parse_api_error_response(status, &body_bytes);
+        let retry = self
+            .should_retry_api_error(
+                &api_error,
+                retry_after_delay,
+                can_retry_network,
+                has_next_req,
+                retries_taken,
+            )
+            .await;
+        if retry { Ok(None) } else { Err(api_error) }
     }
 
     /// Executes requests and returns the raw response body as zero-copy `bytes::Bytes`.
@@ -517,58 +582,39 @@ impl StripeClient {
         let mut retries_taken = 0u32;
 
         loop {
-            let next_req = if retries_taken < max_retries {
-                req.try_clone()
-            } else {
-                None
-            };
+            let next_req = (retries_taken < max_retries).then(|| req.try_clone()).flatten();
+            let has_next_req = next_req.is_some();
 
-            let response = match self.http.execute(req).await {
-                Ok(resp) => resp,
-                Err(err) => {
-                    if self
-                        .should_retry_network_error(
-                            &err,
-                            can_retry_network,
-                            next_req.is_some(),
-                            retries_taken,
-                        )
-                        .await
-                    {
-                        retries_taken += 1;
-                        req = next_req.expect("next_req confirmed present");
-                        continue;
-                    }
-                    return Err(StripeError::Http(err));
-                }
-            };
-
-            let retry_after_delay = parse_retry_after_delay(&response);
-            let status = response.status();
-            let body_bytes = response.bytes().await?;
-
-            if !status.is_success() {
-                let api_error = parse_api_error_response(status, &body_bytes);
-                if self
-                    .should_retry_api_error(
-                        &api_error,
-                        retry_after_delay,
-                        can_retry_network,
-                        next_req.is_some(),
-                        retries_taken,
-                    )
-                    .await
-                {
-                    retries_taken += 1;
-                    req = next_req.expect("next_req confirmed present");
-                    continue;
-                }
-                return Err(api_error);
+            if let Some(body) = self
+                .dispatch_attempt(req, can_retry_network, has_next_req, retries_taken)
+                .await?
+            {
+                return Ok(body);
             }
 
-            return Ok(body_bytes);
+            retries_taken += 1;
+            req = next_req.expect("next_req confirmed present");
         }
     }
+}
+
+fn apply_request_options(
+    mut request: reqwest::RequestBuilder,
+    opts: &RequestOptions,
+) -> reqwest::RequestBuilder {
+    if let Some(acct) = &opts.stripe_account {
+        request = request.header("Stripe-Account", acct);
+    }
+    if let Some(idemp) = &opts.idempotency_key {
+        request = request.header("Idempotency-Key", idemp);
+    }
+    if let Some(ver) = &opts.stripe_version {
+        request = request.header("Stripe-Version", ver);
+    }
+    if let Some(to) = opts.timeout {
+        request = request.timeout(to);
+    }
+    request
 }
 
 fn is_request_network_retryable(req: &reqwest::Request) -> bool {
@@ -872,8 +918,8 @@ mod tests {
 
         assert_eq!(
             workflow.calls.load(std::sync::atomic::Ordering::SeqCst),
-            1,
-            "Workflow called once for status 500 notification"
+            0,
+            "Workflow must not be invoked for non-retryable POST 500"
         );
 
         server.await.unwrap();
@@ -923,6 +969,66 @@ mod tests {
             val.get("id").and_then(|v| v.as_str()),
             Some("ch_retried_ok")
         );
+
+        server.await.unwrap();
+    }
+
+    #[test]
+    fn test_request_options_debug_redacts_bearer_token() {
+        let with_tok = RequestOptions::new().bearer_token("sess_secret_98765");
+        let debug_str = format!("{with_tok:?}");
+        assert!(debug_str.contains(r#"Some("[REDACTED]")"#));
+        assert!(!debug_str.contains("sess_secret_98765"));
+
+        let without_tok = RequestOptions::new();
+        let empty_debug = format!("{without_tok:?}");
+        assert!(empty_debug.contains("bearer_token: None"));
+    }
+
+    #[tokio::test]
+    async fn test_try_with_api_base_and_prepare_request_validate_base_url() {
+        let valid = StripeConfig::new("sk_test_123").try_with_api_base("https://api.stripe.com");
+        assert!(valid.is_ok());
+
+        for bad_url in ["http://api.stripe.com", "https://user:pass@api.stripe.com"] {
+            let res = StripeConfig::new("sk_test_123").try_with_api_base(bad_url);
+            assert!(matches!(res, Err(StripeError::Config(_))));
+        }
+
+        let bad_client = StripeClient::with_config(
+            StripeConfig::new("sk_test_123").with_api_base("ftp://evil.example"),
+        );
+        let req = bad_client.http.get("https://api.stripe.com/v1/customers");
+        let err = bad_client.execute(req).await.unwrap_err();
+        assert!(matches!(err, StripeError::Config(_)));
+    }
+
+    #[tokio::test]
+    async fn test_non_retryable_post_500_does_not_inflate_default_workflow_retry_count() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut buf = vec![0; 1024];
+            let _ = socket.read(&mut buf).await.unwrap();
+            let resp = "HTTP/1.1 500 Internal Server Error\r\nContent-Type: application/json\r\nContent-Length: 64\r\nConnection: close\r\n\r\n{\"error\":{\"code\":\"api_error\",\"message\":\"Server error\",\"type\":\"api_error\"}}";
+            socket.write_all(resp.as_bytes()).await.unwrap();
+        });
+
+        let workflow = Arc::new(DefaultErrorWorkflow::new());
+        let config = StripeConfig::new("sk_test_123")
+            .with_api_base(format!("http://{addr}"))
+            .with_max_retries(3)
+            .with_error_workflow(workflow.clone());
+        let client = StripeClient::with_config(config);
+
+        let req = client.http.post(format!("http://{addr}/v1/charges"));
+        let err = client.execute(req).await.unwrap_err();
+        assert!(matches!(err, StripeError::Api { status: 500, .. }));
+        assert_eq!(workflow.retry_count(), 0);
 
         server.await.unwrap();
     }
