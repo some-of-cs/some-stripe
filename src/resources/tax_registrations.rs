@@ -149,19 +149,7 @@ impl<'a> TaxRegistrationsResource<'a> {
 
     /// Returns a streaming, zero-clone auto-paginator for tax registrations (`GET /v1/tax/registrations`).
     pub fn list(&self, params: &ListTaxRegistrationsParams) -> Paginator<'a, TaxRegistration> {
-        let (base_path, initial_err) = match to_form_params(params) {
-            Ok(mut pairs) => {
-                pairs
-                    .retain(|(k, _)| k != "limit" && k != "starting_after" && k != "ending_before");
-                let path = if pairs.is_empty() {
-                    "v1/tax/registrations".to_string()
-                } else {
-                    format!("v1/tax/registrations?{}", encode_form_pairs(&pairs))
-                };
-                (path, None)
-            }
-            Err(e) => ("v1/tax/registrations".to_string(), Some(e)),
-        };
+        let (base_path, initial_err) = build_list_path(params);
 
         let mut paginator = Paginator::new(
             self.client,
@@ -170,6 +158,9 @@ impl<'a> TaxRegistrationsResource<'a> {
             tax_registration_id,
         );
 
+        if let Some(acct) = self.account {
+            paginator = paginator.with_account(acct);
+        }
         if let Some(err) = initial_err {
             paginator = paginator.with_initial_error(err);
         }
@@ -211,5 +202,39 @@ impl<'a> TaxRegistrationsResource<'a> {
         let val = self.client.execute(req).await?;
         let list: TaxRegistrationList = serde_json::from_value(val)?;
         Ok(list)
+    }
+}
+
+fn build_list_path(params: &ListTaxRegistrationsParams) -> (String, Option<StripeError>) {
+    match to_form_params(params) {
+        Ok(mut pairs) => {
+            pairs.retain(|(k, _)| k != "limit" && k != "starting_after" && k != "ending_before");
+            let path = if pairs.is_empty() {
+                "v1/tax/registrations".to_string()
+            } else {
+                format!("v1/tax/registrations?{}", encode_form_pairs(&pairs))
+            };
+            (path, None)
+        }
+        Err(e) => ("v1/tax/registrations".to_string(), Some(e)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_list_propagates_connected_account_to_paginator() {
+        let client = StripeClient::new("sk_test_mock");
+        let params = ListTaxRegistrationsParams::default();
+
+        let platform = TaxRegistrationsResource::new(&client).list(&params);
+        assert_eq!(platform.stripe_account(), None);
+
+        let connected = TaxRegistrationsResource::new(&client)
+            .with_account("acct_connected_123")
+            .list(&params);
+        assert_eq!(connected.stripe_account(), Some("acct_connected_123"));
     }
 }
