@@ -9,7 +9,7 @@
 //! 1. The process environment (`std::env::var`), and
 //! 2. Standard dotenv files across the current and parent workspace directories in priority order:
 //!    `.env.local`, `.env.dev`, `.env.development`, `.env.test`, `.env.prod`, `.env.production`,
-//!    `.env`, `.env.example`, plus any other `.env.*` file in the directory.
+//!    `.env`, plus any other non-example `.env.*` file in the directory.
 
 use std::path::{Path, PathBuf};
 
@@ -22,7 +22,6 @@ pub const DOTENV_CANDIDATE_FILES: &[&str] = &[
     ".env.prod",
     ".env.production",
     ".env",
-    ".env.example",
 ];
 
 /// Extracts the environment variable name if `input` starts with `$` (e.g. `"$STRIPE_SECRET_KEY"`
@@ -70,7 +69,7 @@ fn is_valid_env_var_name(name: &str) -> bool {
 /// environment variable reference (`"$STRIPE_SECRET_KEY"` or `"${STRIPE_SECRET_KEY}"`).
 ///
 /// Searches `std::env::var` first, followed by `.env.local`, `.env.dev`, `.env.development`,
-/// `.env.test`, `.env.prod`, `.env.production`, `.env`, `.env.example`, and any custom `.env.*`
+/// `.env.test`, `.env.prod`, `.env.production`, `.env`, and any custom non-example `.env.*`
 /// files in the current working directory and up to 3 parent directories.
 #[must_use]
 pub fn resolve_env_secret(input: &str) -> String {
@@ -141,6 +140,9 @@ fn collect_custom_dotenv_files(dir: &Path) -> Vec<PathBuf> {
         let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
             continue;
         };
+        if name == ".env.example" || name.ends_with(".example") {
+            continue;
+        }
         if name.starts_with(".env") && !DOTENV_CANDIDATE_FILES.contains(&name) && path.is_file() {
             custom.push(path);
         }
@@ -158,23 +160,23 @@ fn lookup_var_in_file(path: &Path, target_key: &str) -> Option<String> {
 /// and inline `#` comments.
 #[must_use]
 pub fn parse_dotenv_for_key(content: &str, target_key: &str) -> Option<String> {
-    for raw_line in content.lines() {
-        let trimmed = raw_line.trim();
-        if trimmed.is_empty() || trimmed.starts_with('#') {
-            continue;
-        }
-        let line = trimmed.strip_prefix("export ").unwrap_or(trimmed).trim();
-        let Some((key_part, val_part)) = line.split_once('=') else {
-            continue;
-        };
-        if key_part.trim() == target_key {
-            let cleaned = clean_dotenv_value(val_part.trim());
-            if !cleaned.is_empty() {
-                return Some(cleaned);
-            }
-        }
+    content
+        .lines()
+        .find_map(|line| parse_dotenv_line(line, target_key))
+}
+
+fn parse_dotenv_line(raw_line: &str, target_key: &str) -> Option<String> {
+    let trimmed = raw_line.trim();
+    if trimmed.is_empty() || trimmed.starts_with('#') {
+        return None;
     }
-    None
+    let line = trimmed.strip_prefix("export ").unwrap_or(trimmed).trim();
+    let (key_part, val_part) = line.split_once('=')?;
+    if key_part.trim() != target_key {
+        return None;
+    }
+    let cleaned = clean_dotenv_value(val_part.trim());
+    (!cleaned.is_empty()).then_some(cleaned)
 }
 
 fn clean_dotenv_value(raw_val: &str) -> String {
@@ -186,4 +188,49 @@ fn clean_dotenv_value(raw_val: &str) -> String {
     }
     let without_comment = raw_val.split(" #").next().unwrap_or(raw_val).trim();
     without_comment.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_dotenv_candidates_exclude_env_example() {
+        assert!(!DOTENV_CANDIDATE_FILES.contains(&".env.example"));
+    }
+
+    #[test]
+    fn test_resolve_env_secret_from_dir_never_loads_env_example() {
+        let dir_name = format!("some_stripe_env_secret_test_{}", std::process::id());
+        let dir = std::env::temp_dir().join(dir_name);
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let example = dir.join(".env.example");
+        std::fs::write(&example, "STRIPE_SECRET_KEY=sk_example_placeholder\n").unwrap();
+
+        let unresolved = resolve_env_secret_from_dir("$STRIPE_SECRET_KEY", &dir);
+        assert_eq!(unresolved, "$STRIPE_SECRET_KEY");
+
+        std::fs::write(dir.join(".env"), "STRIPE_SECRET_KEY=sk_real_from_dotenv\n").unwrap();
+        let resolved = resolve_env_secret_from_dir("$STRIPE_SECRET_KEY", &dir);
+        assert_eq!(resolved, "sk_real_from_dotenv");
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn test_parse_dotenv_for_key_handles_export_quotes_and_comments() {
+        let content = concat!(
+            "# comment\n",
+            "export STRIPE_KEY = \"sk_test_quoted\"\n",
+            "OTHER=val # note\n",
+            "EMPTY=\n",
+        );
+        assert_eq!(
+            parse_dotenv_for_key(content, "STRIPE_KEY").as_deref(),
+            Some("sk_test_quoted"),
+        );
+        assert_eq!(parse_dotenv_for_key(content, "OTHER").as_deref(), Some("val"));
+        assert_eq!(parse_dotenv_for_key(content, "EMPTY"), None);
+    }
 }
