@@ -45,9 +45,9 @@ pub mod crypto;
 pub mod error;
 pub mod escalation;
 pub mod header;
+pub mod multi_v1_verifier;
 pub mod tolerance;
 pub mod v2_events;
-pub mod multi_v1_verifier;
 pub mod validation;
 
 pub use escalation::{
@@ -71,7 +71,8 @@ use hmac::digest::KeyInit;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
 use some_stripe_types::Event;
-pub use validation::{is_blank_webhook_secret, resolve_webhook_secret};
+use subtle::Choice;
+pub use validation::{is_blank_webhook_secret, resolve_webhook_secret, try_resolve_webhook_secret};
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -120,6 +121,31 @@ pub fn verify_stripe_signature(
     Webhook::verify_header(payload, signature_header, webhook_secret, None).unwrap_or(false)
 }
 
+fn validate_payload_bounds(payload: &[u8]) -> Result<(), StripeWebhookError> {
+    if payload.is_empty() {
+        return Err(StripeWebhookError::EmptyPayload);
+    }
+    if payload.len() > MAX_WEBHOOK_PAYLOAD_BYTES {
+        return Err(StripeWebhookError::PayloadTooLarge {
+            size: payload.len(),
+            max_allowed: MAX_WEBHOOK_PAYLOAD_BYTES,
+        });
+    }
+    Ok(())
+}
+
+fn match_any_signature(expected_signature: &str, candidates: &[&str]) -> bool {
+    let mut matched = Choice::from(0u8);
+    for sig in candidates {
+        let is_eq = u8::from(safe_constant_time_ascii_casecmp(
+            expected_signature.as_bytes(),
+            sig.as_bytes(),
+        ));
+        matched |= Choice::from(is_eq);
+    }
+    bool::from(matched)
+}
+
 /// Namespace providing static webhook helper functions modeled after `stripe.webhooks`.
 pub struct Webhook;
 
@@ -149,20 +175,12 @@ impl Webhook {
         secret: &str,
         config: &ToleranceConfig,
     ) -> Result<bool, StripeWebhookError> {
-        let resolved_secret = resolve_webhook_secret(secret);
-        let secret = resolved_secret.as_ref();
+        let resolved_secret = validation::try_resolve_webhook_secret(secret)?;
+        let secret = resolved_secret.as_str();
         if is_blank_webhook_secret(secret) {
             return Err(StripeWebhookError::BadKey);
         }
-        if payload.is_empty() {
-            return Err(StripeWebhookError::EmptyPayload);
-        }
-        if payload.len() > MAX_WEBHOOK_PAYLOAD_BYTES {
-            return Err(StripeWebhookError::PayloadTooLarge {
-                size: payload.len(),
-                max_allowed: MAX_WEBHOOK_PAYLOAD_BYTES,
-            });
-        }
+        validate_payload_bounds(payload)?;
 
         let parsed_header = parse_signature_header(header)?;
         let now = chrono::Utc::now().timestamp();
@@ -171,11 +189,7 @@ impl Webhook {
         let expected_signature =
             compute_streaming_hmac_hex(secret.as_bytes(), parsed_header.timestamp, payload)?;
 
-        let matched = parsed_header.signatures.iter().any(|sig| {
-            safe_constant_time_ascii_casecmp(expected_signature.as_bytes(), sig.as_bytes())
-        });
-
-        if matched {
+        if match_any_signature(&expected_signature, &parsed_header.signatures) {
             Ok(true)
         } else {
             Err(StripeWebhookError::BadSignature)
@@ -267,12 +281,27 @@ impl<'a> From<&'a StripeWebhookWrapper> for WebhookAuditRecord<'a> {
 }
 
 /// Ergonomic wrapper providing typed accessors over raw webhook [`Event`] instances.
-#[derive(Debug, Clone)]
+///
+/// Implements a manual [`std::fmt::Debug`] that redacts `event.data` as `"[REDACTED]"`
+/// while preserving non-sensitive metadata (`id`, `event_type`, `created`, `verified_at`).
+#[derive(Clone)]
 pub struct StripeWebhookWrapper {
     /// Parsed event object.
     pub event: Event,
     /// Timestamp at which the webhook was verified.
     pub verified_at: Option<i64>,
+}
+
+impl std::fmt::Debug for StripeWebhookWrapper {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("StripeWebhookWrapper")
+            .field("id", &self.event.id)
+            .field("event_type", &self.event.event_type)
+            .field("created", &self.event.created)
+            .field("verified_at", &self.verified_at)
+            .field("data", &"[REDACTED]")
+            .finish()
+    }
 }
 
 impl StripeWebhookWrapper {
@@ -472,6 +501,41 @@ mod tests {
         // Blank secret in verify_stripe_signature returns false
         assert!(!verify_stripe_signature(payload, header, ""));
         assert!(!verify_stripe_signature(payload, header, "   "));
+    }
+
+    #[test]
+    fn test_unresolved_env_var_secret_fails_closed_with_missing_secret() {
+        let now = chrono::Utc::now().timestamp();
+        let payload = b"{\"id\":\"evt_unset_var\"}";
+        let header = format!("t={now},v1={}", "a".repeat(64));
+
+        let err = Webhook::verify_header(payload, &header, "$SOME_STRIPE_UNSET_SECRET_F01", None)
+            .unwrap_err();
+        assert_eq!(err, StripeWebhookError::MissingSecret);
+    }
+
+    #[test]
+    fn test_stripe_webhook_wrapper_debug_redacts_event_data() {
+        let json = serde_json::json!({
+            "id": "evt_redact_001",
+            "object": "event",
+            "type": "payment_intent.succeeded",
+            "created": 1728345600,
+            "data": {
+                "object": {
+                    "id": "pi_123",
+                    "client_secret": "pi_secret_must_never_appear_in_debug"
+                }
+            }
+        });
+        let event: Event = serde_json::from_value(json).unwrap();
+        let wrapper = StripeWebhookWrapper::new(event, Some(1728345600));
+        let rendered = format!("{wrapper:?}");
+
+        assert!(rendered.contains("[REDACTED]"));
+        assert!(rendered.contains("evt_redact_001"));
+        assert!(rendered.contains("payment_intent.succeeded"));
+        assert!(!rendered.contains("pi_secret_must_never_appear_in_debug"));
     }
 
     #[test]
