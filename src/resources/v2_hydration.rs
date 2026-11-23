@@ -190,21 +190,17 @@ impl<'a> ThinEventHydrator<'a> {
         let current = self
             .mock_clock
             .unwrap_or_else(|| chrono::Utc::now().timestamp());
+        let drift = current.abs_diff(created);
 
-        if current > created {
-            let drift = (current - created) as u64;
-            if drift > self.tolerance_seconds {
-                return Err(HydrationError::StaleEventReplay {
-                    created,
-                    current,
-                    tolerance: self.tolerance_seconds,
-                });
-            }
-        } else if created > current {
-            let future_drift = (created - current) as u64;
-            if future_drift > self.tolerance_seconds {
-                return Err(HydrationError::FutureTimestamp { created, current });
-            }
+        if current > created && drift > self.tolerance_seconds {
+            return Err(HydrationError::StaleEventReplay {
+                created,
+                current,
+                tolerance: self.tolerance_seconds,
+            });
+        }
+        if created > current && drift > self.tolerance_seconds {
+            return Err(HydrationError::FutureTimestamp { created, current });
         }
 
         Ok(())
@@ -260,5 +256,26 @@ impl<'a> ThinEventHydrator<'a> {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_verify_timestamp_freshness_handles_extreme_i64_bounds() {
+        let client = StripeClient::new("sk_test_mock");
+        let hydrator = ThinEventHydrator::new(&client).with_clock_timestamp(1_700_000_000);
+
+        assert!(matches!(
+            hydrator.verify_timestamp_freshness(i64::MIN),
+            Err(HydrationError::StaleEventReplay { .. })
+        ));
+        assert!(matches!(
+            hydrator.verify_timestamp_freshness(i64::MAX),
+            Err(HydrationError::FutureTimestamp { .. })
+        ));
+        assert!(hydrator.verify_timestamp_freshness(1_700_000_000).is_ok());
     }
 }
