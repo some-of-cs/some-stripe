@@ -1068,7 +1068,7 @@ mod tests {
         let debug_output = format!("{card:?}");
         assert!(!debug_output.contains("4242424242424242"));
         assert!(!debug_output.contains("987"));
-        assert!(debug_output.contains("number: Some("[REDACTED]")"));
-        assert!(debug_output.contains("cvc: Some("[REDACTED]")"));
+        assert!(debug_output.contains(r#"number: Some("[REDACTED]")"#));
+        assert!(debug_output.contains(r#"cvc: Some("[REDACTED]")"#));
     }
 }
