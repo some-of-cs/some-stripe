@@ -920,9 +920,16 @@ impl std::error::Error for VerificationSessionParseError {}
 
 /// Checks if the URL uses an authorized protocol (HTTPS or local dev).
 fn is_allowed_protocol(url: &str) -> bool {
-    url.starts_with("https://")
-        || url.starts_with("http://localhost")
-        || url.starts_with("http://127.0.0.1")
+    if let Some(rest) = url.strip_prefix("https://") {
+        return !rest.is_empty() && !matches!(rest.as_bytes()[0], b'/' | b'?' | b'#' | b':');
+    }
+    let Some(rest) = url
+        .strip_prefix("http://localhost")
+        .or_else(|| url.strip_prefix("http://127.0.0.1"))
+    else {
+        return false;
+    };
+    rest.is_empty() || matches!(rest.as_bytes()[0], b':' | b'/' | b'?' | b'#')
 }
 
 /// Checks if the URL contains forbidden client-side scripting schemes.
@@ -1169,8 +1176,11 @@ mod tests {
         assert!(validate_identity_url("http://localhost:3000/callback").is_ok());
         assert!(validate_identity_url("http://127.0.0.1:8080/callback").is_ok());
 
-        // Insecure HTTP
+        // Insecure HTTP and localhost spoofing
         assert!(validate_identity_url("http://insecure.com/callback").is_err());
+        assert!(validate_identity_url("http://localhost.evil.com/callback").is_err());
+        assert!(validate_identity_url("http://127.0.0.1.evil.com/callback").is_err());
+        assert!(validate_identity_url("https://").is_err());
         // Empty
         assert!(validate_identity_url("").is_err());
         // Malicious schemes
