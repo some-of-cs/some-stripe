@@ -102,11 +102,12 @@ struct ThinEventProbe<'a> {
 /// a full DOM representation with `serde_json::Value`.
 ///
 /// Returns `true` if:
+/// - The payload is non-empty and within [`crate::constants::MAX_WEBHOOK_PAYLOAD_BYTES`],
 /// - The root JSON is an object,
 /// - The root `object` starts with `"v2."` (e.g. `"v2.core.event"`), OR contains a `"related_object"` key,
 /// - And the root object does NOT contain a v1 `"data"` object.
 ///
-/// Returns `false` for v1 event payloads, non-object JSON, or invalid JSON byte slices.
+/// Returns `false` for empty, oversized, v1 event, non-object JSON, or invalid JSON byte slices.
 ///
 /// # Example
 ///
@@ -120,12 +121,15 @@ struct ThinEventProbe<'a> {
 /// assert!(!is_thin_event(v1_payload));
 /// ```
 pub fn is_thin_event(payload: &[u8]) -> bool {
+    if payload.is_empty() || payload.len() > crate::constants::MAX_WEBHOOK_PAYLOAD_BYTES {
+        return false;
+    }
     let Ok(probe) = serde_json::from_slice::<ThinEventProbe<'_>>(payload) else {
         return false;
     };
 
     let has_related_object = probe.related_object.is_some();
-    let is_v2_object = probe.object.map(|s| s.starts_with("v2.")).unwrap_or(false);
+    let is_v2_object = probe.object.is_some_and(|s| s.starts_with("v2."));
 
     (has_related_object || is_v2_object) && probe.data.is_none()
 }
@@ -237,5 +241,11 @@ mod tests {
         assert!(!is_thin_event(b"not json"));
         assert!(!is_thin_event(b""));
         assert!(!is_thin_event(b"[]"));
+    }
+
+    #[test]
+    fn test_is_thin_event_rejects_oversized_payload() {
+        let oversized = vec![b' '; crate::constants::MAX_WEBHOOK_PAYLOAD_BYTES + 1];
+        assert!(!is_thin_event(&oversized));
     }
 }
