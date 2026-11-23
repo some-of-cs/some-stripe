@@ -58,8 +58,7 @@ STRIPE_SECRET_KEY=sk_test_from_example
     // 2. .env overrides .env.example
     fs::write(
         dir.join(".env"),
-        "STRIPE_SECRET_KEY="sk_test_from_dotenv"
-",
+        "STRIPE_SECRET_KEY=\"sk_test_from_dotenv\"\n",
     )
     .unwrap();
     assert_eq!(
