@@ -198,11 +198,17 @@ impl OmnibusTaxBreakdown {
             )));
         }
 
+        let amount_128 = i128::from(amount);
+        let rate_128 = i128::from(tax_rate_basis_points);
+
         match tax_behavior {
             TaxBehavior::Inclusive => {
                 let gross_amount = amount;
-                let divisor = 10_000i64 + tax_rate_basis_points as i64;
-                let net_amount = (gross_amount * 10_000 + divisor / 2) / divisor;
+                let divisor = 10_000_i128 + rate_128;
+                let net_128 = (amount_128 * 10_000_i128 + divisor / 2) / divisor;
+                let net_amount = i64::try_from(net_128).map_err(|_| {
+                    OmnibusPriceError::InvalidRequest("Calculated net amount overflowed i64".into())
+                })?;
                 let tax_amount = gross_amount - net_amount;
                 Ok(Self {
                     tax_behavior,
@@ -214,8 +220,16 @@ impl OmnibusTaxBreakdown {
             }
             TaxBehavior::Exclusive => {
                 let net_amount = amount;
-                let tax_amount = (net_amount * (tax_rate_basis_points as i64) + 5_000) / 10_000;
-                let gross_amount = net_amount + tax_amount;
+                let tax_128 = (amount_128 * rate_128 + 5_000_i128) / 10_000_i128;
+                let gross_128 = amount_128 + tax_128;
+                let tax_amount = i64::try_from(tax_128).map_err(|_| {
+                    OmnibusPriceError::InvalidRequest("Calculated tax amount overflowed i64".into())
+                })?;
+                let gross_amount = i64::try_from(gross_128).map_err(|_| {
+                    OmnibusPriceError::InvalidRequest(
+                        "Calculated gross amount overflowed i64".into(),
+                    )
+                })?;
                 Ok(Self {
                     tax_behavior,
                     net_amount,
