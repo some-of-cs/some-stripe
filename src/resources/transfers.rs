@@ -1,6 +1,6 @@
 //! Stripe Transfers resource implementations.
 
-use some_stripe_core::patterns::serializer::to_form_params;
+use some_stripe_core::patterns::serializer::{percent_encode, to_form_params};
 use some_stripe_core::{StripeClient, StripeError, validate_and_encode_id};
 use some_stripe_types::{
     CreateTransferParams, CreateTransferReversalParams, ListTransferReversalsParams,
@@ -158,12 +158,8 @@ impl<'a> TransfersResource<'a> {
         }
 
         if !query_params.is_empty() {
-            let encoded: Vec<String> = query_params
-                .iter()
-                .map(|(k, v)| format!("{k}={v}"))
-                .collect();
             url.push('?');
-            url.push_str(&encoded.join("&"));
+            url.push_str(&encode_query_pairs(&query_params));
         }
 
         let mut req = self.client.http.get(&url);
@@ -201,12 +197,8 @@ impl<'a> TransfersResource<'a> {
         }
 
         if !query_params.is_empty() {
-            let encoded_params: Vec<String> = query_params
-                .iter()
-                .map(|(k, v)| format!("{k}={v}"))
-                .collect();
             url.push('?');
-            url.push_str(&encoded_params.join("&"));
+            url.push_str(&encode_query_pairs(&query_params));
         }
 
         let mut req = self.client.http.get(&url);
@@ -216,5 +208,30 @@ impl<'a> TransfersResource<'a> {
         let val = self.client.execute(req).await?;
         let list: TransferReversalList = serde_json::from_value(val)?;
         Ok(list)
+    }
+}
+
+fn encode_query_pairs(pairs: &[(&str, &str)]) -> String {
+    pairs
+        .iter()
+        .map(|(k, v)| format!("{}={}", percent_encode(k), percent_encode(v)))
+        .collect::<Vec<_>>()
+        .join("&")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_encode_query_pairs_percent_encodes_reserved_chars() {
+        let encoded = encode_query_pairs(&[
+            ("transfer_group", "ord&limit=100#frag%20"),
+            ("destination", "acct_1=2"),
+        ]);
+        assert_eq!(
+            encoded,
+            "transfer_group=ord%26limit%3D100%23frag%2520&destination=acct_1%3D2"
+        );
     }
 }
