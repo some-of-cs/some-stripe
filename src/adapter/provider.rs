@@ -215,6 +215,22 @@ impl fmt::Debug for StripeProvider {
     }
 }
 
+fn validate_api_key_header(api_key: &SecretKey) -> Result<(), PaymentError> {
+    let raw = api_key.expose_secret();
+    if raw.trim().is_empty() {
+        return Err(PaymentError::configuration("Stripe api_key must not be empty"));
+    }
+    let mut bearer = format!("Bearer {raw}");
+    let header_result = reqwest::header::HeaderValue::from_str(&bearer);
+    zeroize::Zeroize::zeroize(&mut bearer);
+    header_result.map_err(|_| {
+        PaymentError::configuration(
+            "Stripe api_key contains invalid HTTP Authorization header bytes",
+        )
+    })?;
+    Ok(())
+}
+
 impl StripeProvider {
     /// Validates `config` and constructs a new [`StripeProvider`].
     ///
@@ -225,11 +241,7 @@ impl StripeProvider {
     /// is empty, `webhook_tolerance_secs` is negative, or the default HTTP
     /// client fails to initialize.
     pub fn new(config: StripeProviderConfig) -> Result<Self, PaymentError> {
-        if config.api_key.expose_secret().trim().is_empty() {
-            return Err(PaymentError::configuration(
-                "Stripe api_key must not be empty",
-            ));
-        }
+        validate_api_key_header(&config.api_key)?;
         let api_base = validate_core_api_base(&config.api_base)
             .map_err(|err| PaymentError::configuration(err.to_string()))?;
         let stripe_version = StripeVersion::try_new(&config.stripe_version)
@@ -241,10 +253,7 @@ impl StripeProvider {
                 "Stripe webhook_tolerance_secs must be non-negative",
             ));
         }
-        let http_client = match config.http_client {
-            Some(client) => client,
-            None => build_default_http_client()?,
-        };
+        let http_client = config.http_client.map_or_else(build_default_http_client, Ok)?;
         Ok(Self {
             provider_id: stripe_provider_id(),
             http_client,
@@ -724,6 +733,8 @@ mod tests {
     fn provider_new_rejects_invalid_configuration() {
         let invalid_configs = [
             StripeProviderConfig::new("   "),
+            StripeProviderConfig::new("sk_test_123\r\nX-Inject: 1"),
+            StripeProviderConfig::new("sk_test_123\0null"),
             StripeProviderConfig::new("sk_test_123").with_api_base("ftp://api.stripe.com"),
             StripeProviderConfig::new("sk_test_123").with_api_base("http://api.stripe.com"),
             StripeProviderConfig::new("sk_test_123")

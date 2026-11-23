@@ -40,18 +40,29 @@ pub struct ReqwestTransport {
 }
 
 impl ReqwestTransport {
-    /// Creates a new `ReqwestTransport` with default connection pooling and timeouts.
-    pub fn new(timeout: Duration) -> Self {
+    /// Creates a new `ReqwestTransport` with default connection pooling, timeouts,
+    /// and a strict `Policy::none()` redirect policy.
+    ///
+    /// # Errors
+    /// Returns [`StripeError::Http`] if the underlying `reqwest::Client` fails to initialize.
+    pub fn try_new(timeout: Duration) -> Result<Self, StripeError> {
         let client = reqwest::Client::builder()
             .timeout(timeout)
             .pool_idle_timeout(Duration::from_secs(90))
             .pool_max_idle_per_host(32)
             .tcp_keepalive(Duration::from_secs(60))
             .redirect(reqwest::redirect::Policy::none())
-            .build()
-            .unwrap_or_default();
+            .build()?;
 
-        Self { client }
+        Ok(Self { client })
+    }
+
+    /// Creates a new `ReqwestTransport` with default connection pooling and timeouts.
+    ///
+    /// # Panics
+    /// Panics if the hardened `reqwest::Client` cannot be constructed.
+    pub fn new(timeout: Duration) -> Self {
+        Self::try_new(timeout).expect("failed to construct hardened ReqwestTransport client")
     }
 
     /// Access the underlying `reqwest::Client`.
@@ -141,5 +152,14 @@ mod tests {
             assert!(delay <= Duration::from_millis(capped));
             assert!(delay >= Duration::from_millis(capped / 2));
         }
+    }
+
+    #[test]
+    fn test_reqwest_transport_try_new_and_new_succeed() {
+        let transport = ReqwestTransport::try_new(Duration::from_secs(15))
+            .expect("try_new should construct hardened transport");
+        assert!(transport.inner().get("https://api.stripe.com/v1/charges").build().is_ok());
+        let fallback_free = ReqwestTransport::new(Duration::from_secs(15));
+        assert!(fallback_free.inner().get("https://api.stripe.com/v1/charges").build().is_ok());
     }
 }

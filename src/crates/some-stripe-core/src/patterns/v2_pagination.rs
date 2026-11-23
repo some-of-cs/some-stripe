@@ -56,15 +56,12 @@ pub fn resolve_v2_url(api_base: &str, next_url: &str) -> String {
     let clean_base = api_base.trim_end_matches('/');
     let trimmed = next_url.trim();
 
-    if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
-        if let Some(pos) = trimmed.find("://") {
-            let after_scheme = &trimmed[pos + 3..];
-            if let Some(slash_idx) = after_scheme.find('/') {
-                let path_and_query = &after_scheme[slash_idx..];
-                return format!("{clean_base}{path_and_query}");
-            }
-        }
-        return format!("{clean_base}/");
+    if let Ok(parsed) = reqwest::Url::parse(trimmed) {
+        let path = parsed.path();
+        return match parsed.query() {
+            Some(query) => format!("{clean_base}{path}?{query}"),
+            None => format!("{clean_base}{path}"),
+        };
     }
 
     if trimmed.starts_with('/') {
@@ -464,6 +461,14 @@ mod tests {
         assert_eq!(
             resolve_v2_url("https://api.stripe.com", "http://foreign-host"),
             "https://api.stripe.com/"
+        );
+        assert_eq!(
+            resolve_v2_url("https://api.stripe.com", "https://api.stripe.com?page=2"),
+            "https://api.stripe.com/?page=2"
+        );
+        assert_eq!(
+            resolve_v2_url("http://127.0.0.1:9090", "https://api.stripe.com?page=2"),
+            "http://127.0.0.1:9090/?page=2"
         );
     }
 

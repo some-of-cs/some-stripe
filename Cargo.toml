@@ -27,15 +27,14 @@ some-payment-adapter = ["dep:some-payment-core"]
 
 [dependencies]
 some-payment-core = { git = "https://github.com/some-of-cs/some-payment", rev = "b8e2ca4de3ec5f78afef4d368798738ad7afbcba", package = "some-payment-core", optional = true }
-some-stripe-core = { path = "src/crates/some-stripe-core" }
-some-stripe-types = { path = "src/crates/some-stripe-types" }
-some-stripe-webhooks = { path = "src/crates/some-stripe-webhooks" }
+some-stripe-core = { version = "0.9.0", path = "src/crates/some-stripe-core" }
+some-stripe-types = { version = "0.9.0", path = "src/crates/some-stripe-types" }
+some-stripe-webhooks = { version = "0.9.0", path = "src/crates/some-stripe-webhooks" }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = { version = "1.0.154", features = ["arbitrary_precision"] }
 sha2 = "0.11.1"
 async-trait = "0.1.92"
 thiserror = "2.0.21"
-openssl = { version = "0.10.82", features = ["vendored"] }
 reqwest = { version = "0.13.5", default-features = false, features = ["rustls", "json", "form"] }
 chrono = { version = "0.4.45", features = ["serde"] }
 zeroize = { version = "1.9.1", features = ["derive"] }
