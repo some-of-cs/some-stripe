@@ -406,21 +406,31 @@ pub enum TaxRegistrationType {
     Custom(String),
 }
 
+const KNOWN_TAX_REGISTRATION_TYPES: &[(TaxRegistrationType, &str)] = &[
+    (TaxRegistrationType::Standard, "standard"),
+    (TaxRegistrationType::Simplified, "simplified"),
+    (TaxRegistrationType::OssUnion, "oss_union"),
+    (TaxRegistrationType::OssNonUnion, "oss_non_union"),
+    (TaxRegistrationType::Ioss, "ioss"),
+    (TaxRegistrationType::StateSalesTax, "state_sales_tax"),
+    (TaxRegistrationType::LocalAmusementTax, "local_amusement_tax"),
+    (TaxRegistrationType::LocalLeaseTax, "local_lease_tax"),
+    (
+        TaxRegistrationType::LocalCommunicationsTax,
+        "local_communications_tax",
+    ),
+];
+
 impl TaxRegistrationType {
     /// Returns the string representation of this registration type.
     pub fn as_str(&self) -> &str {
-        match self {
-            Self::Standard => "standard",
-            Self::Simplified => "simplified",
-            Self::OssUnion => "oss_union",
-            Self::OssNonUnion => "oss_non_union",
-            Self::Ioss => "ioss",
-            Self::StateSalesTax => "state_sales_tax",
-            Self::LocalAmusementTax => "local_amusement_tax",
-            Self::LocalLeaseTax => "local_lease_tax",
-            Self::LocalCommunicationsTax => "local_communications_tax",
-            Self::Custom(s) => s.as_str(),
+        if let Self::Custom(s) = self {
+            return s.as_str();
         }
+        KNOWN_TAX_REGISTRATION_TYPES
+            .iter()
+            .find(|(variant, _)| variant == self)
+            .map_or("", |(_, name)| name)
     }
 }
 
@@ -434,18 +444,11 @@ impl std::str::FromStr for TaxRegistrationType {
     type Err = std::convert::Infallible;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "standard" => Ok(Self::Standard),
-            "simplified" => Ok(Self::Simplified),
-            "oss_union" => Ok(Self::OssUnion),
-            "oss_non_union" => Ok(Self::OssNonUnion),
-            "ioss" => Ok(Self::Ioss),
-            "state_sales_tax" => Ok(Self::StateSalesTax),
-            "local_amusement_tax" => Ok(Self::LocalAmusementTax),
-            "local_lease_tax" => Ok(Self::LocalLeaseTax),
-            "local_communications_tax" => Ok(Self::LocalCommunicationsTax),
-            other => Ok(Self::Custom(other.to_string())),
-        }
+        let matched = KNOWN_TAX_REGISTRATION_TYPES
+            .iter()
+            .find(|(_, name)| *name == s)
+            .map(|(variant, _)| variant.clone());
+        Ok(matched.unwrap_or_else(|| Self::Custom(s.to_string())))
     }
 }
 

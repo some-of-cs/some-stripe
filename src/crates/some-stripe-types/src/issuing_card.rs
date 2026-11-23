@@ -634,7 +634,7 @@ impl PartialEq<&str> for IssuingCardholderReference {
 /// assert_eq!(card.status, IssuingCardStatus::Active);
 /// assert!(card.is_pan_isolated());
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct IssuingCard {
     /// Unique identifier for the Issuing card.
     pub id: String,
@@ -703,6 +703,48 @@ pub struct IssuingCard {
 
 fn default_issuing_card_object() -> String {
     "issuing.card".to_string()
+}
+
+impl fmt::Debug for IssuingCard {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("IssuingCard")
+            .field("id", &self.id)
+            .field("object", &self.object)
+            .field("brand", &self.brand)
+            .field("cancellation_reason", &self.cancellation_reason)
+            .field("cardholder", &self.cardholder)
+            .field("created", &self.created)
+            .field("currency", &self.currency)
+            .field("cvc", &self.cvc.as_ref().map(|_| "[REDACTED]"))
+            .field("exp_month", &self.exp_month)
+            .field("exp_year", &self.exp_year)
+            .field("financial_account", &self.financial_account)
+            .field("last4", &self.last4)
+            .field("livemode", &self.livemode)
+            .field("metadata", &self.metadata)
+            .field("number", &self.number.as_ref().map(|_| "[REDACTED]"))
+            .field("personalization_design", &self.personalization_design)
+            .field("replaced_by", &self.replaced_by)
+            .field("replacement_for", &self.replacement_for)
+            .field("replacement_reason", &self.replacement_reason)
+            .field("shipping", &self.shipping)
+            .field("spending_controls", &self.spending_controls)
+            .field("status", &self.status)
+            .field("type", &self.r#type)
+            .field("wallets", &self.wallets)
+            .finish()
+    }
+}
+
+impl Drop for IssuingCard {
+    fn drop(&mut self) {
+        if let Some(ref mut number) = self.number {
+            zeroize::Zeroize::zeroize(number);
+        }
+        if let Some(ref mut cvc) = self.cvc {
+            zeroize::Zeroize::zeroize(cvc);
+        }
+    }
 }
 
 impl IssuingCard {
@@ -992,5 +1034,41 @@ mod tests {
         let json = serde_json::to_string(&card).unwrap();
         let parsed: IssuingCard = serde_json::from_str(&json).unwrap();
         assert_eq!(card, parsed);
+    }
+
+    #[test]
+    fn test_card_debug_redacts_number_and_cvc() {
+        let card = IssuingCard {
+            id: "ic_redact".into(),
+            object: "issuing.card".into(),
+            brand: "Visa".into(),
+            cancellation_reason: None,
+            cardholder: None,
+            created: 1700000000,
+            currency: "usd".into(),
+            cvc: Some("987".into()),
+            exp_month: 12,
+            exp_year: 2029,
+            financial_account: None,
+            last4: "4242".into(),
+            livemode: false,
+            metadata: None,
+            number: Some("4242424242424242".into()),
+            personalization_design: None,
+            replaced_by: None,
+            replacement_for: None,
+            replacement_reason: None,
+            shipping: None,
+            spending_controls: None,
+            status: IssuingCardStatus::Active,
+            r#type: IssuingCardType::Virtual,
+            wallets: None,
+        };
+
+        let debug_output = format!("{card:?}");
+        assert!(!debug_output.contains("4242424242424242"));
+        assert!(!debug_output.contains("987"));
+        assert!(debug_output.contains("number: Some("[REDACTED]")"));
+        assert!(debug_output.contains("cvc: Some("[REDACTED]")"));
     }
 }

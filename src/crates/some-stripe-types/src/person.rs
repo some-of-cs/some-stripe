@@ -1120,39 +1120,8 @@ impl CreatePersonParams {
 
     /// Validates parameter bounds and constraints before submission.
     pub fn validate(&self) -> Result<(), KycComplianceError> {
-        if let Some(rel) = &self.relationship
-            && let Some(pct) = rel.percent_ownership
-            && !(0.0..=100.0).contains(&pct)
-        {
-            return Err(KycComplianceError::InvalidOwnershipPercentage {
-                percentage: pct.to_string(),
-                reason: "Ownership percentage must be between 0.0 and 100.0%",
-            });
-        }
-        if let Some(dob) = &self.dob {
-            if let Some(m) = dob.month
-                && !(1..=12).contains(&m)
-            {
-                return Err(KycComplianceError::InvalidDateOfBirth {
-                    reason: "Month must be between 1 and 12",
-                });
-            }
-            if let Some(d) = dob.day
-                && !(1..=31).contains(&d)
-            {
-                return Err(KycComplianceError::InvalidDateOfBirth {
-                    reason: "Day must be between 1 and 31",
-                });
-            }
-            if let Some(y) = dob.year
-                && !(1900..=2100).contains(&y)
-            {
-                return Err(KycComplianceError::InvalidDateOfBirth {
-                    reason: "Year must be between 1900 and 2100",
-                });
-            }
-        }
-        Ok(())
+        validate_person_relationship(self.relationship.as_ref())?;
+        validate_person_dob(self.dob.as_ref())
     }
 }
 
@@ -1470,39 +1439,8 @@ impl UpdatePersonParams {
 
     /// Validates parameter bounds and constraints before submission.
     pub fn validate(&self) -> Result<(), KycComplianceError> {
-        if let Some(rel) = &self.relationship
-            && let Some(pct) = rel.percent_ownership
-            && !(0.0..=100.0).contains(&pct)
-        {
-            return Err(KycComplianceError::InvalidOwnershipPercentage {
-                percentage: pct.to_string(),
-                reason: "Ownership percentage must be between 0.0 and 100.0%",
-            });
-        }
-        if let Some(dob) = &self.dob {
-            if let Some(m) = dob.month
-                && !(1..=12).contains(&m)
-            {
-                return Err(KycComplianceError::InvalidDateOfBirth {
-                    reason: "Month must be between 1 and 12",
-                });
-            }
-            if let Some(d) = dob.day
-                && !(1..=31).contains(&d)
-            {
-                return Err(KycComplianceError::InvalidDateOfBirth {
-                    reason: "Day must be between 1 and 31",
-                });
-            }
-            if let Some(y) = dob.year
-                && !(1900..=2100).contains(&y)
-            {
-                return Err(KycComplianceError::InvalidDateOfBirth {
-                    reason: "Year must be between 1900 and 2100",
-                });
-            }
-        }
-        Ok(())
+        validate_person_relationship(self.relationship.as_ref())?;
+        validate_person_dob(self.dob.as_ref())
     }
 }
 
@@ -1588,4 +1526,41 @@ pub struct DeletedPerson {
 /// Function for paginator ID extraction.
 pub fn person_id(person: &Person) -> &str {
     person.id.as_str()
+}
+
+fn validate_person_relationship(
+    relationship: Option<&PersonRelationship>,
+) -> Result<(), KycComplianceError> {
+    if let Some(rel) = relationship
+        && let Some(pct) = rel.percent_ownership
+        && (!pct.is_finite() || !(0.0..=100.0).contains(&pct))
+    {
+        return Err(KycComplianceError::InvalidOwnershipPercentage {
+            percentage: pct.to_string(),
+            reason: "Ownership percentage must be between 0.0 and 100.0%",
+        });
+    }
+    Ok(())
+}
+
+fn validate_person_dob(dob: Option<&PersonDob>) -> Result<(), KycComplianceError> {
+    let Some(dob) = dob else {
+        return Ok(());
+    };
+    if dob.month.is_some_and(|m| !(1..=12).contains(&m)) {
+        return Err(KycComplianceError::InvalidDateOfBirth {
+            reason: "Month must be between 1 and 12",
+        });
+    }
+    if dob.day.is_some_and(|d| !(1..=31).contains(&d)) {
+        return Err(KycComplianceError::InvalidDateOfBirth {
+            reason: "Day must be between 1 and 31",
+        });
+    }
+    if dob.year.is_some_and(|y| !(1900..=2100).contains(&y)) {
+        return Err(KycComplianceError::InvalidDateOfBirth {
+            reason: "Year must be between 1900 and 2100",
+        });
+    }
+    Ok(())
 }

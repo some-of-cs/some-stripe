@@ -730,39 +730,59 @@ impl AccountSessionComponents {
         self
     }
 
+    fn component_states(&self) -> [(&'static str, bool); 11] {
+        [
+            (
+                "account_onboarding",
+                self.account_onboarding.as_ref().is_some_and(|c| c.enabled),
+            ),
+            (
+                "account_management",
+                self.account_management.as_ref().is_some_and(|c| c.enabled),
+            ),
+            ("balances", self.balances.as_ref().is_some_and(|c| c.enabled)),
+            (
+                "documents",
+                self.documents.as_ref().is_some_and(|c| c.enabled),
+            ),
+            (
+                "notification_banner",
+                self.notification_banner.as_ref().is_some_and(|c| c.enabled),
+            ),
+            (
+                "payment_details",
+                self.payment_details.as_ref().is_some_and(|c| c.enabled),
+            ),
+            ("payments", self.payments.as_ref().is_some_and(|c| c.enabled)),
+            ("payouts", self.payouts.as_ref().is_some_and(|c| c.enabled)),
+            (
+                "payouts_list",
+                self.payouts_list.as_ref().is_some_and(|c| c.enabled),
+            ),
+            (
+                "tax_registrations",
+                self.tax_registrations.as_ref().is_some_and(|c| c.enabled),
+            ),
+            (
+                "tax_settings",
+                self.tax_settings.as_ref().is_some_and(|c| c.enabled),
+            ),
+        ]
+    }
+
     /// Returns `true` if any component in this structure is enabled.
     #[must_use]
     pub fn has_any_enabled(&self) -> bool {
-        self.account_onboarding.as_ref().is_some_and(|c| c.enabled)
-            || self.account_management.as_ref().is_some_and(|c| c.enabled)
-            || self.balances.as_ref().is_some_and(|c| c.enabled)
-            || self.documents.as_ref().is_some_and(|c| c.enabled)
-            || self.notification_banner.as_ref().is_some_and(|c| c.enabled)
-            || self.payment_details.as_ref().is_some_and(|c| c.enabled)
-            || self.payments.as_ref().is_some_and(|c| c.enabled)
-            || self.payouts.as_ref().is_some_and(|c| c.enabled)
-            || self.payouts_list.as_ref().is_some_and(|c| c.enabled)
-            || self.tax_registrations.as_ref().is_some_and(|c| c.enabled)
-            || self.tax_settings.as_ref().is_some_and(|c| c.enabled)
+        self.component_states().iter().any(|&(_, enabled)| enabled)
     }
 
     /// Returns `true` if the specified component name is enabled.
     #[must_use]
     pub fn is_component_enabled(&self, name: &str) -> bool {
-        match name {
-            "account_onboarding" => self.account_onboarding.as_ref().is_some_and(|c| c.enabled),
-            "account_management" => self.account_management.as_ref().is_some_and(|c| c.enabled),
-            "balances" => self.balances.as_ref().is_some_and(|c| c.enabled),
-            "documents" => self.documents.as_ref().is_some_and(|c| c.enabled),
-            "notification_banner" => self.notification_banner.as_ref().is_some_and(|c| c.enabled),
-            "payment_details" => self.payment_details.as_ref().is_some_and(|c| c.enabled),
-            "payments" => self.payments.as_ref().is_some_and(|c| c.enabled),
-            "payouts" => self.payouts.as_ref().is_some_and(|c| c.enabled),
-            "payouts_list" => self.payouts_list.as_ref().is_some_and(|c| c.enabled),
-            "tax_registrations" => self.tax_registrations.as_ref().is_some_and(|c| c.enabled),
-            "tax_settings" => self.tax_settings.as_ref().is_some_and(|c| c.enabled),
-            _ => false,
-        }
+        self.component_states()
+            .iter()
+            .find(|&&(key, _)| key == name)
+            .is_some_and(|&(_, enabled)| enabled)
     }
 }
 

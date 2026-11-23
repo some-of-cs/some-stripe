@@ -1261,36 +1261,13 @@ impl CreateCheckoutSessionParams {
     /// assert!(invalid.validate().is_err());
     /// ```
     pub fn validate(&self) -> Result<(), PaymentIntentValidationError> {
-        if self.success_url.trim().is_empty() {
-            return Err(PaymentIntentValidationError::InvalidParameter {
-                field: "success_url",
-                reason: "success_url cannot be empty".to_string(),
-            });
+        validate_checkout_url(&self.success_url, "success_url")?;
+        if let Some(ref cancel_url) = self.cancel_url {
+            validate_checkout_url(cancel_url, "cancel_url")?;
         }
-
         if let Some(ref items) = self.line_items {
-            for item in items {
-                if item.quantity == Some(0) {
-                    return Err(PaymentIntentValidationError::InvalidParameter {
-                        field: "line_items.quantity",
-                        reason: "line item quantity must be greater than 0".to_string(),
-                    });
-                }
-                if let Some(ref price_data) = item.price_data {
-                    validate_currency(&price_data.currency)?;
-                    if let Some(amt) = price_data.unit_amount {
-                        validate_amount(amt)?;
-                    }
-                    if price_data.product_data.name.trim().is_empty() {
-                        return Err(PaymentIntentValidationError::InvalidParameter {
-                            field: "product_data.name",
-                            reason: "product name cannot be empty".to_string(),
-                        });
-                    }
-                }
-            }
+            items.iter().try_for_each(validate_checkout_line_item)?;
         }
-
         if let Some(ref curr) = self.currency {
             validate_currency(curr)?;
         }
@@ -1306,6 +1283,50 @@ impl CreateCheckoutSessionParams {
 
         Ok(())
     }
+}
+
+fn validate_checkout_url(
+    url: &str,
+    field: &'static str,
+) -> Result<(), PaymentIntentValidationError> {
+    let trimmed = url.trim();
+    if trimmed.is_empty() {
+        return Err(PaymentIntentValidationError::InvalidParameter {
+            field,
+            reason: format!("{field} cannot be empty"),
+        });
+    }
+    let lower = trimmed.to_ascii_lowercase();
+    if lower.starts_with("javascript:") || url.chars().any(char::is_control) {
+        return Err(PaymentIntentValidationError::InvalidParameter {
+            field,
+            reason: format!("{field} contains forbidden scheme or control characters"),
+        });
+    }
+    Ok(())
+}
+
+fn validate_checkout_line_item(item: &LineItemParams) -> Result<(), PaymentIntentValidationError> {
+    if item.quantity == Some(0) {
+        return Err(PaymentIntentValidationError::InvalidParameter {
+            field: "line_items.quantity",
+            reason: "line item quantity must be greater than 0".to_string(),
+        });
+    }
+    let Some(ref price_data) = item.price_data else {
+        return Ok(());
+    };
+    validate_currency(&price_data.currency)?;
+    if let Some(amt) = price_data.unit_amount {
+        validate_amount(amt)?;
+    }
+    if price_data.product_data.name.trim().is_empty() {
+        return Err(PaymentIntentValidationError::InvalidParameter {
+            field: "product_data.name",
+            reason: "product name cannot be empty".to_string(),
+        });
+    }
+    Ok(())
 }
 
 /// Query parameters for listing line items of a Checkout Session (`GET /v1/checkout/sessions/{id}/line_items`).
