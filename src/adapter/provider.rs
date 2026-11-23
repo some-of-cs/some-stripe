@@ -218,7 +218,9 @@ impl fmt::Debug for StripeProvider {
 fn validate_api_key_header(api_key: &SecretKey) -> Result<(), PaymentError> {
     let raw = api_key.expose_secret();
     if raw.trim().is_empty() {
-        return Err(PaymentError::configuration("Stripe api_key must not be empty"));
+        return Err(PaymentError::configuration(
+            "Stripe api_key must not be empty",
+        ));
     }
     let mut bearer = format!("Bearer {raw}");
     let header_result = reqwest::header::HeaderValue::from_str(&bearer);
@@ -253,7 +255,9 @@ impl StripeProvider {
                 "Stripe webhook_tolerance_secs must be non-negative",
             ));
         }
-        let http_client = config.http_client.map_or_else(build_default_http_client, Ok)?;
+        let http_client = config
+            .http_client
+            .map_or_else(build_default_http_client, Ok)?;
         Ok(Self {
             provider_id: stripe_provider_id(),
             http_client,
