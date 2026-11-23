@@ -4,7 +4,16 @@
 //! in constant time to prevent attackers from inferring valid signature bytes
 //! through execution timing variance.
 
-use subtle::ConstantTimeEq;
+use subtle::{Choice, ConstantTimeEq};
+
+/// Branchlessly converts an ASCII uppercase byte (`b'A'..=b'Z'`) to lowercase (`b'a'..=b'z'`).
+#[inline]
+pub(crate) fn ct_ascii_to_lower(b: u8) -> u8 {
+    let ge_a = b.wrapping_sub(b'A');
+    let le_z = b'Z'.wrapping_sub(b);
+    let is_upper_mask = !((ge_a | le_z) >> 7) & 1;
+    b | (is_upper_mask << 5)
+}
 
 /// Compares two byte slices in constant time (Gate G2 Invariant 1).
 ///
@@ -35,8 +44,9 @@ pub fn safe_constant_time_eq(a: &[u8], b: &[u8]) -> bool {
 
 /// Compares two byte slices case-insensitively in constant time without heap allocations (Gate G2 / Gate G-Borrow).
 ///
-/// Converts ASCII characters to lowercase on-the-fly and accumulates bitwise XOR differences
-/// in constant time. Avoids allocating intermediate heap [`String`] instances on ingress.
+/// Branchlessly normalizes ASCII uppercase bytes to lowercase on-the-fly and accumulates
+/// [`subtle::ConstantTimeEq`] comparisons into a [`subtle::Choice`] without early exits.
+/// Avoids allocating intermediate heap [`String`] instances on ingress.
 ///
 /// # Examples
 ///
@@ -52,11 +62,11 @@ pub fn safe_constant_time_ascii_casecmp(a: &[u8], b: &[u8]) -> bool {
     if a.len() != b.len() {
         return false;
     }
-    let mut diff = 0u8;
+    let mut choice = Choice::from(1u8);
     for (&x, &y) in a.iter().zip(b.iter()) {
-        diff |= x.to_ascii_lowercase() ^ y.to_ascii_lowercase();
+        choice &= ct_ascii_to_lower(x).ct_eq(&ct_ascii_to_lower(y));
     }
-    diff == 0
+    bool::from(choice)
 }
 
 #[cfg(test)]
@@ -110,6 +120,13 @@ mod tests {
     #[test]
     fn test_empty_slices() {
         assert!(safe_constant_time_eq(b"", b""));
+    }
+
+    #[test]
+    fn test_ct_ascii_to_lower_matches_std_across_all_bytes() {
+        for b in 0u8..=255u8 {
+            assert_eq!(ct_ascii_to_lower(b), b.to_ascii_lowercase());
+        }
     }
 
     #[test]

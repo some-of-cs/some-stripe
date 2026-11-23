@@ -16,8 +16,9 @@
 //!   where webhooks are signed simultaneously with old and newly rotated secrets.
 //! - **DoS Mitigation Limits (Gate G2)**: Enforces [`MAX_SIGNATURE_HEADER_BYTES`] (4096 bytes) and
 //!   [`MAX_V1_SIGNATURES`] (16 signatures) to reject oversized or adversarial headers.
-//! - **Strict Timestamp Validation (Gate G2)**: Extracts the Unix timestamp integer from `t=`. Rejects
-//!   missing, non-numeric, or malformed timestamps with [`StripeWebhookError::InvalidTimestamp`].
+//! - **Strict Timestamp Validation (Gate G2)**: Extracts the canonical unsigned Unix timestamp integer
+//!   from `t=`. Rejects missing, signed (`+`/`-`), leading-zero, non-numeric, or malformed timestamps
+//!   with [`StripeWebhookError::InvalidTimestamp`].
 //! - **Header Integrity (Gate G2)**: Rejects empty or whitespace-only headers with
 //!   [`StripeWebhookError::MissingSignatureHeader`] and headers lacking any `v1` signature with
 //!   [`StripeWebhookError::MissingSignature`].
@@ -80,6 +81,47 @@ impl<'a> StripeSignatureHeader<'a> {
     }
 }
 
+fn parse_canonical_timestamp(t_val: &str) -> Result<i64, StripeWebhookError> {
+    let t_str = t_val.trim();
+    let is_canonical = !t_str.is_empty()
+        && t_str.bytes().all(|b| b.is_ascii_digit())
+        && (t_str.len() == 1 || !t_str.starts_with('0'));
+    if !is_canonical {
+        return Err(StripeWebhookError::InvalidTimestamp);
+    }
+    t_str
+        .parse::<i64>()
+        .map_err(|_| StripeWebhookError::InvalidTimestamp)
+}
+
+fn parse_header_token<'a>(
+    token: &'a str,
+    timestamp: &mut Option<i64>,
+    signatures: &mut Vec<&'a str>,
+) -> Result<(), StripeWebhookError> {
+    if let Some(t_val) = token.strip_prefix("t=") {
+        if timestamp.is_some() {
+            // Reject duplicate timestamp declarations to prevent HTTP parameter pollution or drift bypass
+            return Err(StripeWebhookError::InvalidTimestamp);
+        }
+        *timestamp = Some(parse_canonical_timestamp(t_val)?);
+        return Ok(());
+    }
+
+    let Some(sig_val) = token.strip_prefix("v1=") else {
+        return Ok(());
+    };
+    let sig = sig_val.trim();
+    if sig.is_empty() {
+        return Ok(());
+    }
+    if signatures.len() >= MAX_V1_SIGNATURES {
+        return Err(StripeWebhookError::InvalidHeader("too many v1 signatures"));
+    }
+    signatures.push(sig);
+    Ok(())
+}
+
 /// Parses a raw `Stripe-Signature` header value into a structured [`StripeSignatureHeader`].
 ///
 /// This parser scans comma-separated key-value tokens zero-copy without allocating
@@ -90,7 +132,7 @@ impl<'a> StripeSignatureHeader<'a> {
 /// - [`StripeWebhookError::InvalidHeader`]: If `header` exceeds [`MAX_SIGNATURE_HEADER_BYTES`] (4096 bytes)
 ///   or contains more than [`MAX_V1_SIGNATURES`] (16) signatures.
 /// - [`StripeWebhookError::MissingSignatureHeader`]: If `header` is empty or consists solely of whitespace.
-/// - [`StripeWebhookError::InvalidTimestamp`]: If `t=` is absent or cannot be parsed as a 64-bit signed integer.
+/// - [`StripeWebhookError::InvalidTimestamp`]: If `t=` is absent or is not a canonical unsigned decimal 64-bit integer.
 /// - [`StripeWebhookError::MissingSignature`]: If no valid, non-empty `v1` signature tokens exist in the header.
 ///
 /// # Examples
@@ -126,7 +168,6 @@ pub fn parse_signature_header<'a>(
             "header exceeds maximum allowed length",
         ));
     }
-
     if header.trim().is_empty() {
         return Err(StripeWebhookError::MissingSignatureHeader);
     }
@@ -134,31 +175,8 @@ pub fn parse_signature_header<'a>(
     let mut timestamp: Option<i64> = None;
     let mut signatures: Vec<&'a str> = Vec::with_capacity(2);
 
-    for token in header.split(',') {
-        let token = token.trim();
-        if token.is_empty() {
-            continue;
-        }
-
-        if let Some(t_val) = token.strip_prefix("t=") {
-            if timestamp.is_some() {
-                // Reject duplicate timestamp declarations to prevent HTTP parameter pollution or drift bypass
-                return Err(StripeWebhookError::InvalidTimestamp);
-            }
-            let t_str = t_val.trim();
-            match t_str.parse::<i64>() {
-                Ok(ts) => timestamp = Some(ts),
-                Err(_) => return Err(StripeWebhookError::InvalidTimestamp),
-            }
-        } else if let Some(sig_val) = token.strip_prefix("v1=") {
-            let sig = sig_val.trim();
-            if !sig.is_empty() {
-                if signatures.len() >= MAX_V1_SIGNATURES {
-                    return Err(StripeWebhookError::InvalidHeader("too many v1 signatures"));
-                }
-                signatures.push(sig);
-            }
-        }
+    for token in header.split(',').map(str::trim).filter(|t| !t.is_empty()) {
+        parse_header_token(token, &mut timestamp, &mut signatures)?;
     }
 
     let timestamp = timestamp.ok_or(StripeWebhookError::InvalidTimestamp)?;
@@ -224,6 +242,25 @@ mod tests {
                 parse_signature_header(case).expect_err(&format!("expected error for {case}"));
             assert_eq!(err, StripeWebhookError::InvalidTimestamp);
         }
+    }
+
+    #[test]
+    fn test_rejects_non_canonical_timestamps() {
+        let cases = [
+            "t=+123,v1=sig",
+            "t=0123,v1=sig",
+            "t=-123,v1=sig",
+            "t=00,v1=sig",
+        ];
+
+        for case in cases {
+            let err = parse_signature_header(case)
+                .expect_err(&format!("expected InvalidTimestamp for {case}"));
+            assert_eq!(err, StripeWebhookError::InvalidTimestamp);
+        }
+
+        let zero = parse_signature_header("t=0,v1=sig").expect("single zero must be canonical");
+        assert_eq!(zero.timestamp, 0);
     }
 
     #[test]

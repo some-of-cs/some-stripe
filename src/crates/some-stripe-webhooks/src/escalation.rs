@@ -61,6 +61,57 @@ pub fn determine_severity(err: &StripeWebhookError) -> ErrorSeverity {
     }
 }
 
+fn format_critical_reason(error: &StripeWebhookError) -> Option<String> {
+    match error {
+        StripeWebhookError::BadSignature => Some(
+            "CRITICAL SECURITY ALERT: Webhook cryptographic signature mismatch (HMAC-SHA256 verification failed; possible payload tampering or forged webhook)".to_string(),
+        ),
+        StripeWebhookError::TimestampOutsideTolerance {
+            timestamp,
+            now,
+            tolerance,
+        } => Some(format!(
+            "CRITICAL SECURITY ALERT: Webhook timestamp drift outside tolerance window (event timestamp {timestamp} vs current time {now}, tolerance {tolerance}s; potential replay attack)"
+        )),
+        StripeWebhookError::PayloadTooLarge { size, max_allowed } => Some(format!(
+            "CRITICAL SECURITY ALERT: Webhook payload size {size} bytes exceeds maximum limit {max_allowed} bytes (potential memory exhaustion attack)"
+        )),
+        _ => None,
+    }
+}
+
+fn static_header_or_payload_detail(error: &StripeWebhookError) -> Option<&'static str> {
+    match error {
+        StripeWebhookError::MissingSignatureHeader => Some("missing Stripe-Signature header"),
+        StripeWebhookError::MissingSecret => Some("missing webhook signing secret"),
+        StripeWebhookError::EmptyPayload => Some("empty payload received"),
+        StripeWebhookError::InvalidTimestamp => Some("invalid timestamp in Stripe-Signature header"),
+        StripeWebhookError::MissingSignature => Some("no v1 signature scheme found in header"),
+        _ => None,
+    }
+}
+
+fn format_webhook_error_reason(error: &StripeWebhookError) -> String {
+    if let Some(critical) = format_critical_reason(error) {
+        return critical;
+    }
+    if let Some(detail) = static_header_or_payload_detail(error) {
+        return format!("Webhook verification failed: {detail}");
+    }
+    match error {
+        StripeWebhookError::BadKey => {
+            "Webhook verification failed: invalid or blank webhook signing secret".to_string()
+        }
+        StripeWebhookError::MalformedPayload(msg) => {
+            format!("Webhook verification failed: malformed payload JSON: {msg}")
+        }
+        StripeWebhookError::InvalidHeader(details) => {
+            format!("Webhook verification failed: invalid Stripe-Signature header: {details}")
+        }
+        _ => format!("Webhook verification failed: {error}"),
+    }
+}
+
 /// Escalates a webhook verification error to an [`ErrorWorkflowHandler`].
 ///
 /// Critical security incidents (forgery, replay attacks, payload overflow) are dispatched with
@@ -70,50 +121,7 @@ pub async fn escalate_webhook_error<H: ErrorWorkflowHandler + ?Sized>(
     error: &StripeWebhookError,
 ) {
     let severity = determine_severity(error);
-    let reason = match error {
-        StripeWebhookError::BadSignature => {
-            "CRITICAL SECURITY ALERT: Webhook cryptographic signature mismatch (HMAC-SHA256 verification failed; possible payload tampering or forged webhook)".to_string()
-        }
-        StripeWebhookError::TimestampOutsideTolerance {
-            timestamp,
-            now,
-            tolerance,
-        } => {
-            format!(
-                "CRITICAL SECURITY ALERT: Webhook timestamp drift outside tolerance window (event timestamp {timestamp} vs current time {now}, tolerance {tolerance}s; potential replay attack)"
-            )
-        }
-        StripeWebhookError::PayloadTooLarge { size, max_allowed } => {
-            format!(
-                "CRITICAL SECURITY ALERT: Webhook payload size {size} bytes exceeds maximum limit {max_allowed} bytes (potential memory exhaustion attack)"
-            )
-        }
-        StripeWebhookError::MissingSignatureHeader => {
-            "Webhook verification failed: missing Stripe-Signature header".to_string()
-        }
-        StripeWebhookError::MissingSecret => {
-            "Webhook verification failed: missing webhook signing secret".to_string()
-        }
-        StripeWebhookError::EmptyPayload => {
-            "Webhook verification failed: empty payload received".to_string()
-        }
-        StripeWebhookError::InvalidTimestamp => {
-            "Webhook verification failed: invalid timestamp in Stripe-Signature header".to_string()
-        }
-        StripeWebhookError::MissingSignature => {
-            "Webhook verification failed: no v1 signature scheme found in header".to_string()
-        }
-        StripeWebhookError::MalformedPayload(msg) => {
-            format!("Webhook verification failed: malformed payload JSON: {msg}")
-        }
-        StripeWebhookError::BadKey => {
-            "Webhook verification failed: invalid or blank webhook signing secret".to_string()
-        }
-        StripeWebhookError::InvalidHeader(details) => {
-            format!("Webhook verification failed: invalid Stripe-Signature header: {details}")
-        }
-    };
-
+    let reason = format_webhook_error_reason(error);
     handler.on_webhook_error(severity, &reason).await;
 }
 

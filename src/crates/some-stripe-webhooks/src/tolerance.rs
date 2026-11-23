@@ -81,16 +81,14 @@ impl ToleranceConfig {
         event_timestamp: i64,
         current_timestamp: i64,
     ) -> Result<(), StripeWebhookError> {
-        if self.past_tolerance_seconds > 0 {
-            let past_tolerance = i64::try_from(self.past_tolerance_seconds).unwrap_or(i64::MAX);
-            let lower_bound = current_timestamp.saturating_sub(past_tolerance);
-            if event_timestamp < lower_bound {
-                return Err(StripeWebhookError::TimestampOutsideTolerance {
-                    timestamp: event_timestamp,
-                    now: current_timestamp,
-                    tolerance: self.past_tolerance_seconds,
-                });
-            }
+        let past_tolerance = i64::try_from(self.past_tolerance_seconds).unwrap_or(i64::MAX);
+        let lower_bound = current_timestamp.saturating_sub(past_tolerance);
+        if event_timestamp < lower_bound {
+            return Err(StripeWebhookError::TimestampOutsideTolerance {
+                timestamp: event_timestamp,
+                now: current_timestamp,
+                tolerance: self.past_tolerance_seconds,
+            });
         }
 
         let upper_bound = current_timestamp.saturating_add(self.max_future_drift_seconds);
@@ -159,6 +157,22 @@ mod tests {
                 timestamp: now - 301,
                 now,
                 tolerance: 300,
+            })
+        );
+    }
+
+    #[test]
+    fn test_zero_past_tolerance_rejects_past_timestamps() {
+        let config = ToleranceConfig::new(0);
+        let now = 1_700_000_000;
+
+        assert!(config.check_timestamp(now, now).is_ok());
+        assert_eq!(
+            config.check_timestamp(now - 1, now),
+            Err(StripeWebhookError::TimestampOutsideTolerance {
+                timestamp: now - 1,
+                now,
+                tolerance: 0,
             })
         );
     }

@@ -3,6 +3,9 @@
 use std::borrow::Cow;
 use std::path::{Path, PathBuf};
 
+use some_stripe_core::error::StripeWebhookError;
+use zeroize::Zeroizing;
+
 const DOTENV_CANDIDATE_FILES: &[&str] = &[
     ".env.local",
     ".env.dev",
@@ -11,7 +14,6 @@ const DOTENV_CANDIDATE_FILES: &[&str] = &[
     ".env.prod",
     ".env.production",
     ".env",
-    ".env.example",
 ];
 
 /// Evaluates whether a webhook signing secret is blank, empty, or consists solely of whitespace.
@@ -33,28 +35,52 @@ pub fn is_blank_webhook_secret(secret: &str) -> bool {
     secret.trim().is_empty()
 }
 
+/// Resolves a webhook secret fail-closed into a [`Zeroizing<String>`].
+///
+/// Literal secrets (not starting with `$`) are returned wrapped in [`Zeroizing`].
+/// Environment references (`$VAR_NAME` or `${VAR_NAME}`) are resolved from `std::env`
+/// or local `.env*` files (excluding `.env.example`). If an environment reference
+/// is empty or cannot be resolved, returns [`StripeWebhookError::MissingSecret`]
+/// instead of falling back to the literal `"$VAR"` string.
+pub fn try_resolve_webhook_secret(secret: &str) -> Result<Zeroizing<String>, StripeWebhookError> {
+    let Some(var_name) = extract_env_var_name(secret) else {
+        return Ok(Zeroizing::new(secret.to_string()));
+    };
+    if var_name.is_empty() {
+        return Err(StripeWebhookError::MissingSecret);
+    }
+    lookup_env_var(var_name)
+        .map(Zeroizing::new)
+        .ok_or(StripeWebhookError::MissingSecret)
+}
+
 /// Resolves a webhook secret that may be a literal `"whsec_..."` string (returned as zero-clone
 /// `Cow::Borrowed`) or a `$VAR_NAME` / `${VAR_NAME}` reference (resolved from `std::env` or
-/// `.env.local`, `.env.dev`, `.env`, `.env.example`, etc.).
+/// `.env.local`, `.env.dev`, `.env`, etc., excluding `.env.example`).
 #[must_use]
 pub fn resolve_webhook_secret(secret: &str) -> Cow<'_, str> {
-    let trimmed = secret.trim();
-    let var_name = if let Some(inner) = trimmed.strip_prefix("${").and_then(|s| s.strip_suffix('}')) {
-        inner.trim()
-    } else if let Some(rest) = trimmed.strip_prefix('$') {
-        rest.trim()
-    } else {
+    let Some(var_name) = extract_env_var_name(secret) else {
         return Cow::Borrowed(secret);
     };
-
     if var_name.is_empty() {
         return Cow::Borrowed(secret);
     }
+    lookup_env_var(var_name).map_or(Cow::Borrowed(secret), Cow::Owned)
+}
 
+fn extract_env_var_name(secret: &str) -> Option<&str> {
+    let trimmed = secret.trim();
+    if let Some(inner) = trimmed.strip_prefix("${").and_then(|s| s.strip_suffix('}')) {
+        return Some(inner.trim());
+    }
+    trimmed.strip_prefix('$').map(str::trim)
+}
+
+fn lookup_env_var(var_name: &str) -> Option<String> {
     if let Ok(val) = std::env::var(var_name) {
         let t = val.trim();
         if !t.is_empty() {
-            return Cow::Owned(t.to_string());
+            return Some(t.to_string());
         }
     }
 
@@ -64,13 +90,14 @@ pub fn resolve_webhook_secret(secret: &str) -> Cow<'_, str> {
         Path::new("../.."),
         Path::new("../../.."),
     ];
-    for dir in roots {
-        if let Some(found) = resolve_in_dir(var_name, dir) {
-            return Cow::Owned(found);
-        }
-    }
+    roots.into_iter().find_map(|dir| resolve_in_dir(var_name, dir))
+}
 
-    Cow::Borrowed(secret)
+fn is_extra_dotenv_file(path: &Path) -> bool {
+    path.is_file()
+        && path.file_name().and_then(|n| n.to_str()).is_some_and(|n| {
+            n.starts_with(".env") && n != ".env.example" && !DOTENV_CANDIDATE_FILES.contains(&n)
+        })
 }
 
 fn resolve_in_dir(var_name: &str, dir: &Path) -> Option<String> {
@@ -88,48 +115,44 @@ fn resolve_in_dir(var_name: &str, dir: &Path) -> Option<String> {
     let mut extras: Vec<PathBuf> = entries
         .flatten()
         .map(|e| e.path())
-        .filter(|p| {
-            p.file_name()
-                .and_then(|n| n.to_str())
-                .is_some_and(|n| n.starts_with(".env") && !DOTENV_CANDIDATE_FILES.contains(&n))
-                && p.is_file()
-        })
+        .filter(|p| is_extra_dotenv_file(p))
         .collect();
     extras.sort();
-    for path in extras {
-        if let Ok(content) = std::fs::read_to_string(&path)
-            && let Some(val) = parse_key(&content, var_name)
-        {
-            return Some(val);
-        }
+    extras.into_iter().find_map(|path| {
+        let content = std::fs::read_to_string(&path).ok()?;
+        parse_key(&content, var_name)
+    })
+}
+
+fn strip_env_quotes(val: &str) -> &str {
+    if let Some(dq) = val.strip_prefix('"').and_then(|s| s.strip_suffix('"')) {
+        return dq.trim();
     }
-    None
+    if let Some(sq) = val.strip_prefix('\'').and_then(|s| s.strip_suffix('\'')) {
+        return sq.trim();
+    }
+    val.split(" #").next().unwrap_or(val).trim()
+}
+
+fn parse_env_line<'a>(raw: &'a str, target: &str) -> Option<&'a str> {
+    let trimmed = raw.trim();
+    if trimmed.is_empty() || trimmed.starts_with('#') {
+        return None;
+    }
+    let line = trimmed.strip_prefix("export ").unwrap_or(trimmed).trim();
+    let (k, v) = line.split_once('=')?;
+    if k.trim() != target {
+        return None;
+    }
+    let clean = strip_env_quotes(v.trim());
+    (!clean.is_empty()).then_some(clean)
 }
 
 fn parse_key(content: &str, target: &str) -> Option<String> {
-    for raw in content.lines() {
-        let trimmed = raw.trim();
-        if trimmed.is_empty() || trimmed.starts_with('#') {
-            continue;
-        }
-        let line = trimmed.strip_prefix("export ").unwrap_or(trimmed).trim();
-        if let Some((k, v)) = line.split_once('=')
-            && k.trim() == target
-        {
-            let val = v.trim();
-            let clean = if let Some(dq) = val.strip_prefix('"').and_then(|s| s.strip_suffix('"')) {
-                dq.trim()
-            } else if let Some(sq) = val.strip_prefix('\'').and_then(|s| s.strip_suffix('\'')) {
-                sq.trim()
-            } else {
-                val.split(" #").next().unwrap_or(val).trim()
-            };
-            if !clean.is_empty() {
-                return Some(clean.to_string());
-            }
-        }
-    }
-    None
+    content
+        .lines()
+        .find_map(|raw| parse_env_line(raw, target))
+        .map(ToOwned::to_owned)
 }
 
 #[cfg(test)]
@@ -148,5 +171,32 @@ mod tests {
     fn test_literal_webhook_secret_is_borrowed_zero_clone() {
         let resolved = resolve_webhook_secret("whsec_literal_123");
         assert!(matches!(resolved, Cow::Borrowed("whsec_literal_123")));
+    }
+
+    #[test]
+    fn test_dotenv_candidates_exclude_example_file() {
+        assert!(!DOTENV_CANDIDATE_FILES.contains(&".env.example"));
+    }
+
+    #[test]
+    fn test_try_resolve_unset_env_var_returns_missing_secret() {
+        assert_eq!(
+            try_resolve_webhook_secret("$SOME_STRIPE_UNSET_VAR_F01"),
+            Err(StripeWebhookError::MissingSecret)
+        );
+        assert_eq!(
+            try_resolve_webhook_secret("${SOME_STRIPE_UNSET_VAR_F01}"),
+            Err(StripeWebhookError::MissingSecret)
+        );
+        assert_eq!(
+            try_resolve_webhook_secret("$"),
+            Err(StripeWebhookError::MissingSecret)
+        );
+        assert_eq!(
+            try_resolve_webhook_secret("${   }"),
+            Err(StripeWebhookError::MissingSecret)
+        );
+        let literal = try_resolve_webhook_secret("whsec_literal_ok").expect("literal must resolve");
+        assert_eq!(literal.as_str(), "whsec_literal_ok");
     }
 }

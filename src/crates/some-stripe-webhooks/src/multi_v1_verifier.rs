@@ -7,24 +7,29 @@
 //! ## Security Invariants
 //!
 //! - **Order-Agnostic Header Parsing**: Accepts `t=` and `v1=` in any order,
-//!   caps collected `v1=` candidates at [`MAX_V1_CANDIDATES`] (16), and explicitly
-//!   ignores `v0=` and unsigned debug keys (`secret`, `destination`, `payload`, etc.).
+//!   rejects headers exceeding [`MAX_V1_CANDIDATES`] (16) `v1=` candidates with
+//!   [`StripeWebhookError::InvalidHeader`], rejects empty `t=` with
+//!   [`StripeWebhookError::InvalidTimestamp`], and explicitly ignores `v0=` and
+//!   unsigned debug keys (`secret`, `destination`, `payload`, etc.).
 //! - **Fail-Closed Downgrade Protection**: Rejects headers lacking any `v1=`
 //!   signature (including `v0`-only payloads) with [`StripeWebhookError::MissingSignature`].
 //! - **Input & Resource Bounds**: Rejects empty/blank secret lists with
 //!   [`StripeWebhookError::BadKey`] and headers exceeding [`MAX_HEADER_BYTES`] (4096).
-//! - **Replay & Drift Protection**: Enforces `|now_unix_secs - timestamp| <= tolerance_secs`
-//!   (default [`DEFAULT_TOLERANCE_SECS`] = 300s).
+//! - **Asymmetric Replay & Drift Protection**: Enforces
+//!   `now_unix_secs - tolerance_secs <= timestamp <= now_unix_secs + MAX_FUTURE_DRIFT_SECONDS`
+//!   (default [`DEFAULT_TOLERANCE_SECS`] = 300s, future drift ceiling = 60s).
 //! - **Raw-Body Streaming HMAC Before JSON Parsing**: Computes streaming HMAC-SHA256
-//!   over exact `raw_body` bytes via [`compute_streaming_hmac_bytes`] and compares
-//!   every `v1` candidate against every valid secret using [`subtle::ConstantTimeEq`]
+//!   over exact `raw_body` bytes via [`compute_streaming_hmac_bytes`], normalizes
+//!   each `v1` candidate into a fixed `[u8; 64]` lowercase ASCII stack buffer, and
+//!   compares every `v1` candidate against every valid secret using [`subtle::ConstantTimeEq`]
 //!   without short-circuiting.
 //! - **Thin Event Detection**: After cryptographic verification succeeds, parses
 //!   `raw_body` as [`serde_json::Value`] and identifies Stripe v2 thin events.
 
 use std::fmt;
 
-use crate::constants::MAX_WEBHOOK_PAYLOAD_BYTES;
+use crate::compare::ct_ascii_to_lower;
+use crate::constants::{MAX_FUTURE_DRIFT_SECONDS, MAX_WEBHOOK_PAYLOAD_BYTES};
 use crate::crypto::compute_streaming_hmac_bytes;
 use crate::error::StripeWebhookError;
 use subtle::{Choice, ConstantTimeEq};
@@ -35,7 +40,7 @@ pub const DEFAULT_TOLERANCE_SECS: i64 = 300;
 /// Maximum permitted byte length of a `Stripe-Signature` header (4 KiB).
 pub const MAX_HEADER_BYTES: usize = 4096;
 
-/// Maximum number of `v1=` signature candidates collected from a single header.
+/// Maximum number of `v1=` signature candidates permitted in a single header.
 pub const MAX_V1_CANDIDATES: usize = 16;
 
 /// Clock and replay-window configuration for Stripe webhook verification.
@@ -43,7 +48,7 @@ pub const MAX_V1_CANDIDATES: usize = 16;
 pub struct WebhookVerificationOptions {
     /// Current UNIX epoch timestamp in seconds.
     pub now_unix_secs: i64,
-    /// Maximum allowed clock drift and replay window in seconds.
+    /// Maximum allowed past replay window in seconds.
     pub tolerance_secs: i64,
 }
 
@@ -116,26 +121,33 @@ impl<'a> HeaderAccumulator<'a> {
         };
         let key = raw_key.trim();
         let value = raw_val.trim();
-        if value.is_empty() {
-            return Ok(());
-        }
 
         match key {
-            "t" => self.record_timestamp(value)?,
-            "v1" if is_v1_candidate_eligible(value, self.v1_candidates.len()) => {
-                self.v1_candidates.push(value);
-            }
+            "t" => self.record_timestamp(value),
+            "v1" => self.record_v1_candidate(value),
             // Explicitly ignore `v0` and unsigned debug keys (`secret`, `destination`, `payload`).
-            _ => {}
+            _ => Ok(()),
         }
-        Ok(())
     }
 
     fn record_timestamp(&mut self, value: &'a str) -> Result<(), StripeWebhookError> {
-        if self.raw_timestamp.is_some() {
+        if value.is_empty() || self.raw_timestamp.is_some() {
             return Err(StripeWebhookError::InvalidTimestamp);
         }
         self.raw_timestamp = Some(value);
+        Ok(())
+    }
+
+    fn record_v1_candidate(&mut self, value: &'a str) -> Result<(), StripeWebhookError> {
+        if value.is_empty() || !value.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return Ok(());
+        }
+        if self.v1_candidates.len() >= MAX_V1_CANDIDATES {
+            return Err(StripeWebhookError::InvalidHeader(
+                "Stripe-Signature header exceeds maximum v1 signature candidates",
+            ));
+        }
+        self.v1_candidates.push(value);
         Ok(())
     }
 
@@ -159,8 +171,9 @@ impl<'a> HeaderAccumulator<'a> {
 /// Parses a `Stripe-Signature` header in an order-agnostic manner.
 ///
 /// Accepts `t=` and `v1=` entries in any order, collects up to [`MAX_V1_CANDIDATES`]
-/// hexadecimal `v1=` signature candidates, and explicitly ignores `v0=` and unsigned
-/// debug parameters (`secret`, `destination`, `payload`, etc.).
+/// hexadecimal `v1=` signature candidates (rejecting headers exceeding that ceiling),
+/// and explicitly ignores `v0=` and unsigned debug parameters (`secret`, `destination`,
+/// `payload`, etc.).
 ///
 /// Returns `(parsed_timestamp, raw_timestamp_slice, v1_candidates)` borrowing directly
 /// from `header`.
@@ -168,8 +181,9 @@ impl<'a> HeaderAccumulator<'a> {
 /// # Errors
 ///
 /// - [`StripeWebhookError::MissingSignatureHeader`] if `header` is empty or whitespace-only.
-/// - [`StripeWebhookError::InvalidHeader`] if `header` exceeds [`MAX_HEADER_BYTES`].
-/// - [`StripeWebhookError::InvalidTimestamp`] if `t=` is missing or not a valid UNIX timestamp.
+/// - [`StripeWebhookError::InvalidHeader`] if `header` exceeds [`MAX_HEADER_BYTES`] or
+///   contains more than [`MAX_V1_CANDIDATES`] `v1=` candidates.
+/// - [`StripeWebhookError::InvalidTimestamp`] if `t=` is missing, empty, duplicate, or not a valid UNIX timestamp.
 /// - [`StripeWebhookError::MissingSignature`] if no valid `v1=` signature is present.
 ///
 /// # Examples
@@ -206,7 +220,8 @@ pub fn parse_signature_header_order_agnostic(
 /// - [`StripeWebhookError::MissingSignatureHeader`], [`StripeWebhookError::InvalidHeader`],
 ///   [`StripeWebhookError::InvalidTimestamp`], or [`StripeWebhookError::MissingSignature`]
 ///   if `signature_header` is malformed or lacks a `v1=` signature.
-/// - [`StripeWebhookError::TimestampOutsideTolerance`] if `|now_unix_secs - timestamp| > tolerance_secs`.
+/// - [`StripeWebhookError::TimestampOutsideTolerance`] if `timestamp` is older than
+///   `now_unix_secs - tolerance_secs` or newer than `now_unix_secs + MAX_FUTURE_DRIFT_SECONDS`.
 /// - [`StripeWebhookError::BadSignature`] if no `(secret, v1_candidate)` pair matches.
 /// - [`StripeWebhookError::MalformedPayload`] if the verified body is not a valid JSON object.
 ///
@@ -285,12 +300,11 @@ fn parse_signature_header_internal(
     accumulator.finish()
 }
 
-fn is_v1_candidate_eligible(value: &str, current_count: usize) -> bool {
-    current_count < MAX_V1_CANDIDATES && value.bytes().all(|b| b.is_ascii_hexdigit())
-}
-
 fn parse_unix_timestamp(raw_ts: &str) -> Result<i64, StripeWebhookError> {
-    if !raw_ts.bytes().all(|b| b.is_ascii_digit()) {
+    let is_canonical = !raw_ts.is_empty()
+        && raw_ts.bytes().all(|b| b.is_ascii_digit())
+        && (raw_ts.len() == 1 || !raw_ts.starts_with('0'));
+    if !is_canonical {
         return Err(StripeWebhookError::InvalidTimestamp);
     }
     raw_ts
@@ -321,9 +335,12 @@ fn check_timestamp_tolerance(
             tolerance: 0,
         });
     }
-    let delta = options.now_unix_secs.abs_diff(timestamp);
     let max_tolerance = u64::try_from(options.tolerance_secs).unwrap_or(0);
-    if delta > max_tolerance {
+    let lower_bound = options.now_unix_secs.saturating_sub(options.tolerance_secs);
+    let upper_bound = options
+        .now_unix_secs
+        .saturating_add(MAX_FUTURE_DRIFT_SECONDS);
+    if timestamp < lower_bound || timestamp > upper_bound {
         return Err(StripeWebhookError::TimestampOutsideTolerance {
             timestamp,
             now: options.now_unix_secs,
@@ -331,6 +348,17 @@ fn check_timestamp_tolerance(
         });
     }
     Ok(())
+}
+
+fn ct_eq_hex_64(expected: &[u8], candidate: &[u8]) -> Choice {
+    if expected.len() != 64 || candidate.len() != 64 {
+        return Choice::from(0u8);
+    }
+    let mut normalized = [0u8; 64];
+    for (dst, &src) in normalized.iter_mut().zip(candidate.iter()) {
+        *dst = ct_ascii_to_lower(src);
+    }
+    expected.ct_eq(&normalized)
 }
 
 fn verify_secret_candidates(
@@ -342,7 +370,7 @@ fn verify_secret_candidates(
     let expected = compute_streaming_hmac_bytes(secret.as_bytes(), ts_bytes, raw_body)?;
     let mut matched = Choice::from(0u8);
     for candidate in &parsed.v1_candidates {
-        matched |= expected.as_bytes().ct_eq(candidate.as_bytes());
+        matched |= ct_eq_hex_64(expected.as_bytes(), candidate.as_bytes());
     }
     Ok(matched)
 }
@@ -465,6 +493,52 @@ mod tests {
     }
 
     #[test]
+    fn test_uppercase_hex_v1_signature_verifies() {
+        let sig_upper = sign(DEFAULT_SECRET, SNAPSHOT_BODY).to_ascii_uppercase();
+        let header = format!("t={SAMPLE_TS_STR},v1={sig_upper}");
+
+        let verified = verify_with(SNAPSHOT_BODY, &header, &[DEFAULT_SECRET])
+            .expect("uppercase hex v1 signature must verify");
+        assert_eq!(verified.event_id, "evt_snap_001");
+    }
+
+    #[test]
+    fn test_empty_timestamp_parameter_rejected() {
+        let sig = sign(DEFAULT_SECRET, SNAPSHOT_BODY);
+        for header in [
+            format!("t=,v1={sig}"),
+            format!("t=,t={SAMPLE_TS_STR},v1={sig}"),
+        ] {
+            assert_eq!(
+                parse_signature_header_order_agnostic(&header),
+                Err(StripeWebhookError::InvalidTimestamp)
+            );
+        }
+    }
+
+    #[test]
+    fn test_asymmetric_future_drift_enforced() {
+        let header = signed_header(DEFAULT_SECRET, SNAPSHOT_BODY);
+
+        let within_future = WebhookVerificationOptions::new(SAMPLE_TS - MAX_FUTURE_DRIFT_SECONDS);
+        assert!(
+            verify_stripe_raw_webhook(SNAPSHOT_BODY, &header, &[DEFAULT_SECRET], within_future)
+                .is_ok()
+        );
+
+        let beyond_future_now = SAMPLE_TS - (MAX_FUTURE_DRIFT_SECONDS + 1);
+        let beyond_future = WebhookVerificationOptions::new(beyond_future_now);
+        assert_eq!(
+            verify_stripe_raw_webhook(SNAPSHOT_BODY, &header, &[DEFAULT_SECRET], beyond_future),
+            Err(StripeWebhookError::TimestampOutsideTolerance {
+                timestamp: SAMPLE_TS,
+                now: beyond_future_now,
+                tolerance: 300,
+            })
+        );
+    }
+
+    #[test]
     fn test_order_agnostic_and_debug_keys_ignored() {
         let sig = sign(DEFAULT_SECRET, SNAPSHOT_BODY);
         let headers = [
@@ -568,14 +642,21 @@ mod tests {
             Err(StripeWebhookError::InvalidHeader(_))
         ));
 
-        let mut parts = vec![format!("t={SAMPLE_TS_STR}")];
-        for i in 0..20 {
-            parts.push(format!("v1={i:064x}"));
+        let mut max_parts = vec![format!("t={SAMPLE_TS_STR}")];
+        for i in 0..MAX_V1_CANDIDATES {
+            max_parts.push(format!("v1={i:064x}"));
         }
-        let header = parts.join(",");
-        let (_, _, candidates) =
-            parse_signature_header_order_agnostic(&header).expect("cap should parse");
+        let max_header = max_parts.join(",");
+        let (_, _, candidates) = parse_signature_header_order_agnostic(&max_header)
+            .expect("exact MAX_V1_CANDIDATES should parse");
         assert_eq!(candidates.len(), MAX_V1_CANDIDATES);
+
+        max_parts.push(format!("v1={MAX_V1_CANDIDATES:064x}"));
+        let over_header = max_parts.join(",");
+        assert!(matches!(
+            parse_signature_header_order_agnostic(&over_header),
+            Err(StripeWebhookError::InvalidHeader(_))
+        ));
     }
 
     #[test]
