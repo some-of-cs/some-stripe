@@ -77,7 +77,7 @@ fn extract_env_var_name(secret: &str) -> Option<&str> {
 }
 
 fn lookup_env_var(var_name: &str) -> Option<String> {
-    if let Ok(val) = std::env::var(var_name) {
+    if let Ok(val) = std::env::var(var_name).map(Zeroizing::new) {
         let t = val.trim();
         if !t.is_empty() {
             return Some(t.to_string());
@@ -103,7 +103,7 @@ fn is_extra_dotenv_file(path: &Path) -> bool {
 fn resolve_in_dir(var_name: &str, dir: &Path) -> Option<String> {
     for candidate in DOTENV_CANDIDATE_FILES {
         let path = dir.join(candidate);
-        if let Ok(content) = std::fs::read_to_string(&path)
+        if let Ok(content) = std::fs::read_to_string(&path).map(Zeroizing::new)
             && let Some(val) = parse_key(&content, var_name)
         {
             return Some(val);
@@ -119,7 +119,7 @@ fn resolve_in_dir(var_name: &str, dir: &Path) -> Option<String> {
         .collect();
     extras.sort();
     extras.into_iter().find_map(|path| {
-        let content = std::fs::read_to_string(&path).ok()?;
+        let content = std::fs::read_to_string(&path).map(Zeroizing::new).ok()?;
         parse_key(&content, var_name)
     })
 }

@@ -425,6 +425,20 @@ impl StripeClient {
         Ok(value)
     }
 
+    fn validate_request_url(url: &reqwest::Url) -> Result<(), StripeError> {
+        let host = url.host_str().ok_or_else(|| {
+            StripeError::Config("Request URL must include a non-empty host".to_owned())
+        })?;
+        let is_loopback = matches!(host, "localhost" | "127.0.0.1" | "[::1]" | "::1");
+        if url.scheme() == "https" || (url.scheme() == "http" && is_loopback) {
+            return Ok(());
+        }
+        Err(StripeError::Config(
+            "Request URL must use 'https://' (plain 'http://' is permitted only for loopback hosts)"
+                .to_owned(),
+        ))
+    }
+
     fn prepare_request(
         &self,
         mut request: reqwest::RequestBuilder,
@@ -441,7 +455,9 @@ impl StripeClient {
         } else {
             request.basic_auth(self.config.secret_key.expose_secret(), None::<&str>)
         };
-        request.build().map_err(StripeError::Http)
+        let built = request.build().map_err(StripeError::Http)?;
+        Self::validate_request_url(built.url())?;
+        Ok(built)
     }
 
     async fn should_retry_network_error(
@@ -1001,6 +1017,11 @@ mod tests {
         let req = bad_client.http.get("https://api.stripe.com/v1/customers");
         let err = bad_client.execute(req).await.unwrap_err();
         assert!(matches!(err, StripeError::Config(_)));
+
+        let valid_client = StripeClient::new("sk_test_123");
+        let insecure_req = valid_client.http.get("http://evil.example/v1/customers");
+        let insecure_err = valid_client.execute(insecure_req).await.unwrap_err();
+        assert!(matches!(insecure_err, StripeError::Config(_)));
     }
 
     #[tokio::test]

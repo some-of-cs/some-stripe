@@ -118,6 +118,21 @@ pub fn is_valid_aws_region(region: &str) -> bool {
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
 }
 
+fn authority_segment(rest: &str) -> &str {
+    rest.split(['/', '?', '#']).next().unwrap_or("")
+}
+
+fn is_valid_localhost_tail(rest: &str) -> bool {
+    let tail = authority_segment(rest);
+    if tail.is_empty() {
+        return true;
+    }
+    let Some(port) = tail.strip_prefix(':') else {
+        return false;
+    };
+    !port.is_empty() && port.bytes().all(|b| b.is_ascii_digit())
+}
+
 fn is_exact_localhost_http(url: &str) -> bool {
     let Some(rest) = url
         .strip_prefix("http://localhost")
@@ -125,14 +140,15 @@ fn is_exact_localhost_http(url: &str) -> bool {
     else {
         return false;
     };
-    rest.is_empty() || matches!(rest.as_bytes()[0], b':' | b'/' | b'?' | b'#')
+    is_valid_localhost_tail(rest)
 }
 
 fn has_non_empty_https_host(url: &str) -> bool {
     let Some(rest) = url.strip_prefix("https://") else {
         return false;
     };
-    !rest.is_empty() && !matches!(rest.as_bytes()[0], b'/' | b'?' | b'#' | b':')
+    let authority = authority_segment(rest);
+    !authority.is_empty() && !authority.starts_with(':') && !authority.contains('@')
 }
 
 /// Checks if a webhook URL is well-formed.
@@ -1044,6 +1060,10 @@ mod tests {
         assert!(is_valid_webhook_url("http://127.0.0.1/hook"));
         assert!(!is_valid_webhook_url("http://localhost.evil.com/hook"));
         assert!(!is_valid_webhook_url("http://127.0.0.1.evil.com/hook"));
+        assert!(!is_valid_webhook_url("http://localhost:80@evil.example/hook"));
+        assert!(!is_valid_webhook_url("http://127.0.0.1:80@evil.example/hook"));
+        assert!(!is_valid_webhook_url("http://localhost@evil.example/hook"));
+        assert!(!is_valid_webhook_url("https://user@evil.example/hook"));
         assert!(!is_valid_webhook_url("http://example.com/hook"));
         assert!(!is_valid_webhook_url("https://"));
         assert!(!is_valid_webhook_url("ftp://example.com"));

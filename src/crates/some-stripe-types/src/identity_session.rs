@@ -918,10 +918,33 @@ impl fmt::Display for VerificationSessionParseError {
 
 impl std::error::Error for VerificationSessionParseError {}
 
+fn authority_segment(rest: &str) -> &str {
+    rest.split(['/', '?', '#']).next().unwrap_or("")
+}
+
+fn has_valid_https_authority(url: &str) -> bool {
+    let Some(rest) = url.strip_prefix("https://") else {
+        return false;
+    };
+    let authority = authority_segment(rest);
+    !authority.is_empty() && !authority.starts_with(':') && !authority.contains('@')
+}
+
+fn is_valid_localhost_tail(rest: &str) -> bool {
+    let tail = authority_segment(rest);
+    if tail.is_empty() {
+        return true;
+    }
+    let Some(port) = tail.strip_prefix(':') else {
+        return false;
+    };
+    !port.is_empty() && port.bytes().all(|b| b.is_ascii_digit())
+}
+
 /// Checks if the URL uses an authorized protocol (HTTPS or local dev).
 fn is_allowed_protocol(url: &str) -> bool {
-    if let Some(rest) = url.strip_prefix("https://") {
-        return !rest.is_empty() && !matches!(rest.as_bytes()[0], b'/' | b'?' | b'#' | b':');
+    if has_valid_https_authority(url) {
+        return true;
     }
     let Some(rest) = url
         .strip_prefix("http://localhost")
@@ -929,7 +952,7 @@ fn is_allowed_protocol(url: &str) -> bool {
     else {
         return false;
     };
-    rest.is_empty() || matches!(rest.as_bytes()[0], b':' | b'/' | b'?' | b'#')
+    is_valid_localhost_tail(rest)
 }
 
 /// Checks if the URL contains forbidden client-side scripting schemes.
@@ -1180,6 +1203,10 @@ mod tests {
         assert!(validate_identity_url("http://insecure.com/callback").is_err());
         assert!(validate_identity_url("http://localhost.evil.com/callback").is_err());
         assert!(validate_identity_url("http://127.0.0.1.evil.com/callback").is_err());
+        assert!(validate_identity_url("http://localhost:80@evil.example/hook").is_err());
+        assert!(validate_identity_url("http://127.0.0.1:80@evil.example/hook").is_err());
+        assert!(validate_identity_url("http://localhost@evil.example/hook").is_err());
+        assert!(validate_identity_url("https://user@evil.example/hook").is_err());
         assert!(validate_identity_url("https://").is_err());
         // Empty
         assert!(validate_identity_url("").is_err());

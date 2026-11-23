@@ -1262,27 +1262,52 @@ impl CreateCheckoutSessionParams {
     /// ```
     pub fn validate(&self) -> Result<(), PaymentIntentValidationError> {
         validate_checkout_url(&self.success_url, "success_url")?;
-        if let Some(ref cancel_url) = self.cancel_url {
-            validate_checkout_url(cancel_url, "cancel_url")?;
-        }
-        if let Some(ref items) = self.line_items {
-            items.iter().try_for_each(validate_checkout_line_item)?;
-        }
-        if let Some(ref curr) = self.currency {
-            validate_currency(curr)?;
-        }
-        if let Some(amt) = self.unit_amount {
-            validate_amount(amt)?;
-        }
-        if self.quantity == Some(0) {
-            return Err(PaymentIntentValidationError::InvalidParameter {
-                field: "quantity",
-                reason: "quantity must be greater than 0".to_string(),
-            });
-        }
-
-        Ok(())
+        validate_optional_cancel_url(self.cancel_url.as_deref())?;
+        validate_optional_line_items(self.line_items.as_deref())?;
+        validate_legacy_checkout_pricing(
+            self.currency.as_deref(),
+            self.unit_amount,
+            self.quantity,
+        )
     }
+}
+
+fn validate_optional_cancel_url(
+    cancel_url: Option<&str>,
+) -> Result<(), PaymentIntentValidationError> {
+    if let Some(url) = cancel_url {
+        validate_checkout_url(url, "cancel_url")?;
+    }
+    Ok(())
+}
+
+fn validate_optional_line_items(
+    line_items: Option<&[LineItemParams]>,
+) -> Result<(), PaymentIntentValidationError> {
+    if let Some(items) = line_items {
+        items.iter().try_for_each(validate_checkout_line_item)?;
+    }
+    Ok(())
+}
+
+fn validate_legacy_checkout_pricing(
+    currency: Option<&str>,
+    unit_amount: Option<i64>,
+    quantity: Option<u32>,
+) -> Result<(), PaymentIntentValidationError> {
+    if let Some(curr) = currency {
+        validate_currency(curr)?;
+    }
+    if let Some(amt) = unit_amount {
+        validate_amount(amt)?;
+    }
+    if quantity == Some(0) {
+        return Err(PaymentIntentValidationError::InvalidParameter {
+            field: "quantity",
+            reason: "quantity must be greater than 0".to_string(),
+        });
+    }
+    Ok(())
 }
 
 fn validate_checkout_url(

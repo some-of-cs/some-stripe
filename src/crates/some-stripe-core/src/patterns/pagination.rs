@@ -302,17 +302,27 @@ impl<'a, T: serde::de::DeserializeOwned> Paginator<'a, T> {
         let response = self.fetch_page().await?;
         self.has_more = response.has_more;
 
+        if response.data.is_empty() {
+            return self.handle_empty_page(response.has_more);
+        }
+
         if let Some(last) = response.data.last() {
             self.last_seen_cursor = Some((self.last_id_extractor)(last).to_string());
         }
 
-        if response.data.is_empty() {
-            self.done = true;
-            return Ok(());
-        }
-
         // Move elements into deque buffer without cloning
         self.buffer = response.data.into();
+        Ok(())
+    }
+
+    fn handle_empty_page(&mut self, has_more: bool) -> Result<(), StripeError> {
+        self.done = true;
+        if has_more {
+            return Err(StripeError::InvalidRequest(
+                "Paginated response returned empty data with has_more=true; cursor cannot advance"
+                    .to_string(),
+            ));
+        }
         Ok(())
     }
 
@@ -386,7 +396,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_paginator_empty_page_terminates_cleanly() {
+    async fn test_paginator_empty_page_with_has_more_returns_error() {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -411,7 +421,8 @@ mod tests {
         let mut paginator: Paginator<DummyItem> =
             Paginator::new(&client, "v1/items", 10, |i: &DummyItem| &i.id);
 
-        assert_eq!(paginator.next_item().await.unwrap(), None);
+        let err = paginator.next_item().await.unwrap_err();
+        assert!(matches!(err, StripeError::InvalidRequest(_)));
         assert!(paginator.done);
         server.await.unwrap();
     }

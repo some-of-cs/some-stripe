@@ -111,12 +111,50 @@ pub struct CollectorStats {
     pub batches_sent: u64,
     /// Total duplicate events dropped by client deduplication.
     pub duplicates_dropped: u64,
+    /// Total background flush attempts that failed and restored unsent events.
+    pub flush_failures: u64,
 }
 
 /// Command message sent to the background stream collector worker.
 enum CollectorCommand {
     Event(MeterEventPayload),
     Flush(tokio::sync::oneshot::Sender<Result<Option<BatchIngestionResponse>, StripeError>>),
+}
+
+struct CollectorWorkerContext {
+    engine: MeterIngestionEngine,
+    stats: Arc<Mutex<CollectorStats>>,
+    last_error: Arc<Mutex<Option<String>>>,
+}
+
+impl CollectorWorkerContext {
+    async fn flush_buffer(
+        &self,
+        buffer: &mut Vec<MeterEventPayload>,
+    ) -> Result<Option<BatchIngestionResponse>, StripeError> {
+        if buffer.is_empty() {
+            return Ok(None);
+        }
+        let batch = std::mem::take(buffer);
+        let count = batch.len() as u64;
+        match self.engine.send_batch_preserving(batch).await {
+            Ok(resp) => {
+                let mut s = self.stats.lock().unwrap_or_else(|e| e.into_inner());
+                s.events_flushed += count;
+                s.batches_sent += 1;
+                Ok(Some(resp))
+            }
+            Err((err, mut unsent)) => {
+                unsent.append(buffer);
+                *buffer = unsent;
+                let mut s = self.stats.lock().unwrap_or_else(|e| e.into_inner());
+                s.flush_failures += 1;
+                let mut err_slot = self.last_error.lock().unwrap_or_else(|e| e.into_inner());
+                *err_slot = Some(err.to_string());
+                Err(err)
+            }
+        }
+    }
 }
 
 /// Async buffered batching stream collector for high-throughput meter events.
@@ -129,6 +167,7 @@ pub struct MeterStreamCollector {
     tx: tokio::sync::mpsc::Sender<CollectorCommand>,
     engine: MeterIngestionEngine,
     stats: Arc<Mutex<CollectorStats>>,
+    last_error: Arc<Mutex<Option<String>>>,
     worker_handle: tokio::task::JoinHandle<()>,
 }
 
@@ -145,17 +184,22 @@ impl MeterStreamCollector {
         let safe_interval = normalize_flush_interval(flush_interval);
         let (tx, rx) = tokio::sync::mpsc::channel(safe_capacity);
         let stats = Arc::new(Mutex::new(CollectorStats::default()));
-        let worker_stats = Arc::clone(&stats);
-        let worker_engine = engine.clone();
+        let last_error = Arc::new(Mutex::new(None));
+        let worker_ctx = CollectorWorkerContext {
+            engine: engine.clone(),
+            stats: Arc::clone(&stats),
+            last_error: Arc::clone(&last_error),
+        };
 
         let worker_handle = tokio::spawn(async move {
-            Self::worker_loop(rx, worker_engine, batch_size, safe_interval, worker_stats).await;
+            Self::worker_loop(rx, worker_ctx, batch_size, safe_interval).await;
         });
 
         Self {
             tx,
             engine,
             stats,
+            last_error,
             worker_handle,
         }
     }
@@ -214,6 +258,15 @@ impl MeterStreamCollector {
         *s
     }
 
+    /// Returns the most recent background flush error message, if any.
+    #[must_use]
+    pub fn last_flush_error(&self) -> Option<String> {
+        self.last_error
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .clone()
+    }
+
     /// Signals the background worker to shut down and aborts the task.
     pub fn abort(&self) {
         self.worker_handle.abort();
@@ -221,10 +274,9 @@ impl MeterStreamCollector {
 
     async fn worker_loop(
         mut rx: tokio::sync::mpsc::Receiver<CollectorCommand>,
-        engine: MeterIngestionEngine,
+        ctx: CollectorWorkerContext,
         batch_size: usize,
         flush_interval: Duration,
-        stats: Arc<Mutex<CollectorStats>>,
     ) {
         let mut buffer: Vec<MeterEventPayload> = Vec::with_capacity(batch_size);
         let mut ticker = tokio::time::interval(flush_interval);
@@ -234,18 +286,18 @@ impl MeterStreamCollector {
             tokio::select! {
                 cmd = rx.recv() => match cmd {
                     Some(CollectorCommand::Event(event)) => {
-                        Self::handle_event_command(event, &mut buffer, batch_size, &engine, &stats).await;
+                        Self::handle_event_command(event, &mut buffer, batch_size, &ctx).await;
                     }
                     Some(CollectorCommand::Flush(reply)) => {
-                        Self::handle_flush_command(reply, &mut buffer, &engine, &stats).await;
+                        Self::handle_flush_command(reply, &mut buffer, &ctx).await;
                     }
                     None => {
-                        Self::flush_if_pending(&mut buffer, &engine, &stats).await;
+                        let _ = ctx.flush_buffer(&mut buffer).await;
                         break;
                     }
                 },
                 _ = ticker.tick() => {
-                    Self::flush_if_pending(&mut buffer, &engine, &stats).await;
+                    let _ = ctx.flush_buffer(&mut buffer).await;
                 }
             }
         }
@@ -255,53 +307,21 @@ impl MeterStreamCollector {
         event: MeterEventPayload,
         buffer: &mut Vec<MeterEventPayload>,
         batch_size: usize,
-        engine: &MeterIngestionEngine,
-        stats: &Arc<Mutex<CollectorStats>>,
+        ctx: &CollectorWorkerContext,
     ) {
         buffer.push(event);
         if buffer.len() >= batch_size {
-            let batch = std::mem::take(buffer);
-            let _ = Self::flush_batch_internal(engine, batch, stats).await;
+            let _ = ctx.flush_buffer(buffer).await;
         }
     }
 
     async fn handle_flush_command(
         reply: tokio::sync::oneshot::Sender<Result<Option<BatchIngestionResponse>, StripeError>>,
         buffer: &mut Vec<MeterEventPayload>,
-        engine: &MeterIngestionEngine,
-        stats: &Arc<Mutex<CollectorStats>>,
+        ctx: &CollectorWorkerContext,
     ) {
-        let res = if !buffer.is_empty() {
-            let batch = std::mem::take(buffer);
-            Self::flush_batch_internal(engine, batch, stats).await
-        } else {
-            Ok(None)
-        };
+        let res = ctx.flush_buffer(buffer).await;
         let _ = reply.send(res);
-    }
-
-    async fn flush_if_pending(
-        buffer: &mut Vec<MeterEventPayload>,
-        engine: &MeterIngestionEngine,
-        stats: &Arc<Mutex<CollectorStats>>,
-    ) {
-        if !buffer.is_empty() {
-            let batch = std::mem::take(buffer);
-            let _ = Self::flush_batch_internal(engine, batch, stats).await;
-        }
-    }
-
-    async fn flush_batch_internal(
-        engine: &MeterIngestionEngine,
-        batch: Vec<MeterEventPayload>,
-        stats: &Arc<Mutex<CollectorStats>>,
-    ) -> Result<Option<BatchIngestionResponse>, StripeError> {
-        let count = batch.len() as u64;
-        let resp = engine.send_batch(batch).await?;
-        let mut s = stats.lock().unwrap_or_else(|e| e.into_inner());
-        s.events_flushed += count;
-        s.batches_sent += 1;
-        Ok(Some(resp))
     }
 }
 
@@ -495,7 +515,7 @@ impl MeterIngestionEngine {
         if buf.len() >= self.batch_size {
             let events = std::mem::take(&mut *buf);
             drop(buf);
-            let resp = self.send_batch(events).await?;
+            let resp = self.send_or_restore(events).await?;
             Ok(Some(resp))
         } else {
             Ok(None)
@@ -532,29 +552,43 @@ impl MeterIngestionEngine {
         let events = std::mem::take(&mut *buf);
         drop(buf);
 
-        let resp = self.send_batch(events).await?;
+        let resp = self.send_or_restore(events).await?;
         Ok(Some(resp))
     }
 
-    /// Ingests a batch of meter events directly using an ephemeral session token.
-    ///
-    /// # Errors
-    /// Returns [`StripeError`] if network transmission fails.
-    pub async fn send_batch(
+    async fn restore_unsent_events(&self, mut unsent: Vec<MeterEventPayload>) {
+        let mut buf = self.buffer.lock().await;
+        unsent.append(&mut *buf);
+        *buf = unsent;
+    }
+
+    async fn send_or_restore(
         &self,
         events: Vec<MeterEventPayload>,
+    ) -> Result<BatchIngestionResponse, StripeError> {
+        match self.send_batch_preserving(events).await {
+            Ok(resp) => Ok(resp),
+            Err((err, unsent)) => {
+                self.restore_unsent_events(unsent).await;
+                Err(err)
+            }
+        }
+    }
+
+    async fn dispatch_batch_request(
+        &self,
+        params: &CreateMeterEventStreamParams,
     ) -> Result<BatchIngestionResponse, StripeError> {
         let api_base = self.validated_api_base()?;
         let token = self.get_valid_session_token().await?;
         let url = format!("{api_base}/v2/billing/meter_event_stream");
-        let params = CreateMeterEventStreamParams { events };
 
         let resp = self
             .http
             .post(&url)
             .header("Authorization", format!("Bearer {token}"))
             .header("Content-Type", "application/json")
-            .json(&params)
+            .json(params)
             .send()
             .await
             .map_err(StripeError::Http)?;
@@ -572,8 +606,38 @@ impl MeterIngestionEngine {
         Ok(ingestion_resp)
     }
 
+    async fn send_batch_preserving(
+        &self,
+        events: Vec<MeterEventPayload>,
+    ) -> Result<BatchIngestionResponse, (StripeError, Vec<MeterEventPayload>)> {
+        let params = CreateMeterEventStreamParams { events };
+        match self.dispatch_batch_request(&params).await {
+            Ok(resp) => Ok(resp),
+            Err(err) => Err((err, params.events)),
+        }
+    }
+
+    /// Ingests a batch of meter events directly using an ephemeral session token.
+    ///
+    /// # Errors
+    /// Returns [`StripeError`] if network transmission fails.
+    pub async fn send_batch(
+        &self,
+        events: Vec<MeterEventPayload>,
+    ) -> Result<BatchIngestionResponse, StripeError> {
+        self.send_batch_preserving(events)
+            .await
+            .map_err(|(err, _)| err)
+    }
+
     /// Spawns a background task that periodically flushes buffered events every `interval`.
-    pub fn start_periodic_flusher(&self, interval: Duration) -> tokio::task::JoinHandle<()> {
+    ///
+    /// Propagates flush errors by exiting with `Err(StripeError)` while preserving unsent
+    /// events in the engine buffer.
+    pub fn start_periodic_flusher(
+        &self,
+        interval: Duration,
+    ) -> tokio::task::JoinHandle<Result<(), StripeError>> {
         let engine = self.clone();
         let safe_interval = normalize_flush_interval(interval);
         tokio::spawn(async move {
@@ -581,7 +645,7 @@ impl MeterIngestionEngine {
             ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             loop {
                 ticker.tick().await;
-                let _ = engine.flush().await;
+                engine.flush().await?;
             }
         })
     }
@@ -644,5 +708,33 @@ mod tests {
             normalize_flush_interval(Duration::from_millis(250)),
             Duration::from_millis(250)
         );
+    }
+
+    #[tokio::test]
+    async fn test_failed_flush_restores_unsent_events_and_propagates_error() {
+        use some_stripe_types::MeterPayload;
+
+        let engine = MeterIngestionEngine::new("http://evil.example.com", "sk_test");
+        let event = MeterEventPayload {
+            event_name: "api_calls".into(),
+            payload: MeterPayload {
+                stripe_customer_id: "cus_restore_1".into(),
+                value: "1".into(),
+            },
+            timestamp: Some(1_700_000_000),
+            identifier: Some("evt_restore_1".into()),
+        };
+
+        assert!(engine.push_event(event).await.unwrap().is_none());
+        assert_eq!(engine.pending_count().await, 1);
+
+        let err = engine.flush().await.unwrap_err();
+        assert!(matches!(err, StripeError::Config(_)));
+        assert_eq!(engine.pending_count().await, 1);
+
+        let handle = engine.start_periodic_flusher(Duration::from_millis(10));
+        let bg_res = handle.await.unwrap();
+        assert!(matches!(bg_res, Err(StripeError::Config(_))));
+        assert_eq!(engine.pending_count().await, 1);
     }
 }

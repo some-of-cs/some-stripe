@@ -42,7 +42,7 @@ fn test_parse_env_reference_variants() {
 fn test_resolves_across_dotenv_local_dev_env_and_example_priority() {
     let dir = create_temp_test_dir("priority");
 
-    // 1. Only .env.example exists
+    // 1. Only .env.example exists (excluded from secret resolution)
     fs::write(
         dir.join(".env.example"),
         "# Example file
@@ -52,7 +52,7 @@ STRIPE_SECRET_KEY=sk_test_from_example
     .unwrap();
     assert_eq!(
         resolve_env_secret_from_dir("$STRIPE_SECRET_KEY", &dir),
-        "sk_test_from_example"
+        "$STRIPE_SECRET_KEY"
     );
 
     // 2. .env overrides .env.example
