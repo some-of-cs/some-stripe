@@ -10,17 +10,71 @@
 //! - **Gate G-Complexity**: Cyclomatic complexity $CC \le 6$ for all coordinator and worker methods.
 //! - **Gate G-Law**: Fulfills idempotency and statutory audit logging requirements.
 
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use reqwest::Client;
 use some_stripe_core::StripeError;
+use some_stripe_core::version_transport::validate_api_base;
 use some_stripe_types::{
     BatchIngestionResponse, CreateMeterEventStreamParams, MeterEventPayload, MeterEventSession,
     validate_statutory_meter_event_accuracy,
 };
 use tokio::sync::RwLock;
+use zeroize::Zeroizing;
+
+const MIN_FLUSH_INTERVAL: Duration = Duration::from_millis(10);
+const DEFAULT_HTTP_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+const DEFAULT_HTTP_TIMEOUT: Duration = Duration::from_secs(30);
+
+fn normalize_flush_interval(interval: Duration) -> Duration {
+    if interval.is_zero() {
+        MIN_FLUSH_INTERVAL
+    } else {
+        interval
+    }
+}
+
+#[derive(Default)]
+struct BoundedDedupCache {
+    entries: HashSet<String>,
+    order: VecDeque<String>,
+}
+
+impl BoundedDedupCache {
+    fn contains(&self, identifier: &str) -> bool {
+        self.entries.contains(identifier)
+    }
+
+    fn evict_oldest(&mut self, capacity: usize) {
+        while self.entries.len() >= capacity {
+            let Some(oldest) = self.order.pop_front() else {
+                return;
+            };
+            self.entries.remove(&oldest);
+        }
+    }
+
+    fn insert(&mut self, identifier: &str, capacity: usize) -> bool {
+        if capacity == 0 {
+            return true;
+        }
+        if self.entries.contains(identifier) {
+            return false;
+        }
+        self.evict_oldest(capacity);
+        let owned = identifier.to_string();
+        self.entries.insert(owned.clone());
+        self.order.push_back(owned);
+        true
+    }
+
+    fn clear(&mut self) {
+        self.entries.clear();
+        self.order.clear();
+    }
+}
 
 /// Configuration options for [`MeterIngestionEngine`] and [`MeterStreamCollector`].
 #[derive(Clone, Debug)]
@@ -87,13 +141,15 @@ impl MeterStreamCollector {
         batch_size: usize,
         flush_interval: Duration,
     ) -> Self {
-        let (tx, rx) = tokio::sync::mpsc::channel(channel_capacity);
+        let safe_capacity = channel_capacity.max(1);
+        let safe_interval = normalize_flush_interval(flush_interval);
+        let (tx, rx) = tokio::sync::mpsc::channel(safe_capacity);
         let stats = Arc::new(Mutex::new(CollectorStats::default()));
         let worker_stats = Arc::clone(&stats);
         let worker_engine = engine.clone();
 
         let worker_handle = tokio::spawn(async move {
-            Self::worker_loop(rx, worker_engine, batch_size, flush_interval, worker_stats).await;
+            Self::worker_loop(rx, worker_engine, batch_size, safe_interval, worker_stats).await;
         });
 
         Self {
@@ -118,7 +174,7 @@ impl MeterStreamCollector {
         if let Some(id) = &event.identifier
             && !self.engine.record_identifier(id)
         {
-            let mut s = self.stats.lock().unwrap();
+            let mut s = self.stats.lock().unwrap_or_else(|e| e.into_inner());
             s.duplicates_dropped += 1;
             return Err(StripeError::InvalidRequest(format!(
                 "Duplicate meter event identifier '{id}' rejected by client deduplication engine"
@@ -130,7 +186,7 @@ impl MeterStreamCollector {
             .await
             .map_err(|_| StripeError::InvalidRequest("Collector channel closed".into()))?;
 
-        let mut s = self.stats.lock().unwrap();
+        let mut s = self.stats.lock().unwrap_or_else(|e| e.into_inner());
         s.events_received += 1;
         Ok(())
     }
@@ -154,7 +210,7 @@ impl MeterStreamCollector {
     /// Inspects the current collector runtime statistics.
     #[must_use]
     pub fn stats(&self) -> CollectorStats {
-        let s = self.stats.lock().unwrap();
+        let s = self.stats.lock().unwrap_or_else(|e| e.into_inner());
         *s
     }
 
@@ -242,7 +298,7 @@ impl MeterStreamCollector {
     ) -> Result<Option<BatchIngestionResponse>, StripeError> {
         let count = batch.len() as u64;
         let resp = engine.send_batch(batch).await?;
-        let mut s = stats.lock().unwrap();
+        let mut s = stats.lock().unwrap_or_else(|e| e.into_inner());
         s.events_flushed += count;
         s.batches_sent += 1;
         Ok(Some(resp))
@@ -254,10 +310,11 @@ impl MeterStreamCollector {
 pub struct MeterIngestionEngine {
     http: Client,
     api_base: String,
-    secret_key: String,
+    api_base_error: Option<String>,
+    secret_key: Zeroizing<String>,
     active_session: Arc<RwLock<Option<MeterEventSession>>>,
     refresh_threshold_secs: i64,
-    dedup_cache: Arc<Mutex<HashSet<String>>>,
+    dedup_cache: Arc<Mutex<BoundedDedupCache>>,
     dedup_capacity: usize,
     buffer: Arc<tokio::sync::Mutex<Vec<MeterEventPayload>>>,
     batch_size: usize,
@@ -281,16 +338,25 @@ impl MeterIngestionEngine {
             .pool_max_idle_per_host(64)
             .tcp_keepalive(Duration::from_secs(60))
             .pool_idle_timeout(Duration::from_secs(90))
+            .connect_timeout(DEFAULT_HTTP_CONNECT_TIMEOUT)
+            .timeout(DEFAULT_HTTP_TIMEOUT)
             .build()
             .unwrap_or_else(|_| Client::new());
 
+        let raw_api_base = api_base.into();
+        let (api_base, api_base_error) = match validate_api_base(&raw_api_base) {
+            Ok(normalized) => (normalized, None),
+            Err(err) => (raw_api_base, Some(err.to_string())),
+        };
+
         Self {
             http,
-            api_base: api_base.into(),
-            secret_key: some_stripe_core::resolve_env_secret(&secret_key.into()),
+            api_base,
+            api_base_error,
+            secret_key: Zeroizing::new(some_stripe_core::resolve_env_secret(&secret_key.into())),
             active_session: Arc::new(RwLock::new(None)),
             refresh_threshold_secs,
-            dedup_cache: Arc::new(Mutex::new(HashSet::new())),
+            dedup_cache: Arc::new(Mutex::new(BoundedDedupCache::default())),
             dedup_capacity,
             buffer: Arc::new(tokio::sync::Mutex::new(Vec::new())),
             batch_size,
@@ -311,7 +377,7 @@ impl MeterIngestionEngine {
 
     /// Checks if a meter event identifier was already seen in the client deduplication cache.
     pub fn is_duplicate(&self, identifier: &str) -> bool {
-        let cache = self.dedup_cache.lock().unwrap();
+        let cache = self.dedup_cache.lock().unwrap_or_else(|e| e.into_inner());
         cache.contains(identifier)
     }
 
@@ -319,16 +385,13 @@ impl MeterIngestionEngine {
     ///
     /// Returns `true` if newly recorded, or `false` if already present.
     pub fn record_identifier(&self, identifier: &str) -> bool {
-        let mut cache = self.dedup_cache.lock().unwrap();
-        if cache.len() >= self.dedup_capacity {
-            cache.clear();
-        }
-        cache.insert(identifier.to_string())
+        let mut cache = self.dedup_cache.lock().unwrap_or_else(|e| e.into_inner());
+        cache.insert(identifier, self.dedup_capacity)
     }
 
     /// Clears all entries from the client-side deduplication cache.
     pub fn clear_dedup_cache(&self) {
-        let mut cache = self.dedup_cache.lock().unwrap();
+        let mut cache = self.dedup_cache.lock().unwrap_or_else(|e| e.into_inner());
         cache.clear();
     }
 
@@ -373,12 +436,20 @@ impl MeterIngestionEngine {
         Ok(token)
     }
 
+    fn validated_api_base(&self) -> Result<&str, StripeError> {
+        if let Some(ref err) = self.api_base_error {
+            return Err(StripeError::Config(err.clone()));
+        }
+        Ok(&self.api_base)
+    }
+
     async fn fetch_new_session(&self) -> Result<MeterEventSession, StripeError> {
-        let url = format!("{}/v2/billing/meter_event_session", self.api_base);
+        let api_base = self.validated_api_base()?;
+        let url = format!("{api_base}/v2/billing/meter_event_session");
         let resp = self
             .http
             .post(&url)
-            .basic_auth(&self.secret_key, None::<&str>)
+            .basic_auth(self.secret_key.as_str(), None::<&str>)
             .json(&serde_json::json!({}))
             .send()
             .await
@@ -473,8 +544,9 @@ impl MeterIngestionEngine {
         &self,
         events: Vec<MeterEventPayload>,
     ) -> Result<BatchIngestionResponse, StripeError> {
+        let api_base = self.validated_api_base()?;
         let token = self.get_valid_session_token().await?;
-        let url = format!("{}/v2/billing/meter_event_stream", self.api_base);
+        let url = format!("{api_base}/v2/billing/meter_event_stream");
         let params = CreateMeterEventStreamParams { events };
 
         let resp = self
@@ -503,8 +575,9 @@ impl MeterIngestionEngine {
     /// Spawns a background task that periodically flushes buffered events every `interval`.
     pub fn start_periodic_flusher(&self, interval: Duration) -> tokio::task::JoinHandle<()> {
         let engine = self.clone();
+        let safe_interval = normalize_flush_interval(interval);
         tokio::spawn(async move {
-            let mut ticker = tokio::time::interval(interval);
+            let mut ticker = tokio::time::interval(safe_interval);
             ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
             loop {
                 ticker.tick().await;
@@ -535,4 +608,41 @@ fn current_unix_timestamp() -> i64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_secs() as i64
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_dedup_cache_bounded_fifo_eviction() {
+        let engine =
+            MeterIngestionEngine::with_options("https://api.stripe.com", "sk_test", 10, 60, 2);
+        assert!(engine.record_identifier("evt_1"));
+        assert!(engine.record_identifier("evt_2"));
+        assert!(!engine.record_identifier("evt_1"));
+        // Inserting a 3rd evicts only the oldest ("evt_1"), keeping "evt_2".
+        assert!(engine.record_identifier("evt_3"));
+        assert!(!engine.is_duplicate("evt_1"));
+        assert!(engine.is_duplicate("evt_2"));
+        assert!(engine.is_duplicate("evt_3"));
+    }
+
+    #[test]
+    fn test_invalid_api_base_rejected_cleanly() {
+        let engine = MeterIngestionEngine::new("http://evil.example.com", "sk_test");
+        assert!(matches!(
+            engine.validated_api_base(),
+            Err(StripeError::Config(_))
+        ));
+    }
+
+    #[test]
+    fn test_normalize_flush_interval_guards_zero() {
+        assert_eq!(normalize_flush_interval(Duration::ZERO), MIN_FLUSH_INTERVAL);
+        assert_eq!(
+            normalize_flush_interval(Duration::from_millis(250)),
+            Duration::from_millis(250)
+        );
+    }
 }
