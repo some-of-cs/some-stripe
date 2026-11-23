@@ -386,6 +386,45 @@ impl std::error::Error for PciDssViolationError {}
 /// assert!(validate_pci_dss_token("378282246310005").is_err());
 /// assert!(validate_pci_dss_token("").is_err());
 /// ```
+const ALLOWED_PCI_TOKEN_PREFIXES: &[&str] = &["pm_", "src_", "card_", "tok_", "ba_", "btok_"];
+
+fn passes_luhn(digits: &[u8]) -> bool {
+    let mut sum: u32 = 0;
+    let mut double = false;
+    for &d in digits.iter().rev() {
+        let v = if double { d * 2 } else { d };
+        sum += u32::from(if v > 9 { v - 9 } else { v });
+        double = !double;
+    }
+    sum.is_multiple_of(10)
+}
+
+fn looks_like_raw_pan(trimmed: &str) -> bool {
+    let digits: Vec<u8> = trimmed
+        .bytes()
+        .filter(u8::is_ascii_digit)
+        .map(|b| b - b'0')
+        .collect();
+    if !(12..=19).contains(&digits.len()) {
+        return false;
+    }
+    let pan_chars_only = trimmed
+        .bytes()
+        .all(|b| b.is_ascii_digit() || matches!(b, b' ' | b'-'));
+    pan_chars_only || (digits.len() >= 13 && passes_luhn(&digits))
+}
+
+fn has_valid_token_prefix_and_suffix(trimmed: &str) -> bool {
+    ALLOWED_PCI_TOKEN_PREFIXES.iter().any(|prefix| {
+        trimmed.strip_prefix(prefix).is_some_and(|suffix| {
+            !suffix.is_empty()
+                && suffix
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b == b'_')
+        })
+    })
+}
+
 pub fn validate_pci_dss_token(token: &str) -> Result<(), PciDssViolationError> {
     let trimmed = token.trim();
     if trimmed.is_empty() {
@@ -393,32 +432,23 @@ pub fn validate_pci_dss_token(token: &str) -> Result<(), PciDssViolationError> {
             "Payment method token must not be empty".into(),
         ));
     }
-    // Check if token looks like a raw PAN (12 to 19 digits)
-    let digits_only: String = trimmed.chars().filter(|c| c.is_ascii_digit()).collect();
-    if digits_only.len() >= 12
-        && digits_only.len() <= 19
-        && trimmed
-            .chars()
-            .all(|c| c.is_ascii_digit() || c == ' ' || c == '-')
-    {
+    if has_valid_token_prefix_and_suffix(trimmed) {
+        let suffix = trimmed.split_once('_').map_or("", |(_, s)| s);
+        if suffix.bytes().all(|b| b.is_ascii_digit()) && looks_like_raw_pan(suffix) {
+            return Err(PciDssViolationError(
+                "Raw Primary Account Number (PAN) detected in memory. PCI-DSS 4.0 mandates tokenized identifiers (e.g. pm_..., tok_...) only.".into(),
+            ));
+        }
+        return Ok(());
+    }
+    if looks_like_raw_pan(trimmed) {
         return Err(PciDssViolationError(
             "Raw Primary Account Number (PAN) detected in memory. PCI-DSS 4.0 mandates tokenized identifiers (e.g. pm_..., tok_...) only.".into(),
         ));
     }
-    // Check valid token prefixes
-    if trimmed.starts_with("pm_")
-        || trimmed.starts_with("src_")
-        || trimmed.starts_with("tok_")
-        || trimmed.starts_with("card_")
-        || trimmed.starts_with("ba_")
-        || trimmed.starts_with("btok_")
-    {
-        Ok(())
-    } else {
-        Err(PciDssViolationError(format!(
-            "Invalid payment method identifier '{trimmed}'. Must start with pm_, src_, tok_, card_, or ba_."
-        )))
-    }
+    Err(PciDssViolationError(
+        "Invalid payment method identifier. Must start with pm_, src_, card_, tok_, ba_, or btok_ followed by alphanumeric/underscore characters.".into(),
+    ))
 }
 
 /// Returns `true` if the given token satisfies PCI-DSS 4.0 tokenization rules.
@@ -1425,4 +1455,22 @@ pub struct CustomerSearchResult {
 
 fn default_search_result_object() -> String {
     "search_result".into()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_pci_dss_token_redacts_raw_input_and_enforces_suffix() {
+        let mistyped_pan = "424242424242424x";
+        let err = validate_pci_dss_token(mistyped_pan).unwrap_err();
+        assert!(!err.to_string().contains(mistyped_pan));
+
+        assert!(validate_pci_dss_token("pm_").is_err());
+        assert!(validate_pci_dss_token("pm_abc$123").is_err());
+        assert!(validate_pci_dss_token("pm_4242424242424242").is_err());
+        assert!(validate_pci_dss_token("pm_1N4m2L2eZvKYlo2C01234567").is_ok());
+        assert!(validate_pci_dss_token("btok_12345_abc").is_ok());
+    }
 }
