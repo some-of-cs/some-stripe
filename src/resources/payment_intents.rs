@@ -22,7 +22,7 @@ use some_stripe_types::{
     CreatePaymentIntentParams, PaymentIntent,
 };
 
-/// Generates an RFC 4122 compliant UUID v4 string using cryptographically secure random bytes from OpenSSL CSPRNG.
+/// Generates an RFC 4122 compliant UUID v4 string using cryptographically secure random bytes from the OS CSPRNG.
 ///
 /// Sets:
 /// - Version 4 bits in byte 6 (`(bytes[6] & 0x0f) | 0x40`)
@@ -38,7 +38,7 @@ use some_stripe_types::{
 /// ```
 pub fn generate_uuid_v4() -> String {
     let mut bytes = [0u8; 16];
-    openssl::rand::rand_bytes(&mut bytes).expect("OpenSSL CSPRNG failure");
+    getrandom::getrandom(&mut bytes).expect("OS CSPRNG failure");
     bytes[6] = (bytes[6] & 0x0f) | 0x40;
     bytes[8] = (bytes[8] & 0x3f) | 0x80;
     format!(
