@@ -1190,32 +1190,33 @@ impl PaymentLinkPriceDataParams {
             return Err(PaymentLinkValidationError::InvalidAmount { amount: amt });
         }
         if let Some(ref opts) = self.currency_options {
-            for (curr, opt) in opts {
-                validate_currency(curr).map_err(|_| {
-                    PaymentLinkValidationError::InvalidCurrency {
-                        currency: curr.clone(),
-                    }
-                })?;
-                if let Some(amt) = opt.unit_amount.filter(|&a| a <= 0) {
-                    return Err(PaymentLinkValidationError::InvalidAmount { amount: amt });
-                }
-                if let Some(ref custom) = opt.custom_unit_amount {
-                    match (custom.minimum, custom.maximum) {
-                        (Some(min), Some(max)) if min > max => {
-                            return Err(PaymentLinkValidationError::InvalidParameter {
-                                field: "custom_unit_amount",
-                                reason: format!(
-                                    "Minimum amount {min} cannot exceed maximum amount {max}"
-                                ),
-                            });
-                        }
-                        _ => {}
-                    }
-                }
-            }
+            opts.iter()
+                .try_for_each(|(curr, opt)| validate_currency_option(curr, opt))?;
         }
         Ok(())
     }
+}
+
+fn validate_currency_option(
+    curr: &str,
+    opt: &CurrencyOptionParams,
+) -> Result<(), PaymentLinkValidationError> {
+    validate_currency(curr).map_err(|_| PaymentLinkValidationError::InvalidCurrency {
+        currency: curr.to_string(),
+    })?;
+    if let Some(amt) = opt.unit_amount.filter(|&a| a <= 0) {
+        return Err(PaymentLinkValidationError::InvalidAmount { amount: amt });
+    }
+    if let Some(ref custom) = opt.custom_unit_amount
+        && let (Some(min), Some(max)) = (custom.minimum, custom.maximum)
+        && min > max
+    {
+        return Err(PaymentLinkValidationError::InvalidParameter {
+            field: "custom_unit_amount",
+            reason: format!("Minimum amount {min} cannot exceed maximum amount {max}"),
+        });
+    }
+    Ok(())
 }
 
 /// Multi-currency pricing options for a specific currency (ISO 4217).

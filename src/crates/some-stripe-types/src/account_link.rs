@@ -300,29 +300,63 @@ impl AccountLink {
 /// assert!(validate_account_link_url("javascript:alert(1)").is_err());
 /// assert!(validate_account_link_url("https://example.com/\r\nHeader: Injection").is_err());
 /// ```
+fn authority_segment(rest: &str) -> &str {
+    rest.split(['/', '?', '#']).next().unwrap_or("")
+}
+
+fn has_valid_https_authority(url: &str) -> bool {
+    let Some(rest) = url.strip_prefix("https://") else {
+        return false;
+    };
+    let authority = authority_segment(rest);
+    !authority.is_empty() && !authority.starts_with(':') && !authority.contains('@')
+}
+
+fn is_valid_localhost_tail(rest: &str) -> bool {
+    let tail = authority_segment(rest);
+    if tail.is_empty() {
+        return true;
+    }
+    let Some(port) = tail.strip_prefix(':') else {
+        return false;
+    };
+    !port.is_empty() && port.bytes().all(|b| b.is_ascii_digit())
+}
+
+fn is_allowed_account_link_url(url: &str) -> bool {
+    if has_valid_https_authority(url) {
+        return true;
+    }
+    let Some(rest) = url
+        .strip_prefix("http://localhost")
+        .or_else(|| url.strip_prefix("http://127.0.0.1"))
+    else {
+        return false;
+    };
+    is_valid_localhost_tail(rest)
+}
+
+fn has_forbidden_scheme(url: &str) -> bool {
+    const FORBIDDEN: &[&str] = &["javascript:", "data:", "vbscript:"];
+    let lower = url.to_ascii_lowercase();
+    FORBIDDEN.iter().any(|scheme| lower.contains(scheme))
+}
+
 pub fn validate_account_link_url(url: &str) -> Result<(), &'static str> {
     if url.is_empty() {
         return Err("URL cannot be empty");
     }
-
-    let is_https = url.starts_with("https://");
-    let is_local = url.starts_with("http://localhost") || url.starts_with("http://127.0.0.1");
-
-    if !is_https && !is_local {
+    if !is_allowed_account_link_url(url) {
         return Err(
             "Account link URL must strictly use HTTPS protocol (or localhost for development)",
         );
     }
-
-    let lower = url.to_ascii_lowercase();
-    if lower.contains("javascript:") || lower.contains("data:") || lower.contains("vbscript:") {
+    if has_forbidden_scheme(url) {
         return Err("Account link URL contains forbidden or malicious URI schemes");
     }
-
-    if url.contains('\r') || url.contains('\n') || url.chars().any(|c| c.is_control()) {
+    if url.chars().any(char::is_control) {
         return Err("Account link URL contains forbidden control characters or newline delimiters");
     }
-
     Ok(())
 }
 
@@ -544,5 +578,24 @@ impl CreateAccountLinkParams {
         }
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_validate_account_link_url_strict_localhost_boundary() {
+        assert!(validate_account_link_url("https://example.com/return").is_ok());
+        assert!(validate_account_link_url("http://localhost:3000/refresh").is_ok());
+        assert!(validate_account_link_url("http://127.0.0.1/return").is_ok());
+        assert!(validate_account_link_url("http://localhost.evil.com/return").is_err());
+        assert!(validate_account_link_url("http://127.0.0.1.evil.com/return").is_err());
+        assert!(validate_account_link_url("http://localhost:80@evil.example/hook").is_err());
+        assert!(validate_account_link_url("http://127.0.0.1:80@evil.example/hook").is_err());
+        assert!(validate_account_link_url("http://localhost@evil.example/hook").is_err());
+        assert!(validate_account_link_url("https://user@evil.example/hook").is_err());
+        assert!(validate_account_link_url("https://").is_err());
     }
 }

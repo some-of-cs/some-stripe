@@ -118,14 +118,49 @@ pub fn is_valid_aws_region(region: &str) -> bool {
             .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
 }
 
+fn authority_segment(rest: &str) -> &str {
+    rest.split(['/', '?', '#']).next().unwrap_or("")
+}
+
+fn is_valid_localhost_tail(rest: &str) -> bool {
+    let tail = authority_segment(rest);
+    if tail.is_empty() {
+        return true;
+    }
+    let Some(port) = tail.strip_prefix(':') else {
+        return false;
+    };
+    !port.is_empty() && port.bytes().all(|b| b.is_ascii_digit())
+}
+
+fn is_exact_localhost_http(url: &str) -> bool {
+    let Some(rest) = url
+        .strip_prefix("http://localhost")
+        .or_else(|| url.strip_prefix("http://127.0.0.1"))
+    else {
+        return false;
+    };
+    is_valid_localhost_tail(rest)
+}
+
+fn has_non_empty_https_host(url: &str) -> bool {
+    let Some(rest) = url.strip_prefix("https://") else {
+        return false;
+    };
+    let authority = authority_segment(rest);
+    !authority.is_empty() && !authority.starts_with(':') && !authority.contains('@')
+}
+
 /// Checks if a webhook URL is well-formed.
 #[inline]
 pub fn is_valid_webhook_url(url: &str) -> bool {
     if url.is_empty() || url.len() > 2048 {
         return false;
     }
-    (url.starts_with("https://") || url.starts_with("http://"))
-        && !url.chars().any(|c| c.is_control() || c.is_whitespace())
+    if url.chars().any(|c| c.is_control() || c.is_whitespace()) {
+        return false;
+    }
+    has_non_empty_https_host(url) || is_exact_localhost_http(url)
 }
 
 /// Checks if an Azure configuration field is valid.
@@ -822,54 +857,68 @@ impl UpdateEventDestinationParams {
 
     /// Validates the updated parameter payload.
     pub fn validate(&self) -> Result<(), EventDestinationValidationError> {
-        if let Some(events) = &self.events
-            && events.is_empty()
-        {
+        if self.events.as_ref().is_some_and(Vec::is_empty) {
             return Err(EventDestinationValidationError::EmptyEvents);
         }
         if let Some(eb) = &self.amazon_eventbridge {
-            if !is_valid_aws_account_id(&eb.aws_account_id) {
-                return Err(EventDestinationValidationError::InvalidAwsAccountId(
-                    eb.aws_account_id.clone(),
-                ));
-            }
-            if !is_valid_aws_region(&eb.aws_region) {
-                return Err(EventDestinationValidationError::InvalidAwsRegion(
-                    eb.aws_region.clone(),
-                ));
-            }
+            validate_aws_credentials(&eb.aws_account_id, &eb.aws_region)?;
         }
-        if let Some(wh) = &self.webhook_endpoint
-            && !is_valid_webhook_url(&wh.url)
-        {
-            return Err(EventDestinationValidationError::InvalidWebhookUrl(
-                wh.url.clone(),
-            ));
+        if let Some(wh) = &self.webhook_endpoint {
+            validate_webhook_details(wh)?;
         }
         if let Some(cw) = &self.cloudwatch {
-            if !is_valid_aws_account_id(&cw.aws_account_id) {
-                return Err(EventDestinationValidationError::InvalidAwsAccountId(
-                    cw.aws_account_id.clone(),
-                ));
-            }
-            if !is_valid_aws_region(&cw.aws_region) {
-                return Err(EventDestinationValidationError::InvalidAwsRegion(
-                    cw.aws_region.clone(),
-                ));
-            }
+            validate_aws_credentials(&cw.aws_account_id, &cw.aws_region)?;
         }
-        if let Some(az) = &self.azure_event_grid
-            && (!is_valid_azure_detail(&az.azure_tenant_id)
-                || !is_valid_azure_detail(&az.azure_subscription_id)
-                || !is_valid_azure_detail(&az.azure_resource_group)
-                || !is_valid_azure_detail(&az.azure_event_grid_topic_name))
-        {
-            return Err(EventDestinationValidationError::InvalidAzureDetails(
-                "Azure Event Grid fields must be non-empty strings".to_string(),
-            ));
+        if let Some(az) = &self.azure_event_grid {
+            validate_azure_details(az)?;
         }
         Ok(())
     }
+}
+
+fn validate_aws_credentials(
+    account_id: &str,
+    region: &str,
+) -> Result<(), EventDestinationValidationError> {
+    if !is_valid_aws_account_id(account_id) {
+        return Err(EventDestinationValidationError::InvalidAwsAccountId(
+            account_id.to_string(),
+        ));
+    }
+    if !is_valid_aws_region(region) {
+        return Err(EventDestinationValidationError::InvalidAwsRegion(
+            region.to_string(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_webhook_details(
+    wh: &WebhookEndpointDetails,
+) -> Result<(), EventDestinationValidationError> {
+    if !is_valid_webhook_url(&wh.url) {
+        return Err(EventDestinationValidationError::InvalidWebhookUrl(
+            wh.url.clone(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_azure_details(
+    az: &AzureEventGridDetails,
+) -> Result<(), EventDestinationValidationError> {
+    let fields = [
+        az.azure_tenant_id.as_str(),
+        az.azure_subscription_id.as_str(),
+        az.azure_resource_group.as_str(),
+        az.azure_event_grid_topic_name.as_str(),
+    ];
+    if !fields.iter().all(|f| is_valid_azure_detail(f)) {
+        return Err(EventDestinationValidationError::InvalidAzureDetails(
+            "Azure Event Grid fields must be non-empty strings".to_string(),
+        ));
+    }
+    Ok(())
 }
 
 /// Paginated list envelope for Stripe API v2 Event Destinations.
@@ -1008,6 +1057,15 @@ mod tests {
     fn test_webhook_url_validation() {
         assert!(is_valid_webhook_url("https://example.com/hook"));
         assert!(is_valid_webhook_url("http://localhost:8080/hook"));
+        assert!(is_valid_webhook_url("http://127.0.0.1/hook"));
+        assert!(!is_valid_webhook_url("http://localhost.evil.com/hook"));
+        assert!(!is_valid_webhook_url("http://127.0.0.1.evil.com/hook"));
+        assert!(!is_valid_webhook_url("http://localhost:80@evil.example/hook"));
+        assert!(!is_valid_webhook_url("http://127.0.0.1:80@evil.example/hook"));
+        assert!(!is_valid_webhook_url("http://localhost@evil.example/hook"));
+        assert!(!is_valid_webhook_url("https://user@evil.example/hook"));
+        assert!(!is_valid_webhook_url("http://example.com/hook"));
+        assert!(!is_valid_webhook_url("https://"));
         assert!(!is_valid_webhook_url("ftp://example.com"));
         assert!(!is_valid_webhook_url("https://example.com/with space"));
         assert!(!is_valid_webhook_url(""));

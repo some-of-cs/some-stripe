@@ -1245,12 +1245,15 @@ pub fn detect_pan_leakage(text: &str) -> bool {
     for &byte in text.as_bytes() {
         if byte.is_ascii_digit() {
             digit_buf.push(byte - b'0');
-        } else if byte != b'-' && byte != b' ' {
-            if is_potential_pan(&digit_buf) {
-                return true;
-            }
-            digit_buf.clear();
+            continue;
         }
+        if matches!(byte, b'-' | b' ') {
+            continue;
+        }
+        if is_potential_pan(&digit_buf) {
+            return true;
+        }
+        digit_buf.clear();
     }
 
     is_potential_pan(&digit_buf)
@@ -1265,20 +1268,22 @@ fn is_potential_pan(digits: &[u8]) -> bool {
     luhn_verify(digits)
 }
 
+fn luhn_step(digit: u8, should_double: bool) -> u32 {
+    let val = u32::from(digit);
+    if !should_double {
+        return val;
+    }
+    let doubled = val * 2;
+    if doubled > 9 { doubled - 9 } else { doubled }
+}
+
 /// Performs Luhn mod 10 verification on a slice of decimal digits.
 fn luhn_verify(digits: &[u8]) -> bool {
     let mut sum: u32 = 0;
     let mut should_double = false;
 
     for &d in digits.iter().rev() {
-        let mut val = d as u32;
-        if should_double {
-            val *= 2;
-            if val > 9 {
-                val -= 9;
-            }
-        }
-        sum += val;
+        sum += luhn_step(d, should_double);
         should_double = !should_double;
     }
 
@@ -1301,14 +1306,11 @@ pub fn validate_zero_pan(
 pub fn validate_zero_pan_in_metadata(
     metadata: Option<&HashMap<String, String>>,
 ) -> Result<(), TreasuryTransferValidationError> {
-    if let Some(map) = metadata {
-        for val in map.values() {
-            if detect_pan_leakage(val) {
-                return Err(TreasuryTransferValidationError::PanLeakageDetected {
-                    field: "metadata",
-                });
-            }
-        }
+    let Some(map) = metadata else {
+        return Ok(());
+    };
+    if map.values().any(|val| detect_pan_leakage(val.as_str())) {
+        return Err(TreasuryTransferValidationError::PanLeakageDetected { field: "metadata" });
     }
     Ok(())
 }
@@ -1377,7 +1379,11 @@ impl TreasuryVelocityTracker {
 
     /// Resets the tracker window if the current timestamp has surpassed the window boundary.
     pub fn refresh_window(&mut self, now_seconds: i64) {
-        if now_seconds >= self.window_start_seconds + self.window_duration_seconds {
+        if now_seconds
+            >= self
+                .window_start_seconds
+                .saturating_add(self.window_duration_seconds)
+        {
             self.current_volume_cents = 0;
             self.current_transaction_count = 0;
             self.window_start_seconds = now_seconds;
@@ -1390,6 +1396,9 @@ impl TreasuryVelocityTracker {
         amount: i64,
         now_seconds: i64,
     ) -> Result<(), TreasuryTransferValidationError> {
+        if amount <= 0 {
+            return Err(TreasuryTransferValidationError::InvalidAmount { amount });
+        }
         self.refresh_window(now_seconds);
 
         if self.current_transaction_count >= self.max_transaction_count {
@@ -1401,12 +1410,20 @@ impl TreasuryVelocityTracker {
             });
         }
 
-        if self.current_volume_cents + amount > self.max_volume_cents {
+        let Some(projected_volume) = self.current_volume_cents.checked_add(amount) else {
+            return Err(TreasuryTransferValidationError::VelocityLimitExceeded {
+                reason: format!(
+                    "Daily volume limit of {} cents exceeded (volume overflow)",
+                    self.max_volume_cents
+                ),
+            });
+        };
+
+        if projected_volume > self.max_volume_cents {
             return Err(TreasuryTransferValidationError::VelocityLimitExceeded {
                 reason: format!(
                     "Daily volume limit of {} cents exceeded (attempted: {} cents)",
-                    self.max_volume_cents,
-                    self.current_volume_cents + amount
+                    self.max_volume_cents, projected_volume
                 ),
             });
         }
@@ -1421,8 +1438,57 @@ impl TreasuryVelocityTracker {
         now_seconds: i64,
     ) -> Result<(), TreasuryTransferValidationError> {
         self.check_velocity(amount, now_seconds)?;
-        self.current_volume_cents += amount;
-        self.current_transaction_count += 1;
+        let Some(next_volume) = self.current_volume_cents.checked_add(amount) else {
+            return Err(TreasuryTransferValidationError::VelocityLimitExceeded {
+                reason: format!(
+                    "Daily volume limit of {} cents exceeded (volume overflow)",
+                    self.max_volume_cents
+                ),
+            });
+        };
+        let Some(next_count) = self.current_transaction_count.checked_add(1) else {
+            return Err(TreasuryTransferValidationError::VelocityLimitExceeded {
+                reason: format!(
+                    "Daily transaction count limit of {} reached",
+                    self.max_transaction_count
+                ),
+            });
+        };
+        self.current_volume_cents = next_volume;
+        self.current_transaction_count = next_count;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_velocity_tracker_rejects_non_positive_amounts() {
+        let mut tracker = TreasuryVelocityTracker::new(100_000, 5, 86_400, 1_000);
+        assert!(tracker.record_transfer(50_000, 1_000).is_ok());
+
+        assert_eq!(
+            tracker.check_velocity(0, 1_010),
+            Err(TreasuryTransferValidationError::InvalidAmount { amount: 0 })
+        );
+        assert_eq!(
+            tracker.record_transfer(-25_000, 1_020),
+            Err(TreasuryTransferValidationError::InvalidAmount { amount: -25_000 })
+        );
+        assert_eq!(tracker.current_volume_cents, 50_000);
+        assert_eq!(tracker.current_transaction_count, 1);
+    }
+
+    #[test]
+    fn test_velocity_tracker_rejects_overflow_and_saturates_window() {
+        let mut tracker = TreasuryVelocityTracker::new(i64::MAX, 5, 86_400, i64::MAX - 10);
+        tracker.refresh_window(i64::MAX - 5);
+        assert!(tracker.record_transfer(1_000, i64::MAX - 5).is_ok());
+        assert!(matches!(
+            tracker.check_velocity(i64::MAX, i64::MAX - 5),
+            Err(TreasuryTransferValidationError::VelocityLimitExceeded { .. })
+        ));
     }
 }

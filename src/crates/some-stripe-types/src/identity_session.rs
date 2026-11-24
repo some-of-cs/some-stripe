@@ -918,11 +918,41 @@ impl fmt::Display for VerificationSessionParseError {
 
 impl std::error::Error for VerificationSessionParseError {}
 
+fn authority_segment(rest: &str) -> &str {
+    rest.split(['/', '?', '#']).next().unwrap_or("")
+}
+
+fn has_valid_https_authority(url: &str) -> bool {
+    let Some(rest) = url.strip_prefix("https://") else {
+        return false;
+    };
+    let authority = authority_segment(rest);
+    !authority.is_empty() && !authority.starts_with(':') && !authority.contains('@')
+}
+
+fn is_valid_localhost_tail(rest: &str) -> bool {
+    let tail = authority_segment(rest);
+    if tail.is_empty() {
+        return true;
+    }
+    let Some(port) = tail.strip_prefix(':') else {
+        return false;
+    };
+    !port.is_empty() && port.bytes().all(|b| b.is_ascii_digit())
+}
+
 /// Checks if the URL uses an authorized protocol (HTTPS or local dev).
 fn is_allowed_protocol(url: &str) -> bool {
-    url.starts_with("https://")
-        || url.starts_with("http://localhost")
-        || url.starts_with("http://127.0.0.1")
+    if has_valid_https_authority(url) {
+        return true;
+    }
+    let Some(rest) = url
+        .strip_prefix("http://localhost")
+        .or_else(|| url.strip_prefix("http://127.0.0.1"))
+    else {
+        return false;
+    };
+    is_valid_localhost_tail(rest)
 }
 
 /// Checks if the URL contains forbidden client-side scripting schemes.
@@ -1169,8 +1199,15 @@ mod tests {
         assert!(validate_identity_url("http://localhost:3000/callback").is_ok());
         assert!(validate_identity_url("http://127.0.0.1:8080/callback").is_ok());
 
-        // Insecure HTTP
+        // Insecure HTTP and localhost spoofing
         assert!(validate_identity_url("http://insecure.com/callback").is_err());
+        assert!(validate_identity_url("http://localhost.evil.com/callback").is_err());
+        assert!(validate_identity_url("http://127.0.0.1.evil.com/callback").is_err());
+        assert!(validate_identity_url("http://localhost:80@evil.example/hook").is_err());
+        assert!(validate_identity_url("http://127.0.0.1:80@evil.example/hook").is_err());
+        assert!(validate_identity_url("http://localhost@evil.example/hook").is_err());
+        assert!(validate_identity_url("https://user@evil.example/hook").is_err());
+        assert!(validate_identity_url("https://").is_err());
         // Empty
         assert!(validate_identity_url("").is_err());
         // Malicious schemes

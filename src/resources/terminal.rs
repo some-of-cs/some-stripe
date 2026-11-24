@@ -171,12 +171,7 @@ impl<'a> TerminalReadersResource<'a> {
     /// - Returns [`StripeError::InvalidRequest`] if `reader_id` is invalid.
     /// - Returns [`StripeError::Api`] if the reader does not exist or API fails.
     pub async fn retrieve(&self, reader_id: &str) -> Result<TerminalReader, StripeError> {
-        validate_and_encode_id(reader_id)?;
-
-        let url = format!(
-            "{}/v1/terminal/readers/{}",
-            self.client.config.api_base, reader_id
-        );
+        let url = reader_url(&self.client.config.api_base, reader_id)?;
         let mut req = self.client.http.get(&url);
 
         if let Some(acct) = self.account {
@@ -223,12 +218,7 @@ impl<'a> TerminalReadersResource<'a> {
     /// - Returns [`StripeError::InvalidRequest`] if `reader_id` is invalid.
     /// - Returns [`StripeError::Api`] if cancellation fails.
     pub async fn cancel_action(&self, reader_id: &str) -> Result<TerminalReader, StripeError> {
-        validate_and_encode_id(reader_id)?;
-
-        let url = format!(
-            "{}/v1/terminal/readers/{}/cancel_action",
-            self.client.config.api_base, reader_id
-        );
+        let url = reader_cancel_action_url(&self.client.config.api_base, reader_id)?;
         let idempotency_key = super::resolve_idempotency_key(None);
 
         let mut req = self
@@ -315,12 +305,7 @@ impl<'a> TerminalLocationsResource<'a> {
     /// - Returns [`StripeError::InvalidRequest`] if `location_id` is invalid.
     /// - Returns [`StripeError::Api`] if the location does not exist.
     pub async fn retrieve(&self, location_id: &str) -> Result<TerminalLocation, StripeError> {
-        validate_and_encode_id(location_id)?;
-
-        let url = format!(
-            "{}/v1/terminal/locations/{}",
-            self.client.config.api_base, location_id
-        );
+        let url = location_url(&self.client.config.api_base, location_id)?;
         let mut req = self.client.http.get(&url);
 
         if let Some(acct) = self.account {
@@ -427,5 +412,50 @@ impl<'a> TerminalConnectionTokensResource<'a> {
         let val = self.client.execute(req).await?;
         let token: ConnectionToken = serde_json::from_value(val)?;
         Ok(token)
+    }
+}
+
+fn reader_url(api_base: &str, reader_id: &str) -> Result<String, StripeError> {
+    let encoded = validate_and_encode_id(reader_id)?;
+    Ok(format!("{api_base}/v1/terminal/readers/{encoded}"))
+}
+
+fn reader_cancel_action_url(api_base: &str, reader_id: &str) -> Result<String, StripeError> {
+    let encoded = validate_and_encode_id(reader_id)?;
+    Ok(format!(
+        "{api_base}/v1/terminal/readers/{encoded}/cancel_action"
+    ))
+}
+
+fn location_url(api_base: &str, location_id: &str) -> Result<String, StripeError> {
+    let encoded = validate_and_encode_id(location_id)?;
+    Ok(format!("{api_base}/v1/terminal/locations/{encoded}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_terminal_urls_validate_and_encode_ids() {
+        assert_eq!(
+            reader_url("https://api.stripe.com", "tmr_123").unwrap(),
+            "https://api.stripe.com/v1/terminal/readers/tmr_123"
+        );
+        assert_eq!(
+            reader_cancel_action_url("https://api.stripe.com", "tmr_123").unwrap(),
+            "https://api.stripe.com/v1/terminal/readers/tmr_123/cancel_action"
+        );
+        assert_eq!(
+            location_url("https://api.stripe.com", "tml_456").unwrap(),
+            "https://api.stripe.com/v1/terminal/locations/tml_456"
+        );
+    }
+
+    #[test]
+    fn test_terminal_urls_reject_traversal_and_query_injection() {
+        assert!(reader_url("https://api.stripe.com", "../v1/charges").is_err());
+        assert!(reader_cancel_action_url("https://api.stripe.com", "tmr_1?foo=bar").is_err());
+        assert!(location_url("https://api.stripe.com", "tml_1#frag").is_err());
     }
 }

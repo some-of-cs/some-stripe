@@ -294,6 +294,38 @@ impl<'a, T: serde::de::DeserializeOwned> Paginator<'a, T> {
         Ok(page)
     }
 
+    async fn fetch_and_buffer_page(&mut self) -> Result<(), StripeError> {
+        if let Some(ref cursor) = self.last_seen_cursor {
+            self.loop_detector.record_cursor(cursor)?;
+        }
+
+        let response = self.fetch_page().await?;
+        self.has_more = response.has_more;
+
+        if response.data.is_empty() {
+            return self.handle_empty_page(response.has_more);
+        }
+
+        if let Some(last) = response.data.last() {
+            self.last_seen_cursor = Some((self.last_id_extractor)(last).to_string());
+        }
+
+        // Move elements into deque buffer without cloning
+        self.buffer = response.data.into();
+        Ok(())
+    }
+
+    fn handle_empty_page(&mut self, has_more: bool) -> Result<(), StripeError> {
+        self.done = true;
+        if has_more {
+            return Err(StripeError::InvalidRequest(
+                "Paginated response returned empty data with has_more=true; cursor cannot advance"
+                    .to_string(),
+            ));
+        }
+        Ok(())
+    }
+
     /// Fetches the next item by value with zero heap clones.
     pub async fn next_item(&mut self) -> Result<Option<T>, StripeError> {
         if let Some(err) = self.initial_error.take() {
@@ -314,32 +346,7 @@ impl<'a, T: serde::de::DeserializeOwned> Paginator<'a, T> {
             }
 
             // 3. Fetch next page
-            if let Some(ref cursor) = self.last_seen_cursor {
-                self.loop_detector.record_cursor(cursor)?;
-            }
-
-            let response = self.fetch_page().await?;
-            self.has_more = response.has_more;
-
-            if let Some(last) = response.data.last() {
-                self.last_seen_cursor = Some((self.last_id_extractor)(last).to_string());
-            }
-
-            if response.data.is_empty() {
-                self.done = true;
-                return Ok(None);
-            }
-
-            // Move elements into deque buffer without cloning
-            self.buffer = response.data.into();
-
-            // Guard against empty intermediate pages
-            if self.buffer.is_empty() && self.has_more {
-                continue;
-            } else if self.buffer.is_empty() {
-                self.done = true;
-                return Ok(None);
-            }
+            self.fetch_and_buffer_page().await?;
         }
     }
 }
@@ -386,5 +393,37 @@ mod tests {
                 .with_account("acct_test_connected_123");
 
         assert_eq!(paginator.stripe_account(), Some("acct_test_connected_123"));
+    }
+
+    #[tokio::test]
+    async fn test_paginator_empty_page_with_has_more_returns_error() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut buf = vec![0; 1024];
+            let _ = socket.read(&mut buf).await.unwrap();
+            let body = r#"{"object":"list","data":[],"has_more":true}"#;
+            let resp = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            socket.write_all(resp.as_bytes()).await.unwrap();
+        });
+
+        let config = crate::client::StripeConfig::new("sk_test_123")
+            .with_api_base(format!("http://{addr}"));
+        let client = StripeClient::with_config(config);
+        let mut paginator: Paginator<DummyItem> =
+            Paginator::new(&client, "v1/items", 10, |i: &DummyItem| &i.id);
+
+        let err = paginator.next_item().await.unwrap_err();
+        assert!(matches!(err, StripeError::InvalidRequest(_)));
+        assert!(paginator.done);
+        server.await.unwrap();
     }
 }

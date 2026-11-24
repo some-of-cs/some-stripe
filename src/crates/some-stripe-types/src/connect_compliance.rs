@@ -244,6 +244,45 @@ impl std::error::Error for FinCenCddError {}
 ///
 /// assert!(validate_fincen_cdd(&cdd).is_ok());
 /// ```
+fn parse_two_digit_in_range(part: &str, min: u8, max: u8) -> bool {
+    part.len() == 2
+        && part.bytes().all(|b| b.is_ascii_digit())
+        && part.parse::<u8>().is_ok_and(|v| (min..=max).contains(&v))
+}
+
+fn is_valid_iso_dob(dob: &str) -> bool {
+    let mut parts = dob.split('-');
+    let (Some(year), Some(month), Some(day), None) =
+        (parts.next(), parts.next(), parts.next(), parts.next())
+    else {
+        return false;
+    };
+    let valid_year = year.len() == 4 && year.bytes().all(|b| b.is_ascii_digit());
+    valid_year && parse_two_digit_in_range(month, 1, 12) && parse_two_digit_in_range(day, 1, 31)
+}
+
+fn validate_beneficial_owner(owner: &FinCenBeneficialOwner) -> Result<(), FinCenCddError> {
+    if !owner.equity_percentage.is_finite() || !(0.0..=100.0).contains(&owner.equity_percentage) {
+        return Err(FinCenCddError::NegativeEquityPercentage {
+            owner_id: owner.id.clone(),
+            equity: owner.equity_percentage,
+        });
+    }
+    if !is_valid_iso_dob(&owner.date_of_birth) {
+        return Err(FinCenCddError::InvalidDateOfBirth {
+            owner_id: owner.id.clone(),
+            dob: owner.date_of_birth.clone(),
+        });
+    }
+    if owner.is_25_percent_beneficial_owner() && !owner.has_verified_tax_id {
+        return Err(FinCenCddError::MissingTaxIdVerification {
+            owner_id: owner.id.clone(),
+            equity: owner.equity_percentage,
+        });
+    }
+    Ok(())
+}
+
 pub fn validate_fincen_cdd(cdd: &FinCenCddRequirements) -> Result<(), FinCenCddError> {
     if cdd.account_id().trim().is_empty() {
         return Err(FinCenCddError::EmptyAccountId);
@@ -258,39 +297,9 @@ pub fn validate_fincen_cdd(cdd: &FinCenCddRequirements) -> Result<(), FinCenCddE
     let mut has_control_person = false;
 
     for owner in cdd.beneficial_owners() {
-        if owner.equity_percentage < 0.0 {
-            return Err(FinCenCddError::NegativeEquityPercentage {
-                owner_id: owner.id.clone(),
-                equity: owner.equity_percentage,
-            });
-        }
-
-        // Validate date of birth format: YYYY-MM-DD
-        let dob_parts: Vec<&str> = owner.date_of_birth.split('-').collect();
-        if dob_parts.len() != 3
-            || dob_parts[0].len() != 4
-            || dob_parts[1].len() != 2
-            || dob_parts[2].len() != 2
-        {
-            return Err(FinCenCddError::InvalidDateOfBirth {
-                owner_id: owner.id.clone(),
-                dob: owner.date_of_birth.clone(),
-            });
-        }
-
+        validate_beneficial_owner(owner)?;
         total_equity += owner.equity_percentage;
-
-        if owner.is_control_person {
-            has_control_person = true;
-        }
-
-        // Equity ownership prong: >= 25% requires verified tax identifier
-        if owner.is_25_percent_beneficial_owner() && !owner.has_verified_tax_id {
-            return Err(FinCenCddError::MissingTaxIdVerification {
-                owner_id: owner.id.clone(),
-                equity: owner.equity_percentage,
-            });
-        }
+        has_control_person |= owner.is_control_person;
     }
 
     if total_equity > 100.0001 {
@@ -797,4 +806,57 @@ where
     F: FnOnce(&'a T) -> R,
 {
     inspection(entity)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_owner(equity_percentage: f64, date_of_birth: &str) -> FinCenBeneficialOwner {
+        FinCenBeneficialOwner {
+            id: "owner_1".into(),
+            first_name: "Ada".into(),
+            last_name: "Lovelace".into(),
+            date_of_birth: date_of_birth.into(),
+            equity_percentage,
+            is_control_person: true,
+            has_verified_tax_id: true,
+            country: "US".into(),
+        }
+    }
+
+    #[test]
+    fn test_validate_fincen_cdd_rejects_nan_and_out_of_range_equity() {
+        let nan_cdd = FinCenCddRequirements {
+            account_id: "acct_1234567890abcdef".into(),
+            business_type: "company".into(),
+            beneficial_owners: vec![sample_owner(f64::NAN, "1980-12-10")],
+        };
+        assert!(matches!(
+            validate_fincen_cdd(&nan_cdd),
+            Err(FinCenCddError::NegativeEquityPercentage { .. })
+        ));
+
+        let inf_cdd = FinCenCddRequirements {
+            account_id: "acct_1234567890abcdef".into(),
+            business_type: "company".into(),
+            beneficial_owners: vec![sample_owner(f64::INFINITY, "1980-12-10")],
+        };
+        assert!(validate_fincen_cdd(&inf_cdd).is_err());
+    }
+
+    #[test]
+    fn test_validate_fincen_cdd_rejects_malformed_dob() {
+        for bad_dob in ["1980-13-10", "1980-00-10", "1980-12-32", "abcd-12-10"] {
+            let cdd = FinCenCddRequirements {
+                account_id: "acct_1234567890abcdef".into(),
+                business_type: "company".into(),
+                beneficial_owners: vec![sample_owner(30.0, bad_dob)],
+            };
+            assert!(matches!(
+                validate_fincen_cdd(&cdd),
+                Err(FinCenCddError::InvalidDateOfBirth { .. })
+            ));
+        }
+    }
 }

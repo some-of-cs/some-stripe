@@ -323,7 +323,7 @@ impl BalanceTransaction {
     /// ```
     #[inline]
     pub fn verify_accounting_invariant(&self) -> bool {
-        self.net == self.amount - self.fee
+        i128::from(self.net) == i128::from(self.amount) - i128::from(self.fee)
     }
 }
 
@@ -391,12 +391,12 @@ pub fn validate_ledger_reconciliation(txns: &[BalanceTransaction]) -> Result<(),
                 txn.net,
                 txn.amount,
                 txn.fee,
-                txn.amount - txn.fee
+                i128::from(txn.amount) - i128::from(txn.fee)
             ));
         }
-        total_amount += txn.amount as i128;
-        total_fee += txn.fee as i128;
-        total_net += txn.net as i128;
+        total_amount += i128::from(txn.amount);
+        total_fee += i128::from(txn.fee);
+        total_net += i128::from(txn.net);
     }
 
     if total_net != total_amount - total_fee {

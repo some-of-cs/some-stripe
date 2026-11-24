@@ -51,20 +51,25 @@ use std::collections::{HashSet, VecDeque};
 ///     "https://api.stripe.com/v2/core/events"
 /// );
 /// ```
+fn is_hierarchical_http_url(parsed: &reqwest::Url) -> bool {
+    matches!(parsed.scheme(), "http" | "https")
+        && !parsed.cannot_be_a_base()
+        && parsed.path().starts_with('/')
+}
+
 #[must_use]
 pub fn resolve_v2_url(api_base: &str, next_url: &str) -> String {
     let clean_base = api_base.trim_end_matches('/');
     let trimmed = next_url.trim();
 
-    if trimmed.starts_with("http://") || trimmed.starts_with("https://") {
-        if let Some(pos) = trimmed.find("://") {
-            let after_scheme = &trimmed[pos + 3..];
-            if let Some(slash_idx) = after_scheme.find('/') {
-                let path_and_query = &after_scheme[slash_idx..];
-                return format!("{clean_base}{path_and_query}");
-            }
-        }
-        return format!("{clean_base}/");
+    if let Ok(parsed) = reqwest::Url::parse(trimmed)
+        && is_hierarchical_http_url(&parsed)
+    {
+        let path = parsed.path();
+        return match parsed.query() {
+            Some(query) => format!("{clean_base}{path}?{query}"),
+            None => format!("{clean_base}{path}"),
+        };
     }
 
     if trimmed.starts_with('/') {
@@ -465,6 +470,14 @@ mod tests {
             resolve_v2_url("https://api.stripe.com", "http://foreign-host"),
             "https://api.stripe.com/"
         );
+        assert_eq!(
+            resolve_v2_url("https://api.stripe.com", "https://api.stripe.com?page=2"),
+            "https://api.stripe.com/?page=2"
+        );
+        assert_eq!(
+            resolve_v2_url("http://127.0.0.1:9090", "https://api.stripe.com?page=2"),
+            "http://127.0.0.1:9090/?page=2"
+        );
     }
 
     #[test]
@@ -549,5 +562,16 @@ mod tests {
         // Subsequent call returns None
         let next = paginator.next_item().await.unwrap();
         assert!(next.is_none());
+    }
+
+    #[test]
+    fn test_resolve_v2_url_opaque_scheme_cannot_hijack_authority() {
+        let resolved = resolve_v2_url("https://api.stripe.com", "next:.attacker.example/collect");
+        assert_eq!(
+            resolved,
+            "https://api.stripe.com/next:.attacker.example/collect"
+        );
+        let parsed = reqwest::Url::parse(&resolved).unwrap();
+        assert_eq!(parsed.host_str(), Some("api.stripe.com"));
     }
 }

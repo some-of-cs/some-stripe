@@ -4,7 +4,7 @@
 //! (`/v1/issuing/authorizations`), enforcing strict input sanitization, zero-clone borrowing,
 //! and Bank Secrecy Act / AML compliance.
 
-use some_stripe_core::patterns::serializer::to_form_params;
+use some_stripe_core::patterns::serializer::{percent_encode, to_form_params};
 use some_stripe_core::{StripeClient, StripeError, validate_and_encode_id};
 use some_stripe_types::{
     ApproveAuthorizationParams, DeclineAuthorizationParams, IssuingAuthorization,
@@ -234,13 +234,8 @@ impl<'a> IssuingAuthorizationsResource<'a> {
         let mut url = format!("{}/v1/issuing/authorizations", self.client.config.api_base);
         let query_entries = build_authorizations_query(params);
         if !query_entries.is_empty() {
-            let serialized = query_entries
-                .iter()
-                .map(|(k, v)| format!("{k}={v}"))
-                .collect::<Vec<_>>()
-                .join("&");
             url.push('?');
-            url.push_str(&serialized);
+            url.push_str(&encode_query_entries(&query_entries));
         }
 
         let mut req = self.client.http.get(&url);
@@ -286,6 +281,14 @@ fn build_authorizations_query(
     query
 }
 
+fn encode_query_entries(entries: &[(&str, String)]) -> String {
+    entries
+        .iter()
+        .map(|(k, v)| format!("{}={}", percent_encode(k), percent_encode(v)))
+        .collect::<Vec<_>>()
+        .join("&")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -314,6 +317,18 @@ mod tests {
         assert!(q.contains(&("status", "pending".to_string())));
         assert!(q.contains(&("limit", "10".to_string())));
         assert!(q.contains(&("starting_after", "iauth_prev".to_string())));
+    }
+
+    #[test]
+    fn test_encode_query_entries_percent_encodes_reserved_chars() {
+        let encoded = encode_query_entries(&[
+            ("card", "ic_1&limit=99#x%20".to_string()),
+            ("starting_after", "iauth_a=b".to_string()),
+        ]);
+        assert_eq!(
+            encoded,
+            "card=ic_1%26limit%3D99%23x%2520&starting_after=iauth_a%3Db"
+        );
     }
 
     #[test]
